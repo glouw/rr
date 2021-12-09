@@ -1549,11 +1549,22 @@ Compiler_IsFunction(Class class)
 }
 
 void
-Compiler_Declare(Compiler* self, Str* name, Class class, size_t stack)
+Compiler_Reserved(Compiler* self, Str* ident)
 {
-    if(Map_Exists(self->identifiers, name->value))
-        Compiler_Quit(self, "`%s` already defined", name->value);
-    Map_Set(self->identifiers, name, Meta_Init(class, stack));
+    if(Str_Equals(ident, "keys")
+    || Str_Equals(ident, "del")
+    || Str_Equals(ident, "len")
+    || Str_Equals(ident, "assert"))
+        Compiler_Quit(self, "`%s` is a built-in identifier", ident->value);
+}
+
+void
+Compiler_Declare(Compiler* self, Str* ident, Class class, size_t stack)
+{
+    Compiler_Reserved(self, ident);
+    if(Map_Exists(self->identifiers, ident->value))
+        Compiler_Quit(self, "`%s` already defined", ident->value);
+    Map_Set(self->identifiers, ident, Meta_Init(class, stack));
 }
 
 void
@@ -1677,13 +1688,7 @@ Compiler_Ref(Compiler* self, Str* ident)
         Compiler_Assem(self, "\tref %d", meta->stack);
     else
     if(meta->class == CLASS_VARIABLE_LOCAL)
-        Compiler_Assem(self, "\tref [%d]", meta->stack);
-}
-
-void
-Compiler_Copy(Compiler* self)
-{
-    Compiler_Assem(self, "\tcpy");
+        Compiler_Assem(self, "\tref *%d", meta->stack);
 }
 
 void
@@ -1717,12 +1722,6 @@ Compiler_Args(Compiler* self, size_t required)
     Compiler_Match(self, ")");
 }
 
-void
-Compiler_Call(Compiler* self, char* ident)
-{
-    Compiler_Assem(self, "\tcal %s", ident);
-}
-
 bool
 Compiler_Resolve(Compiler* self)
 {
@@ -1744,12 +1743,6 @@ Compiler_Primed(Compiler* self)
     return self->prime != NULL;
 }
 
-void
-Compiler_Not(Compiler* self)
-{
-    Compiler_Assem(self, "\tnot");
-}
-
 bool
 Compiler_Factor(Compiler* self)
 {
@@ -1760,7 +1753,7 @@ Compiler_Factor(Compiler* self)
     {
         Compiler_Match(self, "!");
         Compiler_Factor(self);
-        Compiler_Not(self);
+        Compiler_Assem(self, "\tnot");
     }
     else
     if(next == '&')
@@ -1786,13 +1779,46 @@ Compiler_Factor(Compiler* self)
         /* BOOL AND NULL */
         if(Str_IsBoolean(ident) || Str_IsNull(ident))
             Compiler_Assem(self, "\tval %s", ident->value);
-        /* FUN CALL */
+        /* BUILTIN FUN */
+        else
+        if(Str_Equals(ident, "keys"))
+        {
+            Compiler_Match(self, "(");
+            Compiler_Factor(self);
+            Compiler_Match(self, ")");
+            Compiler_Assem(self, "\tkys");
+        }
+        else
+        if(Str_Equals(ident, "del"))
+        {
+            Compiler_Match(self, "(");
+            Compiler_Factor(self);
+            Compiler_Match(self, ")");
+            Compiler_Assem(self, "\tdel");
+        }
+        else
+        if(Str_Equals(ident, "len"))
+        {
+            Compiler_Match(self, "(");
+            Compiler_Expression(self);
+            Compiler_Match(self, ")");
+            Compiler_Assem(self, "\tlen");
+        }
+        else
+        if(Str_Equals(ident, "assert"))
+        {
+            Compiler_Match(self, "(");
+            Compiler_Expression(self);
+            Compiler_Match(self, ")");
+            Compiler_Assem(self, "\tast");
+        }
+        /* FUN */
         else
         if(Compiler_Next(self) == '(')
         {
             Meta* meta = Compiler_Expect(self, ident, Compiler_IsFunction);
             Compiler_Args(self, meta->stack);
-            Compiler_Call(self, ident->value);
+            Compiler_Assem(self, "\tcal %s", ident->value);
             if(Compiler_Resolve(self))
                 storage = true;
         }
@@ -1802,7 +1828,7 @@ Compiler_Factor(Compiler* self)
             Compiler_Ref(self, ident);
             Compiler_Resolve(self);
             if(Compiler_Next(self) != '=')
-                Compiler_Copy(self);
+                Compiler_Assem(self, "\tcpy");
             storage = true;
         }
         Str_Kill(ident);
@@ -1885,7 +1911,7 @@ void
 Compiler_Or(Compiler* self)
 {
     Compiler_Expression(self);
-    Compiler_Assem(self, "\tor");
+    Compiler_Assem(self, "\tlor");
 }
 
 void
@@ -1893,7 +1919,7 @@ Compiler_Assign(Compiler* self)
 {
     Compiler_Expression(self);
     Compiler_Assem(self, "\tmov");
-    Compiler_Copy(self);
+    Compiler_Assem(self, "\tcpy");
 }
 
 void
@@ -1901,7 +1927,7 @@ Compiler_AddAssign(Compiler* self)
 {
     Compiler_Expression(self);
     Compiler_Assem(self, "\tadd");
-    Compiler_Copy(self);
+    Compiler_Assem(self, "\tcpy");
 }
 
 void
@@ -1909,7 +1935,7 @@ Compiler_SubAssign(Compiler* self)
 {
     Compiler_Expression(self);
     Compiler_Assem(self, "\tsub");
-    Compiler_Copy(self);
+    Compiler_Assem(self, "\tcpy");
 }
 
 void
@@ -1917,7 +1943,7 @@ Compiler_MulAssign(Compiler* self)
 {
     Compiler_Expression(self);
     Compiler_Assem(self, "\tmul");
-    Compiler_Copy(self);
+    Compiler_Assem(self, "\tcpy");
 }
 
 void
@@ -1925,7 +1951,7 @@ Compiler_DivAssign(Compiler* self)
 {
     Compiler_Expression(self);
     Compiler_Assem(self, "\tdiv");
-    Compiler_Copy(self);
+    Compiler_Assem(self, "\tcpy");
 }
 
 void
@@ -1939,14 +1965,14 @@ void
 Compiler_GreaterThan(Compiler* self)
 {
     Compiler_Expression(self);
-    Compiler_Assem(self, "\tgt");
+    Compiler_Assem(self, "\tgrt");
 }
 
 void
 Compiler_LessThan(Compiler* self)
 {
     Compiler_Expression(self);
-    Compiler_Assem(self, "\tlt");
+    Compiler_Assem(self, "\tlst");
 }
 
 void
@@ -2088,84 +2114,6 @@ Compiler_Expression(Compiler* self)
 }
 
 void
-Compiler_Ret(Compiler* self)
-{
-    Compiler_Expression(self);
-    Compiler_Match(self, ";");
-    Compiler_Assem(self, "\tret");
-}
-
-void
-Compiler_Block(Compiler*);
-
-void
-Compiler_If(Compiler* self)
-{
-    Compiler_Match(self, "(");
-    Compiler_Expression(self);
-    Compiler_Match(self, ")");
-    Compiler_Block(self);
-}
-
-void
-Compiler_Elif(Compiler* self)
-{
-    Compiler_Match(self, "(");
-    Compiler_Expression(self);
-    Compiler_Match(self, ")");
-    Compiler_Block(self);
-}
-
-void
-Compiler_Else(Compiler* self)
-{
-    Compiler_Block(self);
-}
-
-void
-Compiler_While(Compiler* self)
-{
-    Compiler_Match(self, "(");
-    Compiler_Expression(self);
-    Compiler_Match(self, ")");
-    Compiler_Block(self);
-}
-
-void
-Compiler_Continue(Compiler* self)
-{
-    Compiler_Match(self, ";");
-}
-
-void
-Compiler_Break(Compiler* self)
-{
-    Compiler_Match(self, ";");
-}
-
-void
-Compiler_For(Compiler* self)
-{
-    Compiler_Match(self, "(");
-    Str* first = Compiler_Ident(self);
-    Queue* scope = Queue_Init((Kill) Str_Kill, (Copy) NULL);
-    Queue_PshB(scope, Str_Copy(first));
-    Compiler_Local(self, first, false);
-    if(Compiler_Next(self) == ',')
-    {
-        Compiler_Match(self, ",");
-        Str* second = Compiler_Ident(self);
-        Compiler_Local(self, second, false);
-        Queue_PshB(scope, Str_Copy(second));
-    }
-    Compiler_Match(self, ":");
-    Compiler_Pass(self);
-    Compiler_Match(self, ")");
-    Compiler_Block(self);
-    Compiler_PopScope(self, scope);
-}
-
-void
 Compiler_Block(Compiler* self)
 {
     Queue* scope = Queue_Init((Kill) Str_Kill, (Copy) NULL);
@@ -2177,7 +2125,10 @@ Compiler_Block(Compiler* self)
             Str* ident = Compiler_Ident(self);
             if(Str_Equals(ident, "if"))
             {
-                Compiler_If(self);
+                Compiler_Match(self, "(");
+                Compiler_Expression(self);
+                Compiler_Match(self, ")");
+                Compiler_Block(self);
                 Str_Kill(ident);
                 self->chain = CHAIN_IF;
             }
@@ -2187,7 +2138,10 @@ Compiler_Block(Compiler* self)
                 if(self->chain == CHAIN_IF
                 || self->chain == CHAIN_ELIF)
                 {
-                    Compiler_Elif(self);
+                    Compiler_Match(self, "(");
+                    Compiler_Expression(self);
+                    Compiler_Match(self, ")");
+                    Compiler_Block(self);
                     Str_Kill(ident);
                 }
                 else
@@ -2200,7 +2154,7 @@ Compiler_Block(Compiler* self)
                 if(self->chain == CHAIN_IF
                 || self->chain == CHAIN_ELIF)
                 {
-                    Compiler_Else(self);
+                    Compiler_Block(self);
                     Str_Kill(ident);
                 }
                 else
@@ -2208,37 +2162,35 @@ Compiler_Block(Compiler* self)
                 self->chain = CHAIN_ELSE;
             }
             else
-            if(Str_Equals(ident, "for"))
-            {
-                Compiler_For(self);
-                Str_Kill(ident);
-                self->chain = CHAIN_NONE;
-            }
-            else
             if(Str_Equals(ident, "while"))
             {
-                Compiler_While(self);
+                Compiler_Match(self, "(");
+                Compiler_Expression(self);
+                Compiler_Match(self, ")");
+                Compiler_Block(self);
                 Str_Kill(ident);
                 self->chain = CHAIN_NONE;
             }
             else
             if(Str_Equals(ident, "ret"))
             {
-                Compiler_Ret(self);
+                Compiler_Expression(self);
+                Compiler_Match(self, ";");
+                Compiler_Assem(self, "\tret");
                 Str_Kill(ident);
                 self->chain = CHAIN_NONE;
             }
             else
             if(Str_Equals(ident, "continue"))
             {
-                Compiler_Continue(self);
+                Compiler_Match(self, ";");
                 Str_Kill(ident);
                 self->chain = CHAIN_NONE;
             }
             else
             if(Str_Equals(ident, "break"))
             {
-                Compiler_Break(self);
+                Compiler_Match(self, ";");
                 Str_Kill(ident);
                 self->chain = CHAIN_NONE;
             }

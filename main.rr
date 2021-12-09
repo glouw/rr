@@ -1,11 +1,17 @@
-A := 1;
-
 fun(a)
 {
-    ret null;
 }
 
 main()
 {
-    a := [1,2,3,4];
+    list := [ 0, 1, 2, 3];
+    fun(&list);
+    index := 0;
+    while(index < len(list))
+    {
+        index += 1;
+    }
+    assert(index == 4);
+    del(list["key"]);
+    keys(list["key"]);
 }
