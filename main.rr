@@ -4,14 +4,14 @@ fun(a)
 
 main()
 {
-    list := [ 0, 1, 2, 3];
-    fun(&list);
-    index := 0;
-    while(index < len(list))
+    while(true)
     {
-        index += 1;
+        while(true)
+        {
+            if(true)
+            {
+                break;
+            }
+        }
     }
-    assert(index == 4);
-    del(list["key"]);
-    keys(list["key"]);
 }
