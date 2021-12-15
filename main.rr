@@ -1,17 +1,10 @@
-fun(a)
+val(test)
 {
+    ret test + 1;
 }
 
 main()
 {
-    while(true)
-    {
-        while(true)
-        {
-            if(true)
-            {
-                break;
-            }
-        }
-    }
+    test := 1;
+    test + 1 = 1;
 }

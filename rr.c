@@ -29,7 +29,6 @@
  */
 
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -72,16 +71,14 @@ typedef enum
     STATE_IF,
     STATE_ELIF,
     STATE_ELSE,
-    STATE_FUNCTION,
-    STATE_WHILE,
 }
 State;
 
 typedef struct
 {
     char* value;
-    size_t size;
-    size_t cap;
+    int size;
+    int cap;
 }
 Str;
 
@@ -98,7 +95,7 @@ typedef struct
     Node** bucket;
     Kill kill;
     Copy copy;
-    size_t size;
+    int size;
     int prime_index;
     float load_factor;
 }
@@ -117,8 +114,8 @@ typedef struct
     Block** block;
     Kill kill;
     Copy copy;
-    size_t size;
-    size_t blocks;
+    int size;
+    int blocks;
 }
 Queue;
 
@@ -132,7 +129,7 @@ typedef struct
     Str* prime;
     int globals;
     int locals;
-    size_t labels;
+    int labels;
 }
 Compiler;
 
@@ -140,9 +137,9 @@ typedef struct
 {
     FILE* file;
     Str* name;
-    size_t index;
-    size_t size;
-    size_t line;
+    int index;
+    int size;
+    int line;
     unsigned char buffer[MODULE_BUFFER_SIZE];
 }
 Module;
@@ -155,7 +152,7 @@ typedef struct
 Meta;
 
 void*
-Malloc(size_t size)
+Malloc(int size)
 {
     return malloc(size);
 }
@@ -181,7 +178,7 @@ Block_Init(End end)
     return self;
 }
 
-size_t
+int
 Queue_Size(Queue* self)
 {
     return self->size;
@@ -238,7 +235,7 @@ Queue_Init(Kill kill, Copy copy)
 void
 Queue_Kill(Queue* self)
 {
-    size_t step = 0;
+    int step = 0;
     while(step < self->blocks)
     {
         Block* block = self->block[step];
@@ -255,21 +252,21 @@ Queue_Kill(Queue* self)
 }
 
 void**
-Queue_At(Queue* self, size_t index)
+Queue_At(Queue* self, int index)
 {
     if(index < self->size)
     {
         Block* block = *Queue_BlockF(self);
-        size_t at = index + block->a;
-        size_t step = at / QUEUE_BLOCK_SIZE;
-        size_t item = at % QUEUE_BLOCK_SIZE;
+        int at = index + block->a;
+        int step = at / QUEUE_BLOCK_SIZE;
+        int item = at % QUEUE_BLOCK_SIZE;
         return &self->block[step]->value[item];
     }
     return NULL;
 }
 
 void
-Queue_Set(Queue* self, size_t index, void* data)
+Queue_Set(Queue* self, int index, void* data)
 {
     void** at = Queue_At(self, index);
     if(at)
@@ -280,14 +277,14 @@ Queue_Set(Queue* self, size_t index, void* data)
 }
 
 void*
-Queue_Get(Queue* self, size_t index)
+Queue_Get(Queue* self, int index)
 {
     void** at = Queue_At(self, index);
     return at ? *at : NULL;
 }
 
 void
-Queue_Alloc(Queue* self, size_t blocks)
+Queue_Alloc(Queue* self, int blocks)
 {
     self->blocks = blocks;
     self->block = realloc(self->block, blocks * sizeof(*self->block));
@@ -345,7 +342,7 @@ Queue_PshF(Queue* self, void* value)
         Block* block = *Queue_BlockF(self);
         if(block->b == 0 || block->a == 0)
         {
-            size_t index;
+            int index;
             Queue_Alloc(self, self->blocks + 1);
             index = self->blocks - 1;
             while(index > 0)
@@ -382,7 +379,7 @@ Queue_Pop(Queue* self, End end)
             block->a += 1;
             if(block->a == QUEUE_BLOCK_SIZE)
             {
-                size_t index = 0;
+                int index = 0;
                 while(index < self->blocks - 1)
                 {
                     self->block[index] = self->block[index + 1];
@@ -409,7 +406,7 @@ Queue_PopF(Queue* self)
 }
 
 void
-Queue_Del(Queue* self, size_t index)
+Queue_Del(Queue* self, int index)
 {
     Kill kill = self->kill;
     void** at = Queue_At(self, index);
@@ -445,7 +442,7 @@ Queue*
 Queue_Copy(Queue* self)
 {
     Queue* copy = Queue_Init(self->kill, self->copy);
-    size_t index = 0;
+    int index = 0;
     while(index < Queue_Size(self))
     {
         void* temp = Queue_Get(self, index);
@@ -459,7 +456,7 @@ Queue_Copy(Queue* self)
 void
 Queue_Append(Queue* self, Queue* other)
 {
-    size_t index = 0;
+    int index = 0;
     while(index < Queue_Size(other))
     {
         void* temp = Queue_Get(other, index);
@@ -476,7 +473,7 @@ Queue_Equal(Queue* self, Queue* other, Equal equal)
         return false;
     else
     {
-        size_t index = 0;
+        int index = 0;
         while(index < Queue_Size(self))
         {
             if(!equal(Queue_Get(self, index), Queue_Get(other, index)))
@@ -488,7 +485,7 @@ Queue_Equal(Queue* self, Queue* other, Equal equal)
 }
 
 void
-Str_Alloc(Str* self, size_t cap)
+Str_Alloc(Str* self, int cap)
 {
     self->cap = cap;
     self->value = realloc(self->value, (1 + cap) * sizeof(*self->value));
@@ -526,7 +523,7 @@ Str_Copy(Str* self)
     return Str_Init(self->value);
 }
 
-size_t
+int
 Str_Size(Str* self)
 {
     return self->size;
@@ -556,7 +553,7 @@ Str_Front(Str* self)
     return *Str_Begin(self);
 }
 
-size_t
+int
 Str_Empty(Str* self)
 {
     return Str_Size(self) == 0;
@@ -580,7 +577,7 @@ Str_PopB(Str* self)
 }
 
 void
-Str_Resize(Str* self, char ch, size_t size)
+Str_Resize(Str* self, char ch, int size)
 {
     if(self->size < size)
     {
@@ -608,7 +605,7 @@ Str_Equal(Str* a, Str* b)
 void
 Str_Replace(Str* self, char a, char b)
 {
-    size_t index = 0;
+    int index = 0;
     while(index < self->size)
     {
         if(self->value[index] == a)
@@ -732,7 +729,7 @@ Node_Copy(Node* self, Copy copy)
     return Node_Init(Str_Copy(self->value), value);
 }
 
-const size_t
+const int
 Map_Primes[] = {
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67,
     71, 73, 79, 83, 89, 97, 103, 109, 113, 127, 137, 139, 149, 157, 167, 179,
@@ -745,7 +742,7 @@ Map_Primes[] = {
     45481, 49201, 53201, 57557, 62233, 67307, 72817, 78779, 85229, 92203,
 };
 
-size_t
+int
 Map_Buckets(Map* self)
 {
     return Map_Primes[self->prime_index];
@@ -771,7 +768,7 @@ Map_Init(Kill kill, Copy copy)
     return self;
 }
 
-size_t
+int
 Map_Size(Map* self)
 {
     return self->size;
@@ -788,7 +785,7 @@ Map_Kill(Map* self)
 {
     if(!Map_Empty(self))
     {
-        size_t index = 0;
+        int index = 0;
         while(index < Map_Buckets(self))
         {
             Node* bucket = self->bucket[index];
@@ -805,10 +802,10 @@ Map_Kill(Map* self)
     Free(self);
 }
 
-size_t
+unsigned
 Map_Hash(char* key)
 {
-    size_t hash = 5381;
+    unsigned hash = 5381;
     char ch = 0;
     while((ch = *key++))
         hash = ((hash << 5) + hash) + ch;
@@ -818,12 +815,12 @@ Map_Hash(char* key)
 Node**
 Map_Bucket(Map* self, char* key)
 {
-    size_t index = Map_Hash(key) % Map_Buckets(self);
+    int index = Map_Hash(key) % Map_Buckets(self);
     return &self->bucket[index];
 }
 
 void
-Map_Alloc(Map* self, size_t index)
+Map_Alloc(Map* self, int index)
 {
     self->prime_index = index;
     self->bucket = calloc(Map_Buckets(self), sizeof(*self->bucket));
@@ -835,7 +832,7 @@ Map_Emplace(Map*, Str*, Node*);
 void
 Map_Rehash(Map* self)
 {
-    size_t index = 0;
+    int index = 0;
     Map* other = Map_Init(self->kill, self->copy);
     Map_Alloc(other, self->prime_index + 1);
     while(index < Map_Buckets(self))
@@ -944,7 +941,7 @@ Map*
 Map_Copy(Map* self)
 {
     Map* copy = Map_Init(self->kill, self->copy);
-    size_t index = 0;
+    int index = 0;
     while(index < Map_Buckets(self))
     {
         Node* chain = self->bucket[index];
@@ -962,7 +959,7 @@ Map_Copy(Map* self)
 void
 Map_Append(Map* self, Map* other)
 {
-    size_t index = 0;
+    int index = 0;
     while(index < Map_Buckets(other))
     {
         Node* chain = other->bucket[index];
@@ -983,7 +980,7 @@ Map_Equal(Map* self, Map* other, Equal equal)
         return false;
     else
     {
-        size_t index = 0;
+        int index = 0;
         while(index < Map_Buckets(self))
         {
             Node* chain = self->bucket[index];
@@ -1018,7 +1015,7 @@ Class_String(Class self)
 }
 
 Meta*
-Meta_Init(Class class, size_t stack)
+Meta_Init(Class class, int stack)
 {
     Meta* self = Malloc(sizeof(*self));
     self->class = class;
@@ -1066,7 +1063,7 @@ Compiler_Quit(Compiler* self, const char* const message, ...)
     Module* back = Queue_Back(self->modules);
     va_list args;
     va_start(args, message);
-    printf("error: file `%s`: line `%lu`: ",
+    printf("error: file `%s`: line `%d`: ",
         back ? back->name->value : "?",
         back ? back->line : 0);
     vprintf(message, args);
@@ -1106,13 +1103,13 @@ Module_Kill(Module* self)
     Free(self);
 }
 
-size_t
+int
 Module_Size(Module* self)
 {
     return self->size;
 }
 
-size_t
+int
 Module_Empty(Module* self)
 {
     return Module_Size(self) == 0;
@@ -1457,7 +1454,7 @@ Compiler_Init(void)
 void
 Compiler_PrintSyms(Compiler* self)
 {
-    size_t index = 0;
+    int index = 0;
     Map* identifiers = self->identifiers;
     while(index < Map_Buckets(identifiers))
     {
@@ -1476,7 +1473,7 @@ Compiler_PrintSyms(Compiler* self)
 void
 Compiler_PrintStringQueue(Queue* queue)
 {
-    size_t index = 0;
+    int index = 0;
     while(index < Queue_Size(queue))
     {
         Str* assem = Queue_Get(queue, index);
@@ -1561,7 +1558,7 @@ Compiler_Reserved(Compiler* self, Str* ident)
 }
 
 void
-Compiler_Declare(Compiler* self, Str* ident, Class class, size_t stack)
+Compiler_Declare(Compiler* self, Str* ident, Class class, int stack)
 {
     Compiler_Reserved(self, ident);
     if(Map_Exists(self->identifiers, ident->value))
@@ -1573,14 +1570,19 @@ void
 Compiler_Expression(Compiler*);
 
 void
+Compiler_Assign(Compiler* self)
+{
+    Compiler_Match(self, ":=");
+    Compiler_Expression(self);
+    Compiler_Assem(self, "\tcpy");
+    Compiler_Match(self, ";");
+}
+
+void
 Compiler_Local(Compiler* self, Str* ident, bool assign)
 {
     if(assign)
-    {
-        Compiler_Match(self, ":=");
-        Compiler_Expression(self);
-        Compiler_Match(self, ";");
-    }
+        Compiler_Assign(self);
     Compiler_Declare(self, ident, CLASS_VARIABLE_LOCAL, self->locals);
     self->locals += 1;
 }
@@ -1589,10 +1591,9 @@ void
 Compiler_Global(Compiler* self, Str* ident)
 {
     Compiler_Label(self, ident->value, true);
-    Compiler_Match(self, ":=");
-    Compiler_Expression(self);
-    Compiler_Match(self, ";");
+    Compiler_Assign(self);
     Compiler_Declare(self, ident, CLASS_VARIABLE_GLOBAL, self->globals);
+    Compiler_Assem(self, "\tval null");
     Compiler_Assem(self, "\tret");
     self->globals += 1;
 }
@@ -1610,7 +1611,7 @@ Compiler_Params(Compiler* self)
             Compiler_Match(self, ",");
     }
     self->locals = -Queue_Size(params);
-    size_t index = 0;
+    int index = 0;
     while(index < Queue_Size(params))
     {
         Str* ident = Str_Copy(Queue_Get(params, index));
@@ -1621,11 +1622,12 @@ Compiler_Params(Compiler* self)
     return params;
 }
 
-void
+int
 Compiler_PopScope(Compiler* self, Queue* scope)
 {
-    size_t index = 0;
-    while(index < Queue_Size(scope))
+    int index = 0;
+    int popped = Queue_Size(scope);
+    while(index < popped)
     {
         Str* key = Queue_Get(scope, index);
         Meta* meta = Map_Get(self->identifiers, key->value);
@@ -1635,6 +1637,7 @@ Compiler_PopScope(Compiler* self, Queue* scope)
         self->locals -= 1;
     }
     Queue_Kill(scope);
+    return popped;
 }
 
 Meta*
@@ -1656,10 +1659,10 @@ Compiler_Ref(Compiler* self, Str* ident)
         Compiler_Assem(self, "\tref %d", meta->stack);
     else
     if(meta->class == CLASS_VARIABLE_LOCAL)
-        Compiler_Assem(self, "\tref *%d", meta->stack);
+        Compiler_Assem(self, "\tref $%d", meta->stack);
 }
 
-bool
+void
 Compiler_Term(Compiler*);
 
 void
@@ -1668,18 +1671,20 @@ Compiler_Pass(Compiler* self)
     if(Compiler_Next(self) == '&')
     {
         Compiler_Match(self, "&");
-        if(!Compiler_Term(self))
-            Compiler_Quit(self, "expected storage");
+        Compiler_Term(self);
     }
     else
+    {
         Compiler_Expression(self);
+        Compiler_Assem(self, "\tcpy");
+    }
 }
 
 void
-Compiler_Args(Compiler* self, size_t required)
+Compiler_Args(Compiler* self, int required)
 {
     Compiler_Match(self, "(");
-    size_t args = 0;
+    int args = 0;
     while(Compiler_Next(self) != ')')
     {
         Compiler_Pass(self);
@@ -1693,30 +1698,14 @@ Compiler_Args(Compiler* self, size_t required)
 }
 
 bool
-Compiler_Resolve(Compiler* self)
-{
-    bool resolved = false;
-    while(Compiler_Next(self) == '[')
-    {
-        Compiler_Match(self, "[");
-        Compiler_Expression(self);
-        Compiler_Match(self, "]");
-        Compiler_Assem(self, "\tget");
-        resolved = true;;
-    }
-    return resolved;
-}
-
-bool
 Compiler_Primed(Compiler* self)
 {
     return self->prime != NULL;
 }
 
-bool
+void
 Compiler_Factor(Compiler* self)
 {
-    bool storage = false;
     int next = Compiler_Next(self);
     /* UNARY */
     if(next == '!')
@@ -1725,9 +1714,6 @@ Compiler_Factor(Compiler* self)
         Compiler_Factor(self);
         Compiler_Assem(self, "\tnot");
     }
-    else
-    if(next == '&')
-        Compiler_Quit(self, "reference found in expression - references may only be passed as function arguments");
     /* DIGIT */
     else
     if(Compiler_IsDigit(next))
@@ -1746,42 +1732,13 @@ Compiler_Factor(Compiler* self)
             Str_Swap(&self->prime, &ident);
         else
             ident = Compiler_Ident(self);
-        /* BOOL AND NULL */
-        if(Str_IsBoolean(ident) || Str_IsNull(ident))
+        /* BOOL */
+        if(Str_IsBoolean(ident))
             Compiler_Assem(self, "\tval %s", ident->value);
-        /* BUILT IN FUN */
+        /* NULL */
         else
-        if(Str_Equals(ident, "keys"))
-        {
-            Compiler_Match(self, "(");
-            Compiler_Factor(self);
-            Compiler_Match(self, ")");
-            Compiler_Assem(self, "\tkys");
-        }
-        else
-        if(Str_Equals(ident, "del"))
-        {
-            Compiler_Match(self, "(");
-            Compiler_Factor(self);
-            Compiler_Match(self, ")");
-            Compiler_Assem(self, "\tdel");
-        }
-        else
-        if(Str_Equals(ident, "len"))
-        {
-            Compiler_Match(self, "(");
-            Compiler_Expression(self);
-            Compiler_Match(self, ")");
-            Compiler_Assem(self, "\tlen");
-        }
-        else
-        if(Str_Equals(ident, "assert"))
-        {
-            Compiler_Match(self, "(");
-            Compiler_Expression(self);
-            Compiler_Match(self, ")");
-            Compiler_Assem(self, "\tast");
-        }
+        if(Str_IsNull(ident))
+            Compiler_Assem(self, "\tval %s", ident->value);
         /* FUN */
         else
         if(Compiler_Next(self) == '(')
@@ -1789,16 +1746,10 @@ Compiler_Factor(Compiler* self)
             Meta* meta = Compiler_Expect(self, ident, Compiler_IsFunction);
             Compiler_Args(self, meta->stack);
             Compiler_Assem(self, "\tcal %s", ident->value);
-            if(Compiler_Resolve(self))
-                storage = true;
         }
-        /* STORAGE */
+        /* REF */
         else
-        {
             Compiler_Ref(self, ident);
-            Compiler_Resolve(self);
-            storage = true;
-        }
         Str_Kill(ident);
     }
     /* PAREN */
@@ -1808,7 +1759,6 @@ Compiler_Factor(Compiler* self)
         Compiler_Match(self, "(");
         Compiler_Expression(self);
         Compiler_Match(self, ")");
-        Compiler_Resolve(self);
     }
     /* DICT */
     else
@@ -1826,7 +1776,6 @@ Compiler_Factor(Compiler* self)
                 Compiler_Match(self, ",");
         }
         Compiler_Match(self, "}");
-        Compiler_Resolve(self);
     }
     /* ARRAY */
     else
@@ -1842,7 +1791,6 @@ Compiler_Factor(Compiler* self)
                 Compiler_Match(self, ",");
         }
         Compiler_Match(self, "]");
-        Compiler_Resolve(self);
     }
     /* STRING */
     else
@@ -1851,188 +1799,133 @@ Compiler_Factor(Compiler* self)
         Str* string = Compiler_String(self);
         Compiler_Assem(self, "\tval \"%s\"", string->value);
         Str_Kill(string);
-        Compiler_Resolve(self);
     }
     else
         Compiler_Quit(self, "unknown factor starting with `%c`", next);
-    return storage;
+    /* RESOLVE */
+    while(Compiler_Next(self) == '[')
+    {
+        Compiler_Match(self, "[");
+        Compiler_Expression(self);
+        Compiler_Match(self, "]");
+        Compiler_Assem(self, "\tget");
+    }
 }
 
-bool
-Compiler_IsLvalue(int terms, bool storage)
-{
-    return terms == 1 && storage == true;
-}
-
-bool
+void
 Compiler_Term(Compiler* self)
 {
-    bool storage = Compiler_Factor(self);
-    int terms = 1;
+    Compiler_Factor(self);
     while(Compiler_Next(self) == '*'
        || Compiler_Next(self) == '/'
-       || Compiler_Next(self) == '%')
+       || Compiler_Next(self) == '%'
+       || Compiler_Next(self) == '|')
     {
         Str* operator = Compiler_Operator(self);
         if(Str_Equals(operator, "*="))
         {
-            if(Compiler_IsLvalue(terms, storage))
-            {
-                Compiler_Expression(self);
-                Compiler_Assem(self, "\tmul");
-            }
-            else
-                Compiler_Quit(self, "expected lvalue");
+            Compiler_Expression(self);
+            Compiler_Assem(self, "\tmul");
         }
         else
         if(Str_Equals(operator, "/="))
         {
-            if(Compiler_IsLvalue(terms, storage))
-            {
-                Compiler_Expression(self);
-                Compiler_Assem(self, "\tdiv");
-            }
-            else
-                Compiler_Quit(self, "expected lvalue");
+            Compiler_Expression(self);
+            Compiler_Assem(self, "\tdiv");
         }
         else
         {
+            Compiler_Assem(self, "\tcpy");
             Compiler_Factor(self);
             if(Str_Equals(operator, "*"))
-            {
-                Compiler_Assem(self, "\tcpy");
                 Compiler_Assem(self, "\tmul");
-            }
             else
             if(Str_Equals(operator, "/"))
-            {
-                Compiler_Assem(self, "\tcpy");
                 Compiler_Assem(self, "\tdiv");
-            }
             else
             if(Str_Equals(operator, "%"))
-            {
-                Compiler_Assem(self, "\tcpy");
                 Compiler_Assem(self, "\tfmt");
-            }
+            else
+            if(Str_Equals(operator, "||"))
+                Compiler_Assem(self, "\tlor");
             else
                 Compiler_Quit(self, "operator `%s` not supported", operator->value);
         }
         Str_Kill(operator);
     }
-    return storage;
 }
 
 void
 Compiler_Expression(Compiler* self)
 {
-    bool storage = Compiler_Term(self);
-    int terms = 1;
+    Compiler_Term(self);
     while(Compiler_Next(self) == '+' 
        || Compiler_Next(self) == '-'
        || Compiler_Next(self) == '='
        || Compiler_Next(self) == '>'
        || Compiler_Next(self) == '<'
-       || Compiler_Next(self) == '&'
-       || Compiler_Next(self) == '|')
+       || Compiler_Next(self) == '&')
     {
         Str* operator = Compiler_Operator(self);
         if(Str_Equals(operator, "="))
         {
-            if(Compiler_IsLvalue(terms, storage))
-            {
-                Compiler_Expression(self);
-                Compiler_Assem(self, "\tmov");
-            }
-            else
-                Compiler_Quit(self, "expected lvalue");
+            Compiler_Expression(self);
+            Compiler_Assem(self, "\tmov");
         }
         else
         if(Str_Equals(operator, "+="))
         {
-            if(Compiler_IsLvalue(terms, storage))
-            {
-                Compiler_Expression(self);
-                Compiler_Assem(self, "\tadd");
-            }
-            else
-                Compiler_Quit(self, "expected lvalue");
+            Compiler_Expression(self);
+            Compiler_Assem(self, "\tadd");
         }
         else
         if(Str_Equals(operator, "-="))
         {
-            if(Compiler_IsLvalue(terms, storage))
-            {
-                Compiler_Expression(self);
-                Compiler_Assem(self, "\tsub");
-            }
-            else
-                Compiler_Quit(self, "expected lvalue");
+            Compiler_Expression(self);
+            Compiler_Assem(self, "\tsub");
         }
         else
         if(Str_Equals(operator, "=="))
         {
-            Compiler_Assem(self, "\tcpy");
             Compiler_Expression(self);
             Compiler_Assem(self, "\teql");
         }
         else
         if(Str_Equals(operator, ">"))
         {
-            Compiler_Assem(self, "\tcpy");
             Compiler_Expression(self);
             Compiler_Assem(self, "\tgrt");
         }
         else
         if(Str_Equals(operator, "<"))
         {
-            Compiler_Assem(self, "\tcpy");
             Compiler_Expression(self);
             Compiler_Assem(self, "\tlst");
         }
         else
         if(Str_Equals(operator, ">="))
         {
-            Compiler_Assem(self, "\tcpy");
             Compiler_Expression(self);
             Compiler_Assem(self, "\tgte");
         }
         else
         if(Str_Equals(operator, "<="))
         {
-            Compiler_Assem(self, "\tcpy");
             Compiler_Expression(self);
             Compiler_Assem(self, "\tlte");
         }
         else
-        if(Str_Equals(operator, "&&"))
         {
             Compiler_Assem(self, "\tcpy");
-            Compiler_Expression(self);
-            Compiler_Assem(self, "\tand");
-        }
-        else
-        if(Str_Equals(operator, "||"))
-        {
-            Compiler_Assem(self, "\tcpy");
-            Compiler_Expression(self);
-            Compiler_Assem(self, "\tlor");
-        }
-        else
-        {
             Compiler_Term(self);
-            terms += 1;
             if(Str_Equals(operator, "+"))
-            {
-                Compiler_Assem(self, "\tcpy");
                 Compiler_Assem(self, "\tadd");
-            }
             else
             if(Str_Equals(operator, "-"))
-            {
-                Compiler_Assem(self, "\tcpy");
                 Compiler_Assem(self, "\tsub");
-            }
+            else
+            if(Str_Equals(operator, "&&"))
+                Compiler_Assem(self, "\tand");
             else
                 Compiler_Quit(self, "operator `%s` not supported", operator->value);
         }
@@ -2041,12 +1934,12 @@ Compiler_Expression(Compiler* self)
 }
 
 void
-Compiler_Block(Compiler* self, size_t head, size_t tail)
+Compiler_Block(Compiler* self, int head, int tail)
 {
     Queue* scope = Queue_Init((Kill) Str_Kill, (Copy) NULL);
     State chain = STATE_NONE;
-    size_t entry = self->labels + 0;
-    size_t final = self->labels + 1;
+    int entry = self->labels + 0;
+    int final = self->labels + 1;
     self->labels += 2;
     Compiler_Match(self, "{");
     while(Compiler_Next(self) != '}')
@@ -2114,8 +2007,8 @@ Compiler_Block(Compiler* self, size_t head, size_t tail)
             if(Str_Equals(ident, "ret"))
             {
                 Compiler_Expression(self);
-                Compiler_Match(self, ";");
                 Compiler_Assem(self, "\tret");
+                Compiler_Match(self, ";");
                 Str_Kill(ident);
                 chain = STATE_NONE;
             }
@@ -2152,7 +2045,6 @@ Compiler_Block(Compiler* self, size_t head, size_t tail)
                 Compiler_Expression(self);
                 Compiler_Match(self, ";");
                 chain = STATE_NONE;
-                Compiler_Assem(self, "\tpop");
             }
         }
         else /* UNPRIMED EXPRESSION */
@@ -2160,7 +2052,6 @@ Compiler_Block(Compiler* self, size_t head, size_t tail)
             Compiler_Expression(self);
             Compiler_Match(self, ";");
             chain = STATE_NONE;
-            Compiler_Assem(self, "\tpop");
         }
     }
     Compiler_Match(self, "}");
@@ -2174,8 +2065,9 @@ Compiler_Function(Compiler* self, Str* ident)
     Compiler_Declare(self, ident, CLASS_FUNCTION, Queue_Size(params));
     Compiler_Label(self, ident->value, false);
     Compiler_Block(self, 0, 0);
-    Compiler_Assem(self, "\tret");
     Compiler_PopScope(self, params);
+    Compiler_Assem(self, "\tval null");
+    Compiler_Assem(self, "\tret");
 }
 
 void
