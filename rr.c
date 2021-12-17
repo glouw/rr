@@ -30,6 +30,7 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -150,6 +151,86 @@ typedef struct
     int stack;
 }
 Meta;
+
+typedef enum Type
+{
+    TYPE_ARRAY,
+    TYPE_DICT,
+    TYPE_STRING,
+    TYPE_NUMBER,
+    TYPE_BOOL,
+    TYPE_NULL,
+}
+Type;
+
+typedef union
+{
+    Queue* array;
+    Map* dict;
+    Str* string;
+    double number;
+    bool boolean;
+}
+Of;
+
+typedef struct
+{
+    Type type;
+    Of of;
+}
+Value;
+
+typedef Value* Element;
+
+typedef enum
+{
+    OPCODE_ADD,
+    OPCODE_AND,
+    OPCODE_BRF,
+    OPCODE_CAL,
+    OPCODE_CPY,
+    OPCODE_DIV,
+    OPCODE_EQL,
+    OPCODE_FMT,
+    OPCODE_GET,
+    OPCODE_GRT,
+    OPCODE_GTE,
+    OPCODE_INS,
+    OPCODE_JMP,
+    OPCODE_LOR,
+    OPCODE_LST,
+    OPCODE_LTE,
+    OPCODE_MOV,
+    OPCODE_MUL,
+    OPCODE_NOT,
+    OPCODE_POP,
+    OPCODE_PSB,
+    OPCODE_PSF,
+    OPCODE_REF,
+    OPCODE_RET,
+    OPCODE_SUB,
+    OPCODE_VAL,
+}
+Opcode;
+
+typedef struct
+{
+    Queue* data;
+    uint64_t* instructions;
+}
+Binary;
+
+void
+Quit(const char* const message, ...)
+{
+    va_list args;
+    va_start(args, message);
+    printf("error: ");
+    vprintf(message, args);
+    printf("\n");
+    va_end(args);
+    exit(3);
+}
 
 void*
 Malloc(int size)
@@ -591,15 +672,21 @@ Str_Resize(Str* self, char ch, int size)
 }
 
 bool
+Equals(char* a, char* b)
+{
+    return strcmp(a, b) == 0;
+}
+
+bool
 Str_Equals(Str* a, char* b)
 {
-    return strcmp(a->value, b) == 0;
+    return Equals(a->value, b);
 }
 
 bool
 Str_Equal(Str* a, Str* b)
 {
-    return Str_Equals(a, b->value);
+    return Equals(a->value, b->value);
 }
 
 void
@@ -1063,7 +1150,7 @@ Compiler_Quit(Compiler* self, const char* const message, ...)
     Module* back = Queue_Back(self->modules);
     va_list args;
     va_start(args, message);
-    printf("error: file `%s`: line `%d`: ",
+    printf("compilation error: file `%s`: line `%d`: ",
         back ? back->name->value : "?",
         back ? back->line : 0);
     vprintf(message, args);
@@ -1548,19 +1635,8 @@ Compiler_IsFunction(Class class)
 }
 
 void
-Compiler_Reserved(Compiler* self, Str* ident)
+Compiler_Declare(Compiler* self, Class class, int stack, Str* ident)
 {
-    if(Str_Equals(ident, "keys")
-    || Str_Equals(ident, "del")
-    || Str_Equals(ident, "len")
-    || Str_Equals(ident, "assert"))
-        Compiler_Quit(self, "`%s` is a built-in identifier", ident->value);
-}
-
-void
-Compiler_Declare(Compiler* self, Str* ident, Class class, int stack)
-{
-    Compiler_Reserved(self, ident);
     if(Map_Exists(self->identifiers, ident->value))
         Compiler_Quit(self, "`%s` already defined", ident->value);
     Map_Set(self->identifiers, ident, Meta_Init(class, stack));
@@ -1583,7 +1659,7 @@ Compiler_Local(Compiler* self, Str* ident, bool assign)
 {
     if(assign)
         Compiler_Assign(self);
-    Compiler_Declare(self, ident, CLASS_VARIABLE_LOCAL, self->locals);
+    Compiler_Declare(self, CLASS_VARIABLE_LOCAL, self->locals, ident);
     self->locals += 1;
 }
 
@@ -1592,7 +1668,7 @@ Compiler_Global(Compiler* self, Str* ident)
 {
     Compiler_Label(self, ident->value, true);
     Compiler_Assign(self);
-    Compiler_Declare(self, ident, CLASS_VARIABLE_GLOBAL, self->globals);
+    Compiler_Declare(self, CLASS_VARIABLE_GLOBAL, self->globals, ident);
     Compiler_Assem(self, "\tval null");
     Compiler_Assem(self, "\tret");
     self->globals += 1;
@@ -1662,7 +1738,7 @@ Compiler_Ref(Compiler* self, Str* ident)
         Compiler_Assem(self, "\tref $%d", meta->stack);
 }
 
-void
+bool
 Compiler_Term(Compiler*);
 
 void
@@ -1671,7 +1747,9 @@ Compiler_Pass(Compiler* self)
     if(Compiler_Next(self) == '&')
     {
         Compiler_Match(self, "&");
-        Compiler_Term(self);
+        Str* ident = Compiler_Ident(self);
+        Compiler_Ref(self, ident);
+        Str_Kill(ident);
     }
     else
     {
@@ -1703,18 +1781,17 @@ Compiler_Primed(Compiler* self)
     return self->prime != NULL;
 }
 
-void
+bool
 Compiler_Factor(Compiler* self)
 {
+    bool storage = false;
     int next = Compiler_Next(self);
-    /* UNARY */
     if(next == '!')
     {
         Compiler_Match(self, "!");
         Compiler_Factor(self);
         Compiler_Assem(self, "\tnot");
     }
-    /* DIGIT */
     else
     if(Compiler_IsDigit(next))
     {
@@ -1722,7 +1799,6 @@ Compiler_Factor(Compiler* self)
         Compiler_Assem(self, "\tval %s", number->value);
         Str_Kill(number);
     }
-    /* IDENT */
     else
     if(Compiler_IsIdent(next)
     || Compiler_Primed(self))
@@ -1732,14 +1808,11 @@ Compiler_Factor(Compiler* self)
             Str_Swap(&self->prime, &ident);
         else
             ident = Compiler_Ident(self);
-        /* BOOL */
         if(Str_IsBoolean(ident))
             Compiler_Assem(self, "\tval %s", ident->value);
-        /* NULL */
         else
         if(Str_IsNull(ident))
             Compiler_Assem(self, "\tval %s", ident->value);
-        /* FUN */
         else
         if(Compiler_Next(self) == '(')
         {
@@ -1747,12 +1820,13 @@ Compiler_Factor(Compiler* self)
             Compiler_Args(self, meta->stack);
             Compiler_Assem(self, "\tcal %s", ident->value);
         }
-        /* REF */
         else
+        {
             Compiler_Ref(self, ident);
+            storage = true;
+        }
         Str_Kill(ident);
     }
-    /* PAREN */
     else
     if(next == '(')
     {
@@ -1760,7 +1834,6 @@ Compiler_Factor(Compiler* self)
         Compiler_Expression(self);
         Compiler_Match(self, ")");
     }
-    /* DICT */
     else
     if(next == '{')
     {
@@ -1777,7 +1850,6 @@ Compiler_Factor(Compiler* self)
         }
         Compiler_Match(self, "}");
     }
-    /* ARRAY */
     else
     if(next == '[')
     {
@@ -1792,7 +1864,6 @@ Compiler_Factor(Compiler* self)
         }
         Compiler_Match(self, "]");
     }
-    /* STRING */
     else
     if(next == '"')
     {
@@ -1802,7 +1873,6 @@ Compiler_Factor(Compiler* self)
     }
     else
         Compiler_Quit(self, "unknown factor starting with `%c`", next);
-    /* RESOLVE */
     while(Compiler_Next(self) == '[')
     {
         Compiler_Match(self, "[");
@@ -1810,12 +1880,13 @@ Compiler_Factor(Compiler* self)
         Compiler_Match(self, "]");
         Compiler_Assem(self, "\tget");
     }
+    return storage;
 }
 
-void
+bool
 Compiler_Term(Compiler* self)
 {
-    Compiler_Factor(self);
+    bool storage = Compiler_Factor(self);
     while(Compiler_Next(self) == '*'
        || Compiler_Next(self) == '/'
        || Compiler_Next(self) == '%'
@@ -1824,17 +1895,22 @@ Compiler_Term(Compiler* self)
         Str* operator = Compiler_Operator(self);
         if(Str_Equals(operator, "*="))
         {
+            if(!storage)
+                Compiler_Quit(self, "factor - left hand side must be storage");
             Compiler_Expression(self);
             Compiler_Assem(self, "\tmul");
         }
         else
         if(Str_Equals(operator, "/="))
         {
+            if(!storage)
+                Compiler_Quit(self, "factor - left hand side must be storage");
             Compiler_Expression(self);
             Compiler_Assem(self, "\tdiv");
         }
         else
         {
+            storage = false;
             Compiler_Assem(self, "\tcpy");
             Compiler_Factor(self);
             if(Str_Equals(operator, "*"))
@@ -1853,12 +1929,13 @@ Compiler_Term(Compiler* self)
         }
         Str_Kill(operator);
     }
+    return storage;
 }
 
 void
 Compiler_Expression(Compiler* self)
 {
-    Compiler_Term(self);
+    bool storage = Compiler_Term(self);
     while(Compiler_Next(self) == '+' 
        || Compiler_Next(self) == '-'
        || Compiler_Next(self) == '='
@@ -1869,18 +1946,24 @@ Compiler_Expression(Compiler* self)
         Str* operator = Compiler_Operator(self);
         if(Str_Equals(operator, "="))
         {
+            if(!storage)
+                Compiler_Quit(self, "term - left hand side must be storage");
             Compiler_Expression(self);
             Compiler_Assem(self, "\tmov");
         }
         else
         if(Str_Equals(operator, "+="))
         {
+            if(!storage)
+                Compiler_Quit(self, "term - left hand side must be storage");
             Compiler_Expression(self);
             Compiler_Assem(self, "\tadd");
         }
         else
         if(Str_Equals(operator, "-="))
         {
+            if(!storage)
+                Compiler_Quit(self, "term - left hand side must be storage");
             Compiler_Expression(self);
             Compiler_Assem(self, "\tsub");
         }
@@ -1916,6 +1999,7 @@ Compiler_Expression(Compiler* self)
         }
         else
         {
+            storage = false;
             Compiler_Assem(self, "\tcpy");
             Compiler_Term(self);
             if(Str_Equals(operator, "+"))
@@ -2045,6 +2129,7 @@ Compiler_Block(Compiler* self, int head, int tail)
                 Compiler_Expression(self);
                 Compiler_Match(self, ";");
                 chain = STATE_NONE;
+                Compiler_Assem(self, "\tpop");
             }
         }
         else /* UNPRIMED EXPRESSION */
@@ -2052,6 +2137,7 @@ Compiler_Block(Compiler* self, int head, int tail)
             Compiler_Expression(self);
             Compiler_Match(self, ";");
             chain = STATE_NONE;
+            Compiler_Assem(self, "\tpop");
         }
     }
     Compiler_Match(self, "}");
@@ -2059,10 +2145,19 @@ Compiler_Block(Compiler* self, int head, int tail)
 }
 
 void
+Compiler_Reserve(Compiler* self)
+{
+    Compiler_Declare(self, CLASS_FUNCTION, 1, Str_Init("len"));
+    Compiler_Declare(self, CLASS_FUNCTION, 2, Str_Init("del"));
+    Compiler_Declare(self, CLASS_FUNCTION, 1, Str_Init("assert"));
+    Compiler_Declare(self, CLASS_FUNCTION, 1, Str_Init("print"));
+}
+
+void
 Compiler_Function(Compiler* self, Str* ident)
 {
     Queue* params = Compiler_Params(self);
-    Compiler_Declare(self, ident, CLASS_FUNCTION, Queue_Size(params));
+    Compiler_Declare(self, CLASS_FUNCTION, Queue_Size(params), ident);
     Compiler_Label(self, ident->value, false);
     Compiler_Block(self, 0, 0);
     Compiler_PopScope(self, params);
@@ -2093,6 +2188,275 @@ Compiler_Parse(Compiler* self)
     }
 }
 
+void
+Value_Kill(Value* self)
+{
+    switch(self->type)
+    {
+    case TYPE_ARRAY:
+        Queue_Kill(self->of.array);
+        break;
+    case TYPE_DICT:
+        Map_Kill(self->of.dict);
+        break;
+    case TYPE_STRING:
+        Str_Kill(self->of.string);
+        break;
+    case TYPE_NUMBER:
+    case TYPE_BOOL:
+    case TYPE_NULL:
+        Free(self);
+        break;
+    }
+}
+
+Value*
+Value_Copy(Value*);
+
+Value*
+Value_Init(Type type, Of of)
+{
+    Value* self = Malloc(sizeof(*self));
+    self->type = type;
+    switch(type)
+    {
+    case TYPE_ARRAY:
+        self->of.array = Queue_Init(
+            (Kill) Value_Kill,
+            (Copy) Value_Copy);
+        break;
+    case TYPE_DICT:
+        self->of.dict = Map_Init(
+            (Kill) Value_Kill,
+            (Copy) Value_Copy);
+        break;
+    case TYPE_STRING:
+        self->of.string = of.string;
+        break;
+    case TYPE_NUMBER:
+        self->of.number = of.number;
+        break;
+    case TYPE_BOOL:
+        self->of.boolean = of.boolean;
+        break;
+    case TYPE_NULL:
+        break;
+    }
+    return self;
+}
+
+Value*
+Value_Copy(Value* self)
+{
+    Value* copy = Malloc(sizeof(*self));
+    copy->type = self->type;
+    switch(copy->type)
+    {
+    case TYPE_ARRAY:
+        copy->of.array = Queue_Copy(self->of.array);
+        break;
+    case TYPE_DICT:
+        copy->of.dict = Map_Copy(self->of.dict);
+        break;
+    case TYPE_STRING:
+        copy->of.string = Str_Copy(self->of.string);
+        break;
+    case TYPE_NUMBER:
+    case TYPE_BOOL:
+    case TYPE_NULL:
+        copy->of = self->of;
+    }
+    return copy;
+}
+
+Map*
+Assembler_Label(Queue* assembly)
+{
+    int instruction = 0;
+    Map* labels = Map_Init((Kill) Free, (Copy) NULL);
+    for(int i = 0; i < Queue_Size(assembly); i++)
+    {
+        Str* line = Queue_Get(assembly, i);
+        if(line->value[0] == '\t')
+            instruction += 1;
+        else /* Label */
+        {
+            char* label = strtok(line->value, ":");
+            int* at = Malloc(sizeof(*at));
+            *at = instruction;
+            Map_Set(labels, Str_Init(label), at);
+        }
+    }
+    return labels;
+}
+
+Binary*
+Binary_Init(Queue* assembly)
+{
+    Binary* bin = Malloc(sizeof(*bin));
+    bin->data = Queue_Init(
+        (Kill) Value_Kill,
+        (Copy) Value_Copy);
+    bin->instructions = Malloc(Queue_Size(assembly) * sizeof(*bin->instructions));
+    return bin;
+}
+
+void
+Binary_Kill(Binary* self)
+{
+    Queue_Kill(self->data);
+    Free(self->instructions);
+    Free(self);
+}
+
+Binary*
+Assembler_Assemble(Queue* assembly)
+{
+    Binary* bin = Binary_Init(assembly);
+    Map* labels = Assembler_Label(assembly);
+    for(int i = 0; i < Queue_Size(assembly); i++)
+    {
+        Str* line = Str_Copy(Queue_Get(assembly, i));
+        if(line->value[0] == '\t')
+        {
+            int instruction = 0;
+            char* mnemonic = strtok(line->value, " \t\n");
+            char* operator = strtok(NULL, "\n");
+            if(Equals(mnemonic, "add"))
+                instruction = OPCODE_ADD;
+            else
+            if(Equals(mnemonic, "and"))
+                instruction = OPCODE_AND;
+            else
+            if(Equals(mnemonic, "brf"))
+            {
+                instruction = OPCODE_BRF;
+                int* address = Map_Get(labels, operator);
+                instruction |= *address << 8;
+            }
+            else
+            if(Equals(mnemonic, "cal"))
+            {
+                instruction = OPCODE_CAL;
+                int* address = Map_Get(labels, operator);
+                instruction |= *address << 8;
+            }
+            else
+            if(Equals(mnemonic, "cpy"))
+                instruction = OPCODE_CPY;
+            else
+            if(Equals(mnemonic, "div"))
+                instruction = OPCODE_DIV;
+            else
+            if(Equals(mnemonic, "eql"))
+                instruction = OPCODE_EQL;
+            else
+            if(Equals(mnemonic, "fmt"))
+                instruction = OPCODE_FMT;
+            else
+            if(Equals(mnemonic, "get"))
+                instruction = OPCODE_GET;
+            else
+            if(Equals(mnemonic, "grt"))
+                instruction = OPCODE_GRT;
+            else
+            if(Equals(mnemonic, "gte"))
+                instruction = OPCODE_GTE;
+            else
+            if(Equals(mnemonic, "ins"))
+                instruction = OPCODE_INS;
+            else
+            if(Equals(mnemonic, "jmp"))
+            {
+                instruction = OPCODE_JMP;
+                int* address = Map_Get(labels, operator);
+                instruction |= *address << 8;
+            }
+            else
+            if(Equals(mnemonic, "lor"))
+                instruction = OPCODE_LOR;
+            else
+            if(Equals(mnemonic, "lst"))
+                instruction = OPCODE_LST;
+            else
+            if(Equals(mnemonic, "lte"))
+                instruction = OPCODE_LTE;
+            else
+            if(Equals(mnemonic, "mov"))
+                instruction = OPCODE_MOV;
+            else
+            if(Equals(mnemonic, "mul"))
+                instruction = OPCODE_MUL;
+            else
+            if(Equals(mnemonic, "not"))
+                instruction = OPCODE_NOT;
+            else
+            if(Equals(mnemonic, "pop"))
+                instruction = OPCODE_POP;
+            else
+            if(Equals(mnemonic, "psb"))
+                instruction = OPCODE_PSB;
+            else
+            if(Equals(mnemonic, "psf"))
+                instruction = OPCODE_PSF;
+            else
+            if(Equals(mnemonic, "ref"))
+                instruction = OPCODE_REF;
+            else
+            if(Equals(mnemonic, "ret"))
+                instruction = OPCODE_RET;
+            else
+            if(Equals(mnemonic, "sub"))
+                instruction = OPCODE_SUB;
+            else
+            if(Equals(mnemonic, "val"))
+            {
+                char ch = operator[0];
+                Of of;
+                switch(ch)
+                {
+                case '[':
+                    Queue_PshB(bin->data, Value_Init(TYPE_ARRAY, of));
+                    break;
+                case '{':
+                    Queue_PshB(bin->data, Value_Init(TYPE_DICT, of));
+                    break;
+                case '"':
+                    of.string = Str_Init(operator);
+                    Queue_PshB(bin->data, Value_Init(TYPE_STRING, of));
+                    break;
+                case 't':
+                case 'f':
+                    of.boolean = Equals(operator, "true") ? true : false;
+                    Queue_PshB(bin->data, Value_Init(TYPE_BOOL, of));
+                    break;
+                case 'n':
+                    Queue_PshB(bin->data, Value_Init(TYPE_NULL, of));
+                    break;
+                default:
+                    if(Compiler_IsNumber(ch))
+                    {
+                        of.number = atof(operator);
+                        Queue_PshB(bin->data, Value_Init(TYPE_NUMBER, of));
+                    }
+                    else
+                        Quit("unknown val operand");
+                    break;
+                }
+                int index = Queue_Size(bin->data) - 1;
+                instruction = (index << 8) | OPCODE_VAL;
+                printf("-> %08X\n", instruction);
+            }
+            else
+                Quit("unknown mnemonic `%s`", mnemonic);
+            bin->instructions[i] = instruction;
+        }
+        Str_Kill(line);
+    }
+    Map_Kill(labels);
+    return bin;
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -2105,11 +2469,14 @@ main(int argc, char* argv[])
     {
         Str* entry = Str_Init(argv[1]);
         Compiler* compiler = Compiler_Init();
+        Compiler_Reserve(compiler);
         Compiler_LoadModule(compiler, entry);
         Compiler_Parse(compiler);
+        Binary* bin = Assembler_Assemble(compiler->assembly);
         Compiler_PrintStringQueue(compiler->assembly);
         Compiler_PrintSyms(compiler);
         Compiler_Kill(compiler);
         Str_Kill(entry);
+        Binary_Kill(bin);
     }
 }
