@@ -180,8 +180,6 @@ typedef struct
 }
 Value;
 
-typedef Value* Element;
-
 typedef enum
 {
     OPCODE_ADD,
@@ -229,7 +227,7 @@ Quit(const char* const message, ...)
     vprintf(message, args);
     printf("\n");
     va_end(args);
-    exit(3);
+    exit(1);
 }
 
 void*
@@ -316,8 +314,7 @@ Queue_Init(Kill kill, Copy copy)
 void
 Queue_Kill(Queue* self)
 {
-    int step = 0;
-    while(step < self->blocks)
+    for(int step = 0; step < self->blocks; step++)
     {
         Block* block = self->block[step];
         while(block->a < block->b)
@@ -325,7 +322,6 @@ Queue_Kill(Queue* self)
             Delete(self->kill, block->value[block->a]);
             block->a += 1;
         }
-        step += 1;
         Free(block);
     }
     Free(self->block);
@@ -423,14 +419,9 @@ Queue_PshF(Queue* self, void* value)
         Block* block = *Queue_BlockF(self);
         if(block->b == 0 || block->a == 0)
         {
-            int index;
             Queue_Alloc(self, self->blocks + 1);
-            index = self->blocks - 1;
-            while(index > 0)
-            {
-                self->block[index] = self->block[index - 1];
-                index -= 1;
-            }
+            for(int i = self->blocks - 1; i > 0; i--)
+                self->block[i] = self->block[i - 1];
             *Queue_BlockF(self) = Block_Init(FRONT);
         }
     }
@@ -460,12 +451,8 @@ Queue_Pop(Queue* self, End end)
             block->a += 1;
             if(block->a == QUEUE_BLOCK_SIZE)
             {
-                int index = 0;
-                while(index < self->blocks - 1)
-                {
-                    self->block[index] = self->block[index + 1];
-                    index += 1;
-                }
+                for(int i = 0; i < self->blocks - 1; i++)
+                    self->block[i] = self->block[i + 1];
                 Free(block);
                 Queue_Alloc(self, self->blocks - 1);
             }
@@ -523,13 +510,11 @@ Queue*
 Queue_Copy(Queue* self)
 {
     Queue* copy = Queue_Init(self->kill, self->copy);
-    int index = 0;
-    while(index < Queue_Size(self))
+    for(int i = 0; i < Queue_Size(self); i++)
     {
-        void* temp = Queue_Get(self, index);
+        void* temp = Queue_Get(self, i);
         void* value = copy->copy ? copy->copy(temp) : temp;
         Queue_PshB(copy, value);
-        index += 1;
     }
     return copy;
 }
@@ -537,13 +522,11 @@ Queue_Copy(Queue* self)
 void
 Queue_Append(Queue* self, Queue* other)
 {
-    int index = 0;
-    while(index < Queue_Size(other))
+    for(int i = 0; i < Queue_Size(other); i++)
     {
-        void* temp = Queue_Get(other, index);
+        void* temp = Queue_Get(other, i);
         void* value = self->copy ? self->copy(temp) : temp;
         Queue_PshB(self, value);
-        index += 1;
     }
 }
 
@@ -552,16 +535,9 @@ Queue_Equal(Queue* self, Queue* other, Equal equal)
 {
     if(Queue_Size(self) != Queue_Size(other))
         return false;
-    else
-    {
-        int index = 0;
-        while(index < Queue_Size(self))
-        {
-            if(!equal(Queue_Get(self, index), Queue_Get(other, index)))
-                return false;
-            index += 1;
-        }
-    }
+    else for(int i = 0; i < Queue_Size(self); i++)
+        if(!equal(Queue_Get(self, i), Queue_Get(other, i)))
+            return false;
     return true;
 }
 
@@ -692,13 +668,9 @@ Str_Equal(Str* a, Str* b)
 void
 Str_Replace(Str* self, char a, char b)
 {
-    int index = 0;
-    while(index < self->size)
-    {
-        if(self->value[index] == a)
-            self->value[index] = b;
-        index += 1;
-    }
+    for(int i = 0; i < self->size; i++)
+        if(self->value[i] == a)
+            self->value[i] = b;
 }
 
 void
@@ -872,17 +844,15 @@ Map_Kill(Map* self)
 {
     if(!Map_Empty(self))
     {
-        int index = 0;
-        while(index < Map_Buckets(self))
+        for(int i = 0; i < Map_Buckets(self); i++)
         {
-            Node* bucket = self->bucket[index];
+            Node* bucket = self->bucket[i];
             while(bucket)
             {
                 Node* next = bucket->next;
                 Node_Kill(bucket, self->kill);
                 bucket = next;
             }
-            index += 1;
         }
     }
     Free(self->bucket);
@@ -919,19 +889,17 @@ Map_Emplace(Map*, Str*, Node*);
 void
 Map_Rehash(Map* self)
 {
-    int index = 0;
     Map* other = Map_Init(self->kill, self->copy);
     Map_Alloc(other, self->prime_index + 1);
-    while(index < Map_Buckets(self))
+    for(int i = 0; i < Map_Buckets(self); i++)
     {
-        Node* bucket = self->bucket[index];
+        Node* bucket = self->bucket[i];
         while(bucket)
         {
             Node* next = bucket->next;
             Map_Emplace(other, bucket->key, bucket);
             bucket = next;
         }
-        index += 1;
     }
     Free(self->bucket);
     *self = *other;
@@ -1028,17 +996,15 @@ Map*
 Map_Copy(Map* self)
 {
     Map* copy = Map_Init(self->kill, self->copy);
-    int index = 0;
-    while(index < Map_Buckets(self))
+    for(int i = 0; i < Map_Buckets(self); i++)
     {
-        Node* chain = self->bucket[index];
+        Node* chain = self->bucket[i];
         while(chain)
         {
             Node* node = Node_Copy(chain, copy->copy);
             Map_Emplace(copy, chain->key, node);
             chain = chain->next;
         }
-        index += 1;
     }
     return copy;
 }
@@ -1046,17 +1012,15 @@ Map_Copy(Map* self)
 void
 Map_Append(Map* self, Map* other)
 {
-    int index = 0;
-    while(index < Map_Buckets(other))
+    for(int i = 0; i < Map_Buckets(other); i++)
     {
-        Node* chain = other->bucket[index];
+        Node* chain = other->bucket[i];
         while(chain)
         {
             Map_Set(self, Str_Copy(chain->key), 
                 self->copy ? self->copy(chain->value) : chain->value);
             chain = chain->next;
         }
-        index += 1;
     }
 }
 
@@ -1067,10 +1031,9 @@ Map_Equal(Map* self, Map* other, Equal equal)
         return false;
     else
     {
-        int index = 0;
-        while(index < Map_Buckets(self))
+        for(int i = 0; i < Map_Buckets(self); i++)
         {
-            Node* chain = self->bucket[index];
+            Node* chain = self->bucket[i];
             while(chain)
             {
                 void* got = Map_Get(other, chain->key->value);
@@ -1080,7 +1043,6 @@ Map_Equal(Map* self, Map* other, Equal equal)
                     return false;
                 chain = chain->next;
             }
-            index += 1;
         }
     }
     return true;
@@ -1541,32 +1503,18 @@ Compiler_Init(void)
 void
 Compiler_PrintSyms(Compiler* self)
 {
-    int index = 0;
     Map* identifiers = self->identifiers;
-    while(index < Map_Buckets(identifiers))
+    for(int i = 0; i < Map_Buckets(identifiers); i++)
     {
-        Node* bucket = identifiers->bucket[index];
+        Node* bucket = identifiers->bucket[i];
         while(bucket)
         {
             Meta* meta = bucket->value;
             printf("\n%s : %2d : %s", Class_String(meta->class), meta->stack, bucket->key->value);
             bucket = bucket->next;
         }
-        index += 1;
     }
     putchar('\n');
-}
-
-void
-Compiler_PrintStringQueue(Queue* queue)
-{
-    int index = 0;
-    while(index < Queue_Size(queue))
-    {
-        Str* assem = Queue_Get(queue, index);
-        puts(assem->value);
-        index += 1;
-    }
 }
 
 void
@@ -1584,13 +1532,11 @@ Str*
 Compiler_Parents(Str* module)
 {
     Str* parents = Str_Init("");
-    char* value = module->value;
-    while(*value)
+    for(char* value = module->value; *value; value++)
     {
         if(*value != '.')
             break;
         Str_Appends(parents, "../");
-        value += 1;
     }
     return parents;
 }
@@ -1695,12 +1641,10 @@ Compiler_Params(Compiler* self)
             Compiler_Match(self, ",");
     }
     self->locals = -Queue_Size(params);
-    int index = 0;
-    while(index < Queue_Size(params))
+    for(int i = 0; i < Queue_Size(params); i++)
     {
-        Str* ident = Str_Copy(Queue_Get(params, index));
+        Str* ident = Str_Copy(Queue_Get(params, i));
         Compiler_Local(self, ident, false);
-        index += 1;
     }
     Compiler_Match(self, ")");
     return params;
@@ -1709,15 +1653,13 @@ Compiler_Params(Compiler* self)
 int
 Compiler_PopScope(Compiler* self, Queue* scope)
 {
-    int index = 0;
     int popped = Queue_Size(scope);
-    while(index < popped)
+    for(int i = 0; i < popped; i++)
     {
-        Str* key = Queue_Get(scope, index);
+        Str* key = Queue_Get(scope, i);
         Meta* meta = Map_Get(self->identifiers, key->value);
         printf("\n\t%s : %2d : %s", Class_String(meta->class), meta->stack, key->value);
         Map_Del(self->identifiers, key->value);
-        index += 1;
         self->locals -= 1;
     }
     Queue_Kill(scope);
@@ -2314,6 +2256,53 @@ Binary_Kill(Binary* self)
     Free(self);
 }
 
+void
+Binary_Datum(Binary* self, char* operator)
+{
+    Of of;
+    Value* value;
+    char ch = operator[0];
+    if(ch == '[')
+        value = Value_Init(TYPE_ARRAY, of);
+    else
+    if(ch == '{')
+        value = Value_Init(TYPE_DICT, of);
+    else
+    if(ch == '"')
+    {
+        of.string = Str_Init(operator);
+        value = Value_Init(TYPE_STRING, of);
+    }
+    else
+    if(ch == 't' || ch == 'f')
+    {
+        of.boolean = Equals(operator, "true") ? true : false;
+        value = Value_Init(TYPE_BOOL, of);
+    }
+    else
+    if(ch == 'n')
+        value = Value_Init(TYPE_NULL, of);
+    else
+    if(Compiler_IsNumber(ch))
+    {
+        of.number = atof(operator);
+        value = Value_Init(TYPE_NUMBER, of);
+    }
+    else
+        Quit("unknown val operand");
+    Queue_PshB(self->data, value);
+}
+
+void
+Assembler_Dump(Queue* assembly)
+{
+    for(int i = 0; i < Queue_Size(assembly); i++)
+    {
+        Str* assem = Queue_Get(assembly, i);
+        puts(assem->value);
+    }
+}
+
 Binary*
 Assembler_Assemble(Queue* assembly)
 {
@@ -2416,41 +2405,9 @@ Assembler_Assemble(Queue* assembly)
             else
             if(Equals(mnemonic, "val"))
             {
-                char ch = operator[0];
-                Of of;
-                switch(ch)
-                {
-                case '[':
-                    Queue_PshB(bin->data, Value_Init(TYPE_ARRAY, of));
-                    break;
-                case '{':
-                    Queue_PshB(bin->data, Value_Init(TYPE_DICT, of));
-                    break;
-                case '"':
-                    of.string = Str_Init(operator);
-                    Queue_PshB(bin->data, Value_Init(TYPE_STRING, of));
-                    break;
-                case 't':
-                case 'f':
-                    of.boolean = Equals(operator, "true") ? true : false;
-                    Queue_PshB(bin->data, Value_Init(TYPE_BOOL, of));
-                    break;
-                case 'n':
-                    Queue_PshB(bin->data, Value_Init(TYPE_NULL, of));
-                    break;
-                default:
-                    if(Compiler_IsNumber(ch))
-                    {
-                        of.number = atof(operator);
-                        Queue_PshB(bin->data, Value_Init(TYPE_NUMBER, of));
-                    }
-                    else
-                        Quit("unknown val operand");
-                    break;
-                }
+                Binary_Datum(bin, operator);
                 int index = Queue_Size(bin->data) - 1;
                 instruction = (index << 8) | OPCODE_VAL;
-                printf("-> %08X\n", instruction);
             }
             else
                 Quit("unknown mnemonic `%s`", mnemonic);
@@ -2462,26 +2419,23 @@ Assembler_Assemble(Queue* assembly)
     return bin;
 }
 
+void
+Run(char* path)
+{
+    Str* entry = Str_Init(path);
+    Compiler* compiler = Compiler_Init();
+    Compiler_Reserve(compiler);
+    Compiler_LoadModule(compiler, entry);
+    Compiler_Parse(compiler);
+    Binary* bin = Assembler_Assemble(compiler->assembly);
+    Assembler_Dump(compiler->assembly);
+    Compiler_Kill(compiler);
+    Binary_Kill(bin);
+    Str_Kill(entry);
+}
+
 int
 main(int argc, char* argv[])
 {
-    if(argc != 2)
-    {
-        printf("usage: rr main.rr\n");
-        return 1;
-    }
-    else
-    {
-        Str* entry = Str_Init(argv[1]);
-        Compiler* compiler = Compiler_Init();
-        Compiler_Reserve(compiler);
-        Compiler_LoadModule(compiler, entry);
-        Compiler_Parse(compiler);
-        Binary* bin = Assembler_Assemble(compiler->assembly);
-        Compiler_PrintStringQueue(compiler->assembly);
-        Compiler_PrintSyms(compiler);
-        Compiler_Kill(compiler);
-        Str_Kill(entry);
-        Binary_Kill(bin);
-    }
+    (argc == 2) ? Run(argv[1]) : Quit("usage: rr main.rr\n");
 }
