@@ -1646,6 +1646,14 @@ void
 Compiler_Expression(Compiler*);
 
 void
+Compiler_EmptyExpression(Compiler* self)
+{
+    Compiler_Expression(self);
+    Compiler_Match(self, ";");
+    Compiler_Assem(self, "\tpop");
+}
+
+void
 Compiler_Assign(Compiler* self)
 {
     Compiler_Match(self, ":=");
@@ -2123,21 +2131,18 @@ Compiler_Block(Compiler* self, int head, int tail)
                 Compiler_Local(self, Str_Copy(ident), true);
                 chain = STATE_NONE;
             }
-            else /* PRIMED EXPRESSION */
+            else
             {
+                // Back up the identifier instead of putting it back in the queue.
                 self->prime = ident;
-                Compiler_Expression(self);
-                Compiler_Match(self, ";");
+                Compiler_EmptyExpression(self);
                 chain = STATE_NONE;
-                Compiler_Assem(self, "\tpop");
             }
         }
-        else /* UNPRIMED EXPRESSION */
+        else
         {
-            Compiler_Expression(self);
-            Compiler_Match(self, ";");
+            Compiler_EmptyExpression(self);
             chain = STATE_NONE;
-            Compiler_Assem(self, "\tpop");
         }
     }
     Compiler_Match(self, "}");
