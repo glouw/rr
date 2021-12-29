@@ -296,6 +296,12 @@ Malloc(int size)
     return malloc(size);
 }
 
+void*
+Realloc(void *ptr, size_t size)
+{
+    return realloc(ptr, size);
+}
+
 void
 Free(void* pointer)
 {
@@ -424,7 +430,7 @@ void
 Queue_Alloc(Queue* self, int blocks)
 {
     self->blocks = blocks;
-    self->block = realloc(self->block, blocks * sizeof(*self->block));
+    self->block = Realloc(self->block, blocks * sizeof(*self->block));
 }
 
 void
@@ -605,7 +611,7 @@ void
 Str_Alloc(Str* self, int cap)
 {
     self->cap = cap;
-    self->value = realloc(self->value, (1 + cap) * sizeof(*self->value));
+    self->value = Realloc(self->value, (1 + cap) * sizeof(*self->value));
 }
 
 Str*
