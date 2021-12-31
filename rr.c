@@ -177,6 +177,7 @@ typedef struct
 {
     Type type;
     Of of;
+    int refs;
 }
 Value;
 
@@ -293,9 +294,9 @@ Quit(const char* const message, ...)
 {
     va_list args;
     va_start(args, message);
-    printf("error: ");
-    vprintf(message, args);
-    printf("\n");
+    fprintf(stderr, "error: ");
+    vfprintf(stderr, message, args);
+    fprintf(stderr, "\n");
     va_end(args);
     exit(1);
 }
@@ -472,8 +473,7 @@ Queue_PshB(Queue* self, void* value)
     else
     {
         Block* block = *Queue_BlockB(self);
-        if(block->b == QUEUE_BLOCK_SIZE
-        || block->a == QUEUE_BLOCK_SIZE)
+        if(block->b == QUEUE_BLOCK_SIZE || block->a == QUEUE_BLOCK_SIZE)
         {
             Queue_Alloc(self, self->blocks + 1);
             *Queue_BlockB(self) = Block_Init(BACK);
@@ -635,9 +635,10 @@ Queue_Equal(Queue* self, Queue* other, Equal equal)
 {
     if(Queue_Size(self) != Queue_Size(other))
         return false;
-    else for(int i = 0; i < Queue_Size(self); i++)
-        if(!equal(Queue_Get(self, i), Queue_Get(other, i)))
-            return false;
+    else
+        for(int i = 0; i < Queue_Size(self); i++)
+            if(!equal(Queue_Get(self, i), Queue_Get(other, i)))
+                return false;
     return true;
 }
 
@@ -855,8 +856,7 @@ Str_Skip(Str* self, char c)
 bool
 Str_IsBoolean(Str* ident)
 {
-    return Str_Equals(ident, "true")
-        || Str_Equals(ident, "false");
+    return Str_Equals(ident, "true") || Str_Equals(ident, "false");
 }
 
 bool
@@ -1236,11 +1236,9 @@ CC_Quit(CC* self, const char* const message, ...)
     Module* back = Queue_Back(self->modules);
     va_list args;
     va_start(args, message);
-    printf("compilation error: file `%s`: line `%d`: ",
-        back ? back->name->value : "?",
-        back ? back->line : 0);
-    vprintf(message, args);
-    printf("\n");
+    fprintf(stderr, "compilation error: file `%s`: line `%d`: ", back ? back->name->value : "?", back ? back->line : 0);
+    vfprintf(stderr, message, args);
+    fprintf(stderr, "\n");
     va_end(args);
     exit(2);
 }
@@ -1355,64 +1353,55 @@ CC_Advance(CC* self)
 bool
 CC_IsLower(int c)
 {
-    return c >= 'a'
-        && c <= 'z';
+    return c >= 'a' && c <= 'z';
 }
 
 bool
 CC_IsUpper(int c)
 {
-    return c >= 'A'
-        && c <= 'Z';
+    return c >= 'A' && c <= 'Z';
 }
 
 bool
 CC_IsAlpha(int c)
 {
-    return CC_IsLower(c)
-        || CC_IsUpper(c);
+    return CC_IsLower(c) || CC_IsUpper(c);
 }
 
 bool
 CC_IsDigit(int c)
 {
-    return c >= '0'
-        && c <= '9';
+    return c >= '0' && c <= '9';
 }
 
 bool
 CC_IsNumber(int c)
 {
-    return CC_IsDigit(c)
-        || c == '.';
+    return CC_IsDigit(c) || c == '.';
 }
 
 bool
 CC_IsAlnum(int c)
 {
-    return CC_IsAlpha(c)
-        || CC_IsDigit(c);
+    return CC_IsAlpha(c) || CC_IsDigit(c);
 }
 
 bool
 CC_IsIdentLeader(int c)
 {
-    return CC_IsAlpha(c)
-        || c == '_';
+    return CC_IsAlpha(c) || c == '_';
 }
 
 bool
 CC_IsIdent(int c)
 {
-    return CC_IsIdentLeader(c)
-        || CC_IsDigit(c);
+    return CC_IsIdentLeader(c) || CC_IsDigit(c);
 }
 
 bool
 CC_IsMod(int c)
 {
-    return CC_IsIdent(c)
-        || c == '.';
+    return CC_IsIdent(c) || c == '.';
 }
 
 bool
@@ -1603,21 +1592,11 @@ CC*
 CC_Init(void)
 {
     CC* self = Malloc(sizeof(*self));
-    self->modules = Queue_Init(
-        (Kill) Module_Kill,
-        (Copy) NULL);
-    self->assembly = Queue_Init(
-        (Kill) Str_Kill,
-        (Copy) NULL);
-    self->data = Queue_Init(
-        (Kill) Str_Kill,
-        (Copy) NULL);
-    self->included = Map_Init(
-        (Kill) NULL,
-        (Copy) NULL);
-    self->identifiers = Map_Init(
-        (Kill) Meta_Kill,
-        (Copy) NULL);
+    self->modules = Queue_Init((Kill) Module_Kill, (Copy) NULL);
+    self->assembly = Queue_Init((Kill) Str_Kill, (Copy) NULL);
+    self->data = Queue_Init((Kill) Str_Kill, (Copy) NULL);
+    self->included = Map_Init((Kill) NULL, (Copy) NULL);
+    self->identifiers = Map_Init((Kill) Meta_Kill, (Copy) NULL);
     self->globals = 0;
     self->locals = 0;
     self->labels = 0;
@@ -1766,8 +1745,6 @@ CC_PopScope(CC* self, Queue* scope)
     for(int i = 0; i < popped; i++)
     {
         Str* key = Queue_Get(scope, i);
-        Meta* meta = Map_Get(self->identifiers, key->value);
-        printf("\n\t%s : %2d : %s", Class_String(meta->class), meta->stack, key->value);
         Map_Del(self->identifiers, key->value);
         self->locals -= 1;
     }
@@ -2367,17 +2344,14 @@ Value_Init(Of of, Type type)
 {
     Value* self = Malloc(sizeof(*self));
     self->type = type;
+    self->refs = 0;
     switch(type)
     {
         case TYPE_ARRAY:
-            self->of.array = Queue_Init(
-                (Kill) Value_Kill,
-                (Copy) Value_Copy);
+            self->of.array = Queue_Init((Kill) Value_Kill, (Copy) Value_Copy);
             break;
         case TYPE_DICT:
-            self->of.dict = Map_Init(
-                (Kill) Value_Kill,
-                (Copy) Value_Copy);
+            self->of.dict = Map_Init((Kill) Value_Kill, (Copy) Value_Copy);
             break;
         case TYPE_STRING:
             self->of.string = of.string;
@@ -2420,6 +2394,7 @@ Value_Copy(Value* self)
 {
     Value* copy = Malloc(sizeof(*copy));
     copy->type = self->type;
+    copy->refs = 0;
     Type_Copy(copy, self);
     return copy;
 }
@@ -2445,9 +2420,9 @@ ASM_Label(Queue* assembly, int* size)
     for(int i = 0; i < Queue_Size(assembly); i++)
     {
         Str* line = Str_Copy(Queue_Get(assembly, i));
-        if(line->value[0] == '\t')
+        if(line->value[0] == '\t') // Instruction.
             *size += 1;
-        else /* Label */
+        else // Label.
         {
             char* label = strtok(line->value, ":");
             int* at = Int_Init(*size);
@@ -2487,18 +2462,10 @@ VM*
 VM_Init(int size)
 {
     VM* self = Malloc(sizeof(*self));
-    self->data = Queue_Init(
-        (Kill) Value_Kill,
-        (Copy) NULL);
-    self->stack = Queue_Init(
-        (Kill) Value_Kill,
-        (Copy) NULL);
-    self->frame = Queue_Init(
-        (Kill) Frame_Free,
-        (Copy) NULL);
-    self->track = Map_Init(
-        (Kill) Int_Kill,
-        (Copy) NULL);
+    self->data = Queue_Init((Kill) Value_Kill, (Copy) NULL);
+    self->stack = Queue_Init((Kill) Value_Kill, (Copy) NULL);
+    self->frame = Queue_Init((Kill) Frame_Free, (Copy) NULL);
+    self->track = Map_Init((Kill) Int_Kill, (Copy) NULL);
     self->ret = NULL;
     self->size = size;
     self->instructions = Malloc(size * sizeof(*self->instructions));
@@ -2510,8 +2477,6 @@ VM_Init(int size)
 void
 VM_Kill(VM* self)
 {
-    for(int i = 0; i < Queue_Size(self->data); i++)
-        Value_Print(Queue_Get(self->data, i));
     Queue_Kill(self->data);
     Queue_Kill(self->stack);
     Queue_Kill(self->frame);
@@ -2522,74 +2487,38 @@ VM_Kill(VM* self)
 }
 
 void
-VM_Print(VM* self)
+VM_Data(VM* self)
 {
-    for(int i = 0; i < self->size; i++)
-        printf("%3d : 0x%08lX\n", i, self->instructions[i]);
+    fprintf(stderr, ".data:\n");
     for(int i = 0; i < Queue_Size(self->data); i++)
-        Value_Print(Queue_Get(self->data, i));
-}
-
-Str*
-VM_Key(Value* value)
-{
-    Str* key = Str_Init("");
-    Str_Resize(key, 17, '\0');
-    sprintf(key->value, "%016lX", (uint64_t) value);
-    return key;
-}
-
-bool
-VM_Dec(VM* self, Value* value)
-{
-    bool owner = false;
-    Str* key = VM_Key(value);
-    if(Map_Exists(self->track, key->value))
     {
-        int* count = Map_Get(self->track, key->value);
-        *count -= 1;
-        if(*count == 0)
-        {
-            Map_Del(self->track, key->value);
-            owner = true;
-        }
+        Value* value = Queue_Get(self->data, i);
+        if(value->refs > 0)
+            Quit("internal: data segment contained references at time of exit");
+        fprintf(stderr, "%4d : ", i);
+        Value_Print(value);
     }
-    Str_Kill(key);
-    return owner;
 }
 
 void
-VM_Inc(VM* self, Value* value)
+VM_Text(VM* self)
 {
-    Str* key = VM_Key(value);
-    if(Map_Exists(self->track, key->value))
-    {
-        int* count = Map_Get(self->track, key->value);
-        *count += 1;
-        Str_Kill(key);
-    }
-    else
-        Map_Set(self->track, key, Int_Init(1));
+    fprintf(stderr, ".text:\n");
+    for(int i = 0; i < self->size; i++)
+        fprintf(stderr, "%4d : 0x%08lX\n", i, self->instructions[i]);
 }
 
-// Argument `queue` registers the data segment as well.
-void
-VM_Push(VM* self, Queue* queue, Value* value)
-{
-    Queue_PshB(queue, value);
-    VM_Inc(self, value);
-}
-
-// No need to deregister the data segment with a `queue` argmuent
-// becuase the stack will be fully popped at shutdown.
 void
 VM_Pop(VM* self)
 {
     Value* value = Queue_Back(self->stack);
-    if(VM_Dec(self, value))
+    if(value->refs == 0)
         Queue_PopB(self->stack);
     else
+    {
+        value->refs -= 1;
         Queue_PopBSoft(self->stack);
+    }
 }
 
 void
@@ -2626,7 +2555,7 @@ VM_Store(VM* self, char* operator)
     }
     else
         Quit("unknown psh operand");
-    VM_Push(self, self->data, value);
+    Queue_PshB(self->data, value);
 }
 
 int
@@ -2775,7 +2704,7 @@ VM_Assemble(Queue* assembly)
 void
 VM_Lod(VM* self)
 {
-    VM_Push(self, self->stack, Value_Copy(self->ret));
+    Queue_PshB(self->stack, Value_Copy(self->ret));
     Value_Kill(self->ret);
 }
 
@@ -2793,7 +2722,7 @@ VM_Cpy(VM* self)
 {
     Value* value = Value_Copy(Queue_Back(self->stack));
     VM_Pop(self);
-    VM_Push(self, self->stack, value);
+    Queue_PshB(self->stack, value);
 }
 
 int
@@ -2821,14 +2750,18 @@ VM_Fls(VM* self)
 void
 VM_Glb(VM* self, int address)
 {
-    VM_Push(self, self->stack, Queue_Get(self->stack, address));
+    Value* value = Queue_Get(self->stack, address);
+    value->refs += 1;
+    Queue_PshB(self->stack, value);
 }
 
 void
 VM_Loc(VM* self, int address)
 {
     Frame* frame = Queue_Back(self->frame);
-    VM_Push(self, self->stack, Queue_Get(self->stack, frame->sp + address));
+    Value* value = Queue_Get(self->stack, frame->sp + address);
+    value->refs += 1;
+    Queue_PshB(self->stack, value);
 }
 
 void
@@ -2854,7 +2787,9 @@ VM_Sav(VM* self)
 void
 VM_Psh(VM* self, int address)
 {
-    VM_Push(self, self->stack, Queue_Get(self->data, address));
+    Value* value = Queue_Get(self->data, address);
+    value->refs += 1;
+    Queue_PshB(self->stack, value);
 }
 
 Head
@@ -2955,7 +2890,7 @@ VM_Lst(VM* self)
     VM_Pop(self);
     VM_Pop(self);
     Of of = { .boolean = boolean };
-    VM_Push(self, self->stack, Value_Init(of, TYPE_BOOL));
+    Queue_PshB(self->stack, Value_Init(of, TYPE_BOOL));
 }
 
 void
@@ -2968,7 +2903,7 @@ VM_Lte(VM* self)
     VM_Pop(self);
     VM_Pop(self);
     Of of = { .boolean = boolean };
-    VM_Push(self, self->stack, Value_Init(of, TYPE_BOOL));
+    Queue_PshB(self->stack, Value_Init(of, TYPE_BOOL));
 }
 
 void
@@ -2981,7 +2916,7 @@ VM_Grt(VM* self)
     VM_Pop(self);
     VM_Pop(self);
     Of of = { .boolean = boolean };
-    VM_Push(self, self->stack, Value_Init(of, TYPE_BOOL));
+    Queue_PshB(self->stack, Value_Init(of, TYPE_BOOL));
 }
 
 void
@@ -2994,7 +2929,7 @@ VM_Gte(VM* self)
     VM_Pop(self);
     VM_Pop(self);
     Of of = { .boolean = boolean };
-    VM_Push(self, self->stack, Value_Init(of, TYPE_BOOL));
+    Queue_PshB(self->stack, Value_Init(of, TYPE_BOOL));
 }
 
 void
@@ -3025,7 +2960,7 @@ VM_Eql(VM* self)
     VM_Pop(self);
     VM_Pop(self);
     Of of = { .boolean = boolean };
-    VM_Push(self, self->stack, Value_Init(of, TYPE_BOOL));
+    Queue_PshB(self->stack, Value_Init(of, TYPE_BOOL));
 }
 
 void
@@ -3036,7 +2971,7 @@ VM_Neq(VM* self)
     VM_Pop(self);
     VM_Pop(self);
     Of of = { .boolean = boolean };
-    VM_Push(self, self->stack, Value_Init(of, TYPE_BOOL));
+    Queue_PshB(self->stack, Value_Init(of, TYPE_BOOL));
 }
 
 void
@@ -3075,7 +3010,9 @@ VM_Run(VM* self)
         self->pc += 1;
         Opcode oc = instruction & 0xFF;
         int address = instruction >> 8;
-        printf(">>> %s (%d)\n", Opcode_String(oc), address);
+#if DEBUG
+        fprintf(stderr, ">>> %s (%d)\n", Opcode_String(oc), address);
+#endif
         switch(oc)
         {
             case OPCODE_ADD: VM_Add(self); break;
@@ -3127,12 +3064,13 @@ main(int argc, char* argv[])
         CC_Parse(cc);
         ASM_Dump(cc->assembly);
         VM* vm = VM_Assemble(cc->assembly);
-        VM_Print(vm);
         int ret = VM_Run(vm);
+        VM_Text(vm);
+        VM_Data(vm);
         CC_Kill(cc);
         VM_Kill(vm);
         Str_Kill(entry);
         return ret;
     }
-    Quit("usage: rr main.rr\n");
+    Quit("usage: rr main.rr");
 }
