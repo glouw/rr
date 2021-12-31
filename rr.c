@@ -1222,11 +1222,14 @@ CC_Format(char* format, ...)
     va_start(args, format);
     int size = vsnprintf(NULL, 0, format, args);
     va_end(args);
-    va_start(args, format);
     Str* line = Str_Init("");
-    Str_Resize(line, '\0', size + 1);
-    vsprintf(line->value, format, args);
-    va_end(args);
+    if(size > 0)
+    {
+        va_start(args, format);
+        Str_Resize(line, '\0', size + 1);
+        vsprintf(line->value, format, args);
+        va_end(args);
+    }
     return line;
 }
 
