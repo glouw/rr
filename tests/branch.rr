@@ -1,0 +1,161 @@
+main()
+{
+    pass := 0;
+
+    # ~~~~~~~~~~~~~~~
+    if(true)
+    {
+        pass += 1;
+    }
+    elif(false)
+    {
+        pass = 0;
+    }
+    elif(false)
+    {
+        pass = 0;
+    }
+    else
+    {
+        pass = 0;
+    }
+
+    # ~~~~~~~~~~~~~~~
+    if(false)
+    {
+        pass = 0;
+    }
+    elif(true)
+    {
+        pass += 1;
+    }
+    elif(false)
+    {
+        pass = 0;
+    }
+    else
+    {
+        pass = 0;
+    }
+
+    # ~~~~~~~~~~~~~~~
+    if(false)
+    {
+        pass = 0;
+    }
+    elif(false)
+    {
+        pass = 0;
+    }
+    elif(true)
+    {
+        pass += 1;
+    }
+    else
+    {
+        pass = 0;
+    }
+
+    # ~~~~~~~~~~~~~~~
+    if(false)
+    {
+        pass = 0;
+    }
+    elif(false)
+    {
+        pass = 0;
+    }
+    elif(false)
+    {
+        pass = 0;
+    }
+    else
+    {
+        pass += 1;
+    }
+
+    # ~~~~~~~~~~~~~~~
+    if(true)
+    {
+        pass += 1;
+    }
+    elif(true)
+    {
+        pass += 1;
+    }
+    elif(true)
+    {
+        pass += 1;
+    }
+    else
+    {
+        pass += 1;
+    }
+
+    # ~~~~~~~~~~~~~~~
+    if(false)
+    {
+        pass += 1;
+    }
+    elif(true)
+    {
+        pass += 1;
+    }
+    elif(true)
+    {
+        pass += 1;
+    }
+    else
+    {
+        pass += 1;
+    }
+
+    # ~~~~~~~~~~~~~~~
+    if(false)
+    {
+        pass += 1;
+    }
+    elif(false)
+    {
+        pass += 1;
+    }
+    elif(true)
+    {
+        pass += 1;
+    }
+    else
+    {
+        pass += 1;
+    }
+
+    # ~~~~~~~~~~~~~~~
+    if(false)
+    {
+        pass += 1;
+    }
+    elif(false)
+    {
+        pass += 1;
+    }
+    elif(false)
+    {
+        pass += 1;
+    }
+    else
+    {
+        pass += 1;
+    }
+
+    # ~~~~~~~~~~~~~~~
+    if(true) {} if(true) {} elif(true) {} if(true) {} else {} # Just to see if this compiles.
+
+    # ~~~~~~~~~~~~~~~
+    if(pass == 8)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

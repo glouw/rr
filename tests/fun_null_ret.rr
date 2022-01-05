@@ -1,0 +1,15 @@
+null_ret()
+{
+}
+
+main()
+{
+    if(null_ret() == null)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

@@ -41,7 +41,55 @@
 #define MODULE_BUFFER_SIZE (512)
 #define STR_CAP_SIZE (16)
 
-#define DEBUG (1)
+#define DEBUG (0)
+
+#define OPCODES   \
+    X(OPCODE_ADD) \
+    X(OPCODE_AND) \
+    X(OPCODE_BRF) \
+    X(OPCODE_CAL) \
+    X(OPCODE_CPY) \
+    X(OPCODE_DIV) \
+    X(OPCODE_END) \
+    X(OPCODE_EQL) \
+    X(OPCODE_FLS) \
+    X(OPCODE_FMT) \
+    X(OPCODE_GET) \
+    X(OPCODE_GLB) \
+    X(OPCODE_GRT) \
+    X(OPCODE_GTE) \
+    X(OPCODE_INS) \
+    X(OPCODE_JMP) \
+    X(OPCODE_LOC) \
+    X(OPCODE_LOD) \
+    X(OPCODE_LOR) \
+    X(OPCODE_LST) \
+    X(OPCODE_LTE) \
+    X(OPCODE_MOV) \
+    X(OPCODE_MUL) \
+    X(OPCODE_NEQ) \
+    X(OPCODE_NOT) \
+    X(OPCODE_POP) \
+    X(OPCODE_PSB) \
+    X(OPCODE_PSF) \
+    X(OPCODE_RET) \
+    X(OPCODE_SAV) \
+    X(OPCODE_SPD) \
+    X(OPCODE_SUB) \
+    X(OPCODE_PSH)
+
+#define TYPES      \
+    X(TYPE_ARRAY)  \
+    X(TYPE_DICT)   \
+    X(TYPE_STRING) \
+    X(TYPE_NUMBER) \
+    X(TYPE_BOOL)   \
+    X(TYPE_NULL)
+
+#define CLASSES              \
+    X(CLASS_VARIABLE_GLOBAL) \
+    X(CLASS_VARIABLE_LOCAL)  \
+    X(CLASS_FUNCTION)
 
 typedef void
 (*Kill)(void*);
@@ -54,26 +102,34 @@ typedef bool
 
 typedef enum
 {
-    FRONT, BACK
+    FRONT,
+    BACK,
 }
 End;
 
 typedef enum
 {
-    CLASS_VARIABLE_GLOBAL,
-    CLASS_VARIABLE_LOCAL,
-    CLASS_FUNCTION,
+#define X(class) class,
+CLASSES
+#undef X
 }
 Class;
 
 typedef enum
 {
-    STATE_NONE,
-    STATE_IF,
-    STATE_ELIF,
-    STATE_ELSE,
+#define X(type) type,
+TYPES
+#undef X
 }
-State;
+Type;
+
+typedef enum
+{
+#define X(opcode) opcode,
+OPCODES
+#undef X
+}
+Opcode;
 
 typedef struct
 {
@@ -152,17 +208,6 @@ typedef struct
 }
 Meta;
 
-typedef enum Type
-{
-    TYPE_ARRAY,
-    TYPE_DICT,
-    TYPE_STRING,
-    TYPE_NUMBER,
-    TYPE_BOOL,
-    TYPE_NULL,
-}
-Type;
-
 typedef union
 {
     Queue* array;
@@ -209,82 +254,38 @@ typedef struct
 }
 Frame;
 
-typedef enum
-{
-    OPCODE_ADD,
-    OPCODE_AND,
-    OPCODE_BRF,
-    OPCODE_CAL,
-    OPCODE_CPY,
-    OPCODE_DIV,
-    OPCODE_END,
-    OPCODE_EQL,
-    OPCODE_FLS,
-    OPCODE_FMT,
-    OPCODE_GET,
-    OPCODE_GLB,
-    OPCODE_GRT,
-    OPCODE_GTE,
-    OPCODE_INS,
-    OPCODE_JMP,
-    OPCODE_LOC,
-    OPCODE_LOD,
-    OPCODE_LOR,
-    OPCODE_LST,
-    OPCODE_LTE,
-    OPCODE_MOV,
-    OPCODE_MUL,
-    OPCODE_NEQ,
-    OPCODE_NOT,
-    OPCODE_POP,
-    OPCODE_PSB,
-    OPCODE_PSF,
-    OPCODE_RET,
-    OPCODE_SAV,
-    OPCODE_SPD,
-    OPCODE_SUB,
-    OPCODE_PSH,
-}
-Opcode;
-
 char*
 Opcode_String(Opcode oc)
 {
     switch(oc)
     {
-        case OPCODE_ADD: return "OPCODE_ADD";
-        case OPCODE_AND: return "OPCODE_AND";
-        case OPCODE_BRF: return "OPCODE_BRF";
-        case OPCODE_CAL: return "OPCODE_CAL";
-        case OPCODE_CPY: return "OPCODE_CPY";
-        case OPCODE_DIV: return "OPCODE_DIV";
-        case OPCODE_END: return "OPCODE_END";
-        case OPCODE_EQL: return "OPCODE_EQL";
-        case OPCODE_FLS: return "OPCODE_FLS";
-        case OPCODE_FMT: return "OPCODE_FMT";
-        case OPCODE_GET: return "OPCODE_GET";
-        case OPCODE_GLB: return "OPCODE_GLB";
-        case OPCODE_GRT: return "OPCODE_GRT";
-        case OPCODE_GTE: return "OPCODE_GTE";
-        case OPCODE_INS: return "OPCODE_INS";
-        case OPCODE_JMP: return "OPCODE_JMP";
-        case OPCODE_LOC: return "OPCODE_LOC";
-        case OPCODE_LOD: return "OPCODE_LOD";
-        case OPCODE_LOR: return "OPCODE_LOR";
-        case OPCODE_LST: return "OPCODE_LST";
-        case OPCODE_LTE: return "OPCODE_LTE";
-        case OPCODE_MOV: return "OPCODE_MOV";
-        case OPCODE_MUL: return "OPCODE_MUL";
-        case OPCODE_NEQ: return "OPCODE_NEQ";
-        case OPCODE_NOT: return "OPCODE_NOT";
-        case OPCODE_POP: return "OPCODE_POP";
-        case OPCODE_PSB: return "OPCODE_PSB";
-        case OPCODE_PSF: return "OPCODE_PSF";
-        case OPCODE_RET: return "OPCODE_RET";
-        case OPCODE_SAV: return "OPCODE_SAV";
-        case OPCODE_SPD: return "OPCODE_SPD";
-        case OPCODE_SUB: return "OPCODE_SUB";
-        case OPCODE_PSH: return "OPCODE_PSH";
+#define X(opcode) case opcode: return #opcode;
+OPCODES
+#undef X
+    }
+    return "N/A";
+}
+
+char*
+Type_String(Type self)
+{
+    switch(self)
+    {
+#define X(type) case type: return #type;
+TYPES
+#undef X
+    }
+    return "N/A";
+}
+
+char*
+Class_String(Class self)
+{
+    switch(self)
+    {
+#define X(class) case class: return #class;
+CLASSES
+#undef X
     }
     return "N/A";
 }
@@ -298,7 +299,7 @@ Quit(const char* const message, ...)
     vfprintf(stderr, message, args);
     fprintf(stderr, "\n");
     va_end(args);
-    exit(1);
+    exit(0xFF);
 }
 
 void*
@@ -791,16 +792,6 @@ Str_Appends(Str* self, char* str)
     }
 }
 
-void
-Str_Prepends(Str* self, Str* other)
-{
-    Str* copy = Str_Copy(self);
-    Str_Clear(self);
-    Str_Appends(self, other->value);
-    Str_Appends(self, copy->value);
-    Str_Kill(copy);
-}
-
 Str*
 Str_Base(Str* path)
 {
@@ -1164,42 +1155,6 @@ Map_Equal(Map* self, Map* other, Equal equal)
     return true;
 }
 
-char*
-Type_String(Type self)
-{
-    switch(self)
-    {
-        case TYPE_ARRAY:
-            return "TYPE_ARRAY";
-        case TYPE_DICT:
-            return "TYPE_DICT";
-        case TYPE_STRING:
-            return "TYPE_STRING";
-        case TYPE_NUMBER:
-            return "TYPE_NUMBER";
-        case TYPE_BOOL:
-            return "TYPE_BOOL";
-        case TYPE_NULL:
-            return "TYPE_NULL";
-    }
-    return "N/A";
-}
-
-char*
-Class_String(Class self)
-{
-    switch(self)
-    {
-        case CLASS_VARIABLE_LOCAL:
-            return "CLASS_VARIABLE_LOCAL";
-        case CLASS_VARIABLE_GLOBAL:
-            return "CLASS_VARIABLE_GLOBAL";
-        case CLASS_FUNCTION:
-            return "CLASS_FUNCTION";
-    }
-    return "N/A";
-}
-
 Meta*
 Meta_Init(Class class, int stack)
 {
@@ -1243,7 +1198,7 @@ CC_Quit(CC* self, const char* const message, ...)
     vfprintf(stderr, message, args);
     fprintf(stderr, "\n");
     va_end(args);
-    exit(2);
+    exit(0xFE);
 }
 
 void
@@ -1817,12 +1772,6 @@ CC_Args(CC* self, int required)
 }
 
 bool
-CC_Primed(CC* self)
-{
-    return self->prime != NULL;
-}
-
-bool
 CC_Factor(CC* self)
 {
     bool storage = false;
@@ -1841,11 +1790,10 @@ CC_Factor(CC* self)
         Str_Kill(number);
     }
     else
-    if(CC_IsIdent(next)
-    || CC_Primed(self))
+    if(CC_IsIdent(next) || self->prime)
     {
         Str* ident = NULL;
-        if(CC_Primed(self))
+        if(self->prime)
             Str_Swap(&self->prime, &ident);
         else
             ident = CC_Ident(self);
@@ -1983,6 +1931,7 @@ CC_Expression(CC* self)
     while(CC_Next(self) == '+' 
        || CC_Next(self) == '-'
        || CC_Next(self) == '='
+       || CC_Next(self) == '!'
        || CC_Next(self) == '>'
        || CC_Next(self) == '<'
        || CC_Next(self) == '&')
@@ -2067,125 +2016,145 @@ CC_Expression(CC* self)
     }
 }
 
+int
+CC_Label(CC* self)
+{
+    int label = self->labels;
+    self->labels += 1;
+    return label;
+}
+
 void
-CC_Block(CC* self, int head, int tail)
+CC_Block(CC*, int head, int tail, bool loop);
+
+void
+CC_Branch(CC* self, int head, int tail, int end, bool loop)
+{
+    int next = CC_Label(self);
+    CC_Match(self, "(");
+    CC_Expression(self);
+    CC_Match(self, ")");
+    Queue_PshB(self->assembly, CC_Format("\tbrf @l%d", next));
+    CC_Block(self, head, tail, loop);
+    Queue_PshB(self->assembly, CC_Format("\tjmp @l%d", end));
+    Queue_PshB(self->assembly, CC_Format("@l%d:", next));
+}
+
+Str*
+CC_Branches(CC* self, int head, int tail, int loop)
+{
+    int end = CC_Label(self);
+    CC_Branch(self, head, tail, end, loop);
+    Str* buffer = CC_Ident(self);
+    while(Str_Equals(buffer, "elif"))
+    {
+        CC_Branch(self, head, tail, end, loop);
+        Str_Kill(buffer);
+        buffer = CC_Ident(self);
+    }
+    if(Str_Equals(buffer, "else"))
+        CC_Block(self, head, tail, loop);
+    Queue_PshB(self->assembly, CC_Format("@l%d:", end));
+    Str* backup = NULL;
+    if(Str_Equals(buffer, "elif") || Str_Equals(buffer, "else"))
+        Str_Kill(buffer);
+    else
+        backup = buffer;
+    return backup;
+}
+
+void
+CC_While(CC* self)
+{
+    int entry = CC_Label(self);
+    int final = CC_Label(self);
+    Queue_PshB(self->assembly, CC_Format("@l%d:", entry));
+    CC_Match(self, "(");
+    CC_Expression(self);
+    Queue_PshB(self->assembly, CC_Format("\tbrf @l%d", final));
+    CC_Match(self, ")");
+    CC_Block(self, entry, final, true);
+    Queue_PshB(self->assembly, CC_Format("\tjmp @l%d", entry));
+    Queue_PshB(self->assembly, CC_Format("@l%d:", final));
+}
+
+void
+CC_Ret(CC* self)
+{
+    CC_Expression(self);
+    Queue_PshB(self->assembly, CC_Format("\tsav"));
+    Queue_PshB(self->assembly, CC_Format("\tfls"));
+    CC_Match(self, ";");
+}
+
+void
+CC_Continue(CC* self, int head, bool loop)
+{
+    if(!loop)
+        CC_Quit(self, "`continue` can only be used within while loops");
+    CC_Match(self, ";");
+    Queue_PshB(self->assembly, CC_Format("\tjmp @l%d", head));
+}
+
+void
+CC_Break(CC* self, int tail, bool loop)
+{
+    if(!loop)
+        CC_Quit(self, "`break` can only be used within while loops");
+    CC_Match(self, ";");
+    Queue_PshB(self->assembly, CC_Format("\tjmp @l%d", tail));
+}
+
+void
+CC_Block(CC* self, int head, int tail, bool loop)
 {
     Queue* scope = Queue_Init((Kill) Str_Kill, (Copy) NULL);
-    State chain = STATE_NONE;
-    int entry = self->labels + 0;
-    int final = self->labels + 1;
-    self->labels += 2;
     CC_Match(self, "{");
+    Str* prime = NULL; 
     while(CC_Next(self) != '}')
     {
-        if(CC_IsIdentLeader(CC_Next(self)))
+        if(CC_IsIdentLeader(CC_Next(self)) || prime)
         {
-            Str* ident = CC_Ident(self);
+            Str* ident = NULL;
+            if(prime)
+                Str_Swap(&prime, &ident);
+            else
+                ident = CC_Ident(self);
             if(Str_Equals(ident, "if"))
-            {
-                CC_Match(self, "(");
-                CC_Expression(self);
-                CC_Match(self, ")");
-                Queue_PshB(self->assembly, CC_Format("\tbrf @l%d", final));
-                CC_Block(self, head, tail);
-                Queue_PshB(self->assembly, CC_Format("@l%d:", final));
-                Str_Kill(ident);
-                chain = STATE_IF;
-            }
+                prime = CC_Branches(self, head, tail, loop);
             else
             if(Str_Equals(ident, "elif"))
-            {
-                if(chain == STATE_IF
-                || chain == STATE_ELIF)
-                {
-                    CC_Match(self, "(");
-                    CC_Expression(self);
-                    CC_Match(self, ")");
-                    Queue_PshB(self->assembly, CC_Format("\tbrf @l%d", final));
-                    CC_Block(self, head, tail);
-                    Queue_PshB(self->assembly, CC_Format("@l%d:", final));
-                    Str_Kill(ident);
-                }
-                else
-                    CC_Quit(self, "`elif` must follow either `if` or `elif`");
-                chain = STATE_ELIF;
-            }
+                CC_Quit(self, "`elif` must follow an `if` or `elif` block");
             else
             if(Str_Equals(ident, "else"))
-            {
-                if(chain == STATE_IF
-                || chain == STATE_ELIF)
-                {
-                    CC_Block(self, head, tail);
-                    Str_Kill(ident);
-                }
-                else
-                    CC_Quit(self, "`else` must follow either `if` or `elif`");
-                chain = STATE_ELSE;
-            }
+                CC_Quit(self, "`else` must follow an `if` or `elif` block");
             else
             if(Str_Equals(ident, "while"))
-            {
-                Queue_PshB(self->assembly, CC_Format("@l%d:", entry));
-                CC_Match(self, "(");
-                CC_Expression(self);
-                Queue_PshB(self->assembly, CC_Format("\tbrf @l%d", final));
-                CC_Match(self, ")");
-                CC_Block(self, entry, final);
-                Queue_PshB(self->assembly, CC_Format("\tjmp @l%d", entry));
-                Queue_PshB(self->assembly, CC_Format("@l%d:", final));
-                Str_Kill(ident);
-                chain = STATE_NONE;
-            }
+                CC_While(self);
             else
             if(Str_Equals(ident, "ret"))
-            {
-                CC_Expression(self);
-                Queue_PshB(self->assembly, CC_Format("\tsav"));
-                Queue_PshB(self->assembly, CC_Format("\tfls"));
-                CC_Match(self, ";");
-                Str_Kill(ident);
-                chain = STATE_NONE;
-            }
+                CC_Ret(self);
             else
             if(Str_Equals(ident, "continue"))
-            {
-                if(head == 0)
-                    CC_Quit(self, "`continue` can only be used within while loops");
-                CC_Match(self, ";");
-                Queue_PshB(self->assembly, CC_Format("\tjmp @l%d", head));
-                Str_Kill(ident);
-                chain = STATE_NONE;
-            }
+                CC_Continue(self, head, loop);
             else
             if(Str_Equals(ident, "break"))
-            {
-                if(tail == 0)
-                    CC_Quit(self, "`break` can only be used within while loops");
-                CC_Match(self, ";");
-                Queue_PshB(self->assembly, CC_Format("\tjmp @l%d", tail));
-                Str_Kill(ident);
-                chain = STATE_NONE;
-            }
+                CC_Break(self, tail, loop);
             else
             if(CC_Next(self) == ':')
             {
-                Queue_PshB(scope, ident);
+                Queue_PshB(scope, Str_Copy(ident));
                 CC_Local(self, Str_Copy(ident), true);
-                chain = STATE_NONE;
             }
             else
             {
-                self->prime = ident;
+                self->prime = Str_Copy(ident);
                 CC_EmptyExpression(self);
-                chain = STATE_NONE;
             }
+            Str_Kill(ident);
         }
         else
-        {
             CC_EmptyExpression(self);
-            chain = STATE_NONE;
-        }
     }
     CC_Match(self, "}");
     CC_PopScope(self, scope);
@@ -2206,7 +2175,7 @@ CC_Function(CC* self, Str* ident)
     Queue* params = CC_Params(self);
     CC_Declare(self, CLASS_FUNCTION, Queue_Size(params), ident);
     Queue_PshB(self->assembly, CC_Format("%s:", ident->value));
-    CC_Block(self, 0, 0);
+    CC_Block(self, 0, 0, false);
     CC_PopScope(self, params);
     Queue_PshB(self->assembly, CC_Format("\tpsh null"));
     Queue_PshB(self->assembly, CC_Format("\tsav"));
@@ -2429,6 +2398,8 @@ ASM_Label(Queue* assembly, int* size)
         {
             char* label = strtok(line->value, ":");
             int* at = Int_Init(*size);
+            if(Map_Exists(labels, label))
+                Quit("asm: label %s already defined", label);
             Map_Set(labels, Str_Init(label), at);
         }
         Str_Kill(line);
@@ -2484,7 +2455,6 @@ VM_Kill(VM* self)
     Queue_Kill(self->stack);
     Queue_Kill(self->frame);
     Map_Kill(self->track);
-    Value_Kill(self->ret);
     Free(self->instructions);
     Free(self);
 }
@@ -2557,7 +2527,7 @@ VM_Store(VM* self, char* operator)
         value = Value_Init(of, TYPE_NUMBER);
     }
     else
-        Quit("unknown psh operand");
+        Quit("vm: unknown psh operand encountered");
     Queue_PshB(self->data, value);
 }
 
@@ -2571,7 +2541,10 @@ Datum(VM* self, char* operator)
 int
 Indirect(Opcode oc, Map* labels, char* label)
 {
-    return (*(int*) Map_Get(labels, label) << 8) | oc;
+    int* address = Map_Get(labels, label);
+    if(address == NULL)
+        Quit("asm: label `%s` not defined", label);
+    return *address << 8 | oc;
 }
 
 int
@@ -2694,7 +2667,7 @@ VM_Assemble(Queue* assembly)
             if(Equals(mnemonic, "psh"))
                 instruction = Datum(self, operator);
             else
-                Quit("unknown mnemonic `%s`", mnemonic);
+                Quit("asm: unknown mnemonic `%s`", mnemonic);
             self->instructions[pc] = instruction;
             pc += 1;
         }
@@ -2702,13 +2675,6 @@ VM_Assemble(Queue* assembly)
     }
     Map_Kill(labels);
     return self;
-}
-
-void
-VM_Lod(VM* self)
-{
-    Queue_PshB(self->stack, Value_Copy(self->ret));
-    Value_Kill(self->ret);
 }
 
 void
@@ -2732,8 +2698,11 @@ int
 VM_End(VM* self)
 {
     if(self->ret->type != TYPE_NUMBER)
-        Quit("`main` return type was type `%s`; expected `%s`", Type_String(self->ret->type), Type_String(TYPE_NUMBER));
-    return self->ret->of.number;
+        Quit("`vm: main` return type was type `%s`; expected `%s`", Type_String(self->ret->type), Type_String(TYPE_NUMBER));
+    int ret = self->ret->of.number;
+    if(self->ret->refs == 0)
+        Value_Kill(self->ret);
+    return ret;
 }
 
 void
@@ -2782,9 +2751,17 @@ VM_Ret(VM* self)
 }
 
 void
+VM_Lod(VM* self)
+{
+    Queue_PshB(self->stack, self->ret);
+}
+
+void
 VM_Sav(VM* self)
 {
-    self->ret = Value_Copy(Queue_Back(self->stack));
+    Value* value = Queue_Back(self->stack);
+    value->refs += 1;
+    self->ret = value;
 }
 
 void
@@ -2802,7 +2779,7 @@ VM_Head(VM* self)
     head.a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     head.b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(head.a->type != head.b->type)
-        Quit("operator types `%s` and `%s` mismatch", Type_String(head.a->type), Type_String(head.b->type));
+        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(head.a->type), Type_String(head.b->type));
     return head;
 }
 
@@ -2813,6 +2790,16 @@ VM_Mov(VM* self)
     Type_Kill(head.a->type, head.a->of);
     Type_Copy(head.a, head.b);
     VM_Pop(self);
+}
+
+void
+VM_Swap(VM* self)
+{
+    void** a = Queue_At(self->stack, Queue_Size(self->stack) - 1);
+    void** b = Queue_At(self->stack, Queue_Size(self->stack) - 2);
+    void* temp = *a;
+    *a = *b;
+    *b = temp;
 }
 
 void
@@ -2828,14 +2815,15 @@ VM_Add(VM* self)
             Map_Append(head.a->of.dict, head.b->of.dict);
             break;
         case TYPE_STRING:
-            Str_Appends(head.a->of.string, head.b->of.string->value);
+            Str_PopB(head.a->of.string);
+            Str_Appends(head.a->of.string, head.b->of.string->value + 1);
             break;
         case TYPE_NUMBER:
             head.a->of.number += head.b->of.number;
             break;
         case TYPE_BOOL:
         case TYPE_NULL:
-            Quit("operator `+` not supported for type `%s`", Type_String(head.a->type));
+            Quit("vm: operator `+` not supported for type `%s`", Type_String(head.a->type));
     }
     VM_Pop(self);
 }
@@ -2850,7 +2838,9 @@ VM_Sub(VM* self)
             Queue_Prepend(head.a->of.array, head.b->of.array);
             break;
         case TYPE_STRING:
-            Str_Prepends(head.a->of.string, head.b->of.string);
+            Str_PopB(head.b->of.string);
+            Str_Appends(head.b->of.string, head.a->of.string->value + 1);
+            VM_Swap(self);
             break;
         case TYPE_NUMBER:
             head.a->of.number -= head.b->of.number;
@@ -2858,7 +2848,7 @@ VM_Sub(VM* self)
         case TYPE_DICT:
         case TYPE_BOOL:
         case TYPE_NULL:
-            Quit("operator `-` not supported for type `%s`", Type_String(head.a->type));
+            Quit("vm: operator `-` not supported for type `%s`", Type_String(head.a->type));
     }
     VM_Pop(self);
 }
@@ -2868,7 +2858,7 @@ VM_Mul(VM* self)
 {
     Head head = VM_Head(self);
     if(head.a->type != TYPE_NUMBER)
-        Quit("operator `*` not supported for type `%s`", Type_String(head.a->type));
+        Quit("vm: operator `*` not supported for type `%s`", Type_String(head.a->type));
     head.a->of.number *= head.b->of.number;
     VM_Pop(self);
 }
@@ -2878,7 +2868,7 @@ VM_Div(VM* self)
 {
     Head head = VM_Head(self);
     if(head.a->type != TYPE_NUMBER)
-        Quit("operator `/` not supported for type `%s`", Type_String(head.a->type));
+        Quit("vm: operator `/` not supported for type `%s`", Type_String(head.a->type));
     head.a->of.number /= head.b->of.number;
     VM_Pop(self);
 }
@@ -2888,7 +2878,7 @@ VM_Lst(VM* self)
 {
     Head head = VM_Head(self);
     if(head.a->type != TYPE_NUMBER)
-        Quit("operator `<` not supported for type `%s`", Type_String(head.a->type));
+        Quit("vm: operator `<` not supported for type `%s`", Type_String(head.a->type));
     bool boolean = head.a->of.number < head.b->of.number;
     VM_Pop(self);
     VM_Pop(self);
@@ -2901,7 +2891,7 @@ VM_Lte(VM* self)
 {
     Head head = VM_Head(self);
     if(head.a->type != TYPE_NUMBER)
-        Quit("operator `<=` not supported for type `%s`", Type_String(head.a->type));
+        Quit("vm: operator `<=` not supported for type `%s`", Type_String(head.a->type));
     bool boolean = head.a->of.number <= head.b->of.number;
     VM_Pop(self);
     VM_Pop(self);
@@ -2914,7 +2904,7 @@ VM_Grt(VM* self)
 {
     Head head = VM_Head(self);
     if(head.a->type != TYPE_NUMBER)
-        Quit("operator `>` not supported for type `%s`", Type_String(head.a->type));
+        Quit("vm: operator `>` not supported for type `%s`", Type_String(head.a->type));
     bool boolean = head.a->of.number > head.b->of.number;
     VM_Pop(self);
     VM_Pop(self);
@@ -2927,7 +2917,7 @@ VM_Gte(VM* self)
 {
     Head head = VM_Head(self);
     if(head.a->type != TYPE_NUMBER)
-        Quit("operator `>=` not supported for type `%s`", Type_String(head.a->type));
+        Quit("vm: operator `>=` not supported for type `%s`", Type_String(head.a->type));
     bool boolean = head.a->of.number >= head.b->of.number;
     VM_Pop(self);
     VM_Pop(self);
@@ -2940,7 +2930,7 @@ VM_And(VM* self)
 {
     Head head = VM_Head(self);
     if(head.a->type != TYPE_BOOL)
-        Quit("operator `&&` not supported for type `%s`", Type_String(head.a->type));
+        Quit("vm: operator `&&` not supported for type `%s`", Type_String(head.a->type));
     head.a->of.boolean = head.a->of.boolean && head.b->of.boolean;
     VM_Pop(self);
 }
@@ -2950,7 +2940,7 @@ VM_Lor(VM* self)
 {
     Head head = VM_Head(self);
     if(head.a->type != TYPE_BOOL)
-        Quit("operator `||` not supported for type `%s`", Type_String(head.a->type));
+        Quit("vm: operator `||` not supported for type `%s`", Type_String(head.a->type));
     head.a->of.boolean = head.a->of.boolean || head.b->of.boolean;
     VM_Pop(self);
 }
@@ -2988,9 +2978,8 @@ VM_Not(VM* self)
 {
     Value* value = Queue_Back(self->stack);
     if(value->type != TYPE_BOOL)
-        Quit("operator `!` not supported for type `%s`", Type_String(value->type));
+        Quit("vm: operator `!` not supported for type `%s`", Type_String(value->type));
     value->of.boolean = !value->of.boolean;
-    VM_Pop(self);
 }
 
 void
@@ -2998,7 +2987,7 @@ VM_Brf(VM* self, int address)
 {
     Value* value = Queue_Back(self->stack);
     if(value->type != TYPE_BOOL)
-        Quit("boolean expression expected");
+        Quit("vm: boolean expression expected");
     if(value->of.boolean == false)
         self->pc = address;
     VM_Pop(self);
@@ -3065,11 +3054,15 @@ main(int argc, char* argv[])
         CC_Reserve(cc);
         CC_LoadModule(cc, entry);
         CC_Parse(cc);
+#if DEBUG
         ASM_Dump(cc->assembly);
+#endif
         VM* vm = VM_Assemble(cc->assembly);
         int ret = VM_Run(vm);
+#if DEBUG
         VM_Text(vm);
         VM_Data(vm);
+#endif
         CC_Kill(cc);
         VM_Kill(vm);
         Str_Kill(entry);

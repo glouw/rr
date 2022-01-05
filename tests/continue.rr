@@ -1,0 +1,29 @@
+main()
+{
+    a := 0;
+    b := 0;
+    c := 0;
+    d := 0;
+    B := 10;
+    A := 99;
+    while(a < B)
+    {
+        a += 1;
+        while(c < A)
+        {
+            c += 1;
+            continue;
+            d += 1;
+        }
+        continue;
+        b += 1;
+    }
+    if((d == 0) && (c == A) && (b == 0) && (a == B))
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}
