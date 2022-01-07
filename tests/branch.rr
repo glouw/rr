@@ -149,7 +149,6 @@ main()
     # ~~~~~~~~~~~~~~~
     if(true) {} if(true) {} elif(true) {} if(true) {} else {} # Just to see if this compiles.
 
-    # ~~~~~~~~~~~~~~~
     if(pass == 8)
     {
         ret 0;

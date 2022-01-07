@@ -1,13 +1,11 @@
-fun(ref)
-{
-    temp := ref + 1;
-    ref += 1;
-}
+A(ref) { ref += 1; }
+B(ref) { A(&ref); }
+C(ref) { B(&ref); }
 
 main()
 {
     ref := 0;
-    fun(&ref);
+    C(&ref);
     if(ref == 1)
     {
         ret 0;

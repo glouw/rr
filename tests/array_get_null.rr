@@ -1,0 +1,12 @@
+main()
+{
+    a := [];
+    if(a[0] == null)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

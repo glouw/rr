@@ -1,6 +1,6 @@
 make;
 for test in tests/*; do
-    ./rr $test
+    ./rr $test #1> /dev/null
     echo "$? : $test"
     if [ $? -ne 0 ]; then
         exit 1
