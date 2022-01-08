@@ -1,0 +1,17 @@
+main()
+{
+    a := [ 1,2,3,4, "string", true, false, { "adam": "gustav"}, [] ];
+
+    # Print piece by piece.
+    i := 0;
+    while(i < len(&a))
+    {
+        print(&a[i]);
+        i += 1;
+    }
+
+    # Print the whole thing
+    print(&a);
+
+    ret 0;
+}

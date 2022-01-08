@@ -1,0 +1,40 @@
+main()
+{
+    pass := 0;
+    if(type("asdf") == "string")
+    {
+        pass += 1;
+    }
+    if(type([]) == "array")
+    {
+        pass += 1;
+    }
+    if(type({}) == "dict")
+    {
+        pass += 1;
+    }
+    if(type(false) == "bool")
+    {
+        pass += 1;
+    }
+    if(type(true) == "bool")
+    {
+        pass += 1;
+    }
+    if(type(1) == "number")
+    {
+        pass += 1;
+    }
+    if(type(null) == "null")
+    {
+        pass += 1;
+    }
+    if(pass == 7)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1; 
+    }
+}
