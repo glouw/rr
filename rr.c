@@ -254,10 +254,10 @@ Type_String(Type self)
     case TYPE_NULL:
         return "null";
     }
-    return "n/a";
+    return "N/A";
 }
 
-static char*
+static inline char*
 Opcode_String(Opcode oc)
 {
     switch(oc)
@@ -411,17 +411,6 @@ Queue_At(Queue* self, int index)
     }
     return NULL;
 }
-
-// static void
-// Queue_Set(Queue* self, int index, void* data)
-// {
-//     void** at = Queue_At(self, index);
-//     if(at)
-//     {
-//         Delete(self->kill, *at);
-//         *at = data;
-//     }
-// }
 
 static void*
 Queue_Get(Queue* self, int index)
@@ -1743,48 +1732,8 @@ CC_Args(CC* self, int required)
 }
 
 static void
-CC_Len(CC* self)
+CC_Call(CC* self, Str* ident, Meta* meta)
 {
-    CC_Match(self, "(");
-    CC_Pass(self);
-    CC_Match(self, ")");
-    Queue_PshB(self->assembly, Str_Format("\tlen"));
-}
-
-static void
-CC_Del(CC* self)
-{
-    CC_Match(self, "(");
-    CC_Pass(self);
-    CC_Match(self, ",");
-    CC_Pass(self);
-    CC_Match(self, ")");
-    Queue_PshB(self->assembly, Str_Format("\tdel"));
-}
-
-static void
-CC_Type(CC* self)
-{
-    CC_Match(self, "(");
-    CC_Pass(self);
-    CC_Match(self, ")");
-    Queue_PshB(self->assembly, Str_Format("\ttyp"));
-}
-
-static void
-CC_Print(CC* self)
-{
-    CC_Match(self, "(");
-    CC_Pass(self);
-    CC_Match(self, ")");
-    Queue_PshB(self->assembly, Str_Format("\tprt"));
-}
-
-static void
-CC_Call(CC* self, Str* ident)
-{
-    Meta* meta = CC_Expect(self, ident, CC_IsFunction);
-    CC_Args(self, meta->stack);
     for(int i = 0; i < meta->stack; i++)
         Queue_PshB(self->assembly, Str_Format("\tspd"));
     Queue_PshB(self->assembly, Str_Format("\tcal %s", ident->value));
@@ -1863,19 +1812,21 @@ CC_Indirect(CC* self)
     else
     if(CC_Next(self) == '(')
     {
+        Meta* meta = CC_Expect(self, ident, CC_IsFunction);
+        CC_Args(self, meta->stack);
         if(Str_Equals(ident, "len"))
-            CC_Len(self);
+            Queue_PshB(self->assembly, Str_Format("\tlen"));
         else
         if(Str_Equals(ident, "del"))
-            CC_Del(self);
+            Queue_PshB(self->assembly, Str_Format("\tdel"));
         else
         if(Str_Equals(ident, "type"))
-            CC_Type(self);
+            Queue_PshB(self->assembly, Str_Format("\ttyp"));
         else
         if(Str_Equals(ident, "print"))
-            CC_Print(self);
+            Queue_PshB(self->assembly, Str_Format("\tprt"));
         else
-            CC_Call(self, ident);
+            CC_Call(self, ident, meta);
     }
     else
     {
@@ -1884,6 +1835,15 @@ CC_Indirect(CC* self)
     }
     Str_Kill(ident);
     return storage;
+}
+
+static void
+CC_Reserve(CC* self)
+{
+    CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("len"));
+    CC_Declare(self, CLASS_FUNCTION, 2, Str_Init("del"));
+    CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("type"));
+    CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("print"));
 }
 
 static void
@@ -2216,14 +2176,6 @@ CC_Block(CC* self, int head, int tail, bool loop)
     }
     CC_Match(self, "}");
     CC_PopScope(self, scope);
-}
-
-static void
-CC_Reserve(CC* self)
-{
-    CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("len"));
-    CC_Declare(self, CLASS_FUNCTION, 2, Str_Init("del"));
-    CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("print"));
 }
 
 static void
@@ -2597,7 +2549,7 @@ ASM_Label(Queue* assembly, int* size)
     return labels;
 }
 
-static void
+static inline void
 ASM_Dump(Queue* assembly)
 {
     for(int i = 0; i < Queue_Size(assembly); i++)
@@ -2649,7 +2601,7 @@ VM_Kill(VM* self)
     Free(self);
 }
 
-static void
+static inline void
 VM_Data(VM* self)
 {
     fprintf(stderr, ".data:\n");
@@ -2665,7 +2617,7 @@ VM_Data(VM* self)
     }
 }
 
-static void
+static inline void
 VM_Text(VM* self)
 {
     fprintf(stderr, ".text:\n");
