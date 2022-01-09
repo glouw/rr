@@ -5,14 +5,10 @@ main()
     # TEST STRING APPEND
     if("A" + "_" + "B" == "A_B")
     {
-        pass += 1;
+        ret 0;
     }
-
-    # TEST STRING PREPEND
-    if("B" - "_" - "A" == "A_B")
+    else
     {
-        pass += 1;
+        ret 1;
     }
-
-    if(pass == 2) { ret 0; } else { ret 1; }
 }

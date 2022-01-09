@@ -101,6 +101,7 @@ Opcode;
 typedef enum
 {
     TYPE_ARRAY,
+    TYPE_CHAR,
     TYPE_DICT,
     TYPE_STRING,
     TYPE_NUMBER,
@@ -191,6 +192,7 @@ typedef union
     Queue* array;
     Map* dict;
     Str* string;
+    char* character;
     double number;
     bool boolean;
 }
@@ -239,6 +241,8 @@ Type_String(Type self)
     {
     case TYPE_ARRAY:
         return "array";
+    case TYPE_CHAR:
+        return "char";
     case TYPE_DICT:
         return "dict";
     case TYPE_STRING:
@@ -408,22 +412,30 @@ Queue_At(Queue* self, int index)
     return NULL;
 }
 
-static void
-Queue_Set(Queue* self, int index, void* data)
-{
-    void** at = Queue_At(self, index);
-    if(at)
-    {
-        Delete(self->kill, *at);
-        *at = data;
-    }
-}
+// static void
+// Queue_Set(Queue* self, int index, void* data)
+// {
+//     void** at = Queue_At(self, index);
+//     if(at)
+//     {
+//         Delete(self->kill, *at);
+//         *at = data;
+//     }
+// }
 
 static void*
 Queue_Get(Queue* self, int index)
 {
-    void** at = Queue_At(self, index);
-    return at ? *at : NULL;
+    if(index == 0)
+        return Queue_Front(self);
+    else
+    if(index == Queue_Size(self) - 1)
+        return Queue_Back(self);
+    else
+    {
+        void** at = Queue_At(self, index);
+        return at ? *at : NULL;
+    }
 }
 
 static void
@@ -702,12 +714,6 @@ Str_Begin(Str* self)
     return &self->value[0];
 }
 
-static char
-Str_Front(Str* self)
-{
-    return *Str_Begin(self);
-}
-
 static int
 Str_Empty(Str* self)
 {
@@ -729,13 +735,6 @@ Str_PopB(Str* self)
 {
     self->size -= 1;
     self->value[self->size] = '\0';
-}
-
-static void
-Str_Clear(Str* self)
-{
-    while(Str_Size(self) > 0)
-        Str_PopB(self);
 }
 
 static void
@@ -771,14 +770,6 @@ Str_Equal(Str* a, Str* b)
 }
 
 static void
-Str_Replace(Str* self, char a, char b)
-{
-    for(int i = 0; i < self->size; i++)
-        if(self->value[i] == a)
-            self->value[i] = b;
-}
-
-static void
 Str_Appends(Str* self, char* str)
 {
     while(*str)
@@ -805,22 +796,6 @@ Str_Base(Str* path)
         else
             Str_PopB(base);
     return base;
-}
-
-static Queue*
-Str_Split(Str* path, char* delim)
-{
-    Str* buffer = Str_Copy(path);
-    Queue* toks = Queue_Init((Kill) Str_Kill, NULL);
-    while(true)
-    {
-        char* tok = strtok(Queue_Empty(toks) ? buffer->value : NULL, delim);
-        if(tok == NULL)
-            break;
-        Queue_PshB(toks, Str_Init(tok));
-    }
-    Str_Kill(buffer); 
-    return toks;
 }
 
 static Str*
@@ -877,12 +852,23 @@ Str_Format(char* format, ...)
     return line;
 }
 
+static char*
+Str_Get(Str* self, int index)
+{
+    if(index < 0 || index >= Str_Size(self))
+        return NULL;
+    return &self->value[index];
+}
+
 static void
 Str_Del(Str* self, int index)
 {
-    for(int i = 0; i < Str_Size(self) - 1; i++)
-        self->value[i] = self->value[i + 1];
-    Str_PopB(self);
+    if(Str_Get(self, index) != NULL)
+    {
+        for(int i = index; i < Str_Size(self) - 1; i++)
+            self->value[i] = self->value[i + 1];
+        Str_PopB(self);
+    }
 }
 
 static Node*
@@ -1343,12 +1329,6 @@ static bool
 CC_IsNumber(int c)
 {
     return CC_IsDigit(c) || c == '.';
-}
-
-static bool
-CC_IsAlnum(int c)
-{
-    return CC_IsAlpha(c) || CC_IsDigit(c);
 }
 
 static bool
@@ -2322,7 +2302,10 @@ Type_Kill(Type type, Of of)
     case TYPE_STRING:
         Str_Kill(of.string);
         break;
-    default:
+    case TYPE_NUMBER:
+    case TYPE_CHAR:
+    case TYPE_BOOL:
+    case TYPE_NULL:
         break;
     }
 }
@@ -2338,7 +2321,10 @@ Value_Len(Value* self)
         return Map_Size(self->of.dict);
     case TYPE_STRING:
         return Str_Size(self->of.string);
-    default:
+    case TYPE_CHAR:
+    case TYPE_NUMBER:
+    case TYPE_BOOL:
+    case TYPE_NULL:
         break;
     }
     Quit("vm: type `%s` does not have length", Type_String(self->type));
@@ -2368,6 +2354,8 @@ Value_Equal(Value* a, Value* b)
             return a->of.number == b->of.number;
         case TYPE_BOOL:
             return a->of.boolean == b->of.boolean;
+        case TYPE_CHAR:
+            return *a->of.character == *b->of.character;
         case TYPE_NULL:
             return b->type == TYPE_NULL;
         }
@@ -2464,6 +2452,9 @@ Value_Print(Value* self, bool newline, int indents)
     case TYPE_BOOL:
         Str_Append(print, Str_Format("%s", self->of.boolean ? "true" : "false"));
         break;
+    case TYPE_CHAR:
+        Str_Append(print, Str_Format("%c", *self->of.character));
+        break;
     case TYPE_NULL:
         Str_Appends(print, "null");
         break;
@@ -2499,28 +2490,63 @@ Value_Init(Of of, Type type)
     case TYPE_BOOL:
         self->of.boolean = of.boolean;
         break;
+    case TYPE_CHAR:
+        self->of.character = of.character;
+        break;
     case TYPE_NULL:
         break;
     }
     return self;
 }
 
-static void
-Type_Copy(Value* a, Value* b)
+static Str*
+Char_Promote(char c)
 {
-    switch(a->type)
+    char string[] = { c, '\0' };
+    return Str_Init(string);
+}
+
+static void
+Value_PromoteChar(Value* self)
+{
+    self->type = TYPE_STRING;
+    self->of.string = Char_Promote(*self->of.character);
+    self->refs = 0;
+}
+
+static void
+Value_PromoteChars(Value* a, Value* b)
+{
+    if((a->type == TYPE_CHAR && b->type == TYPE_STRING)
+    || (b->type == TYPE_CHAR && a->type == TYPE_STRING))
+    {
+        if(a->type == TYPE_CHAR) Value_PromoteChar(a);
+        if(b->type == TYPE_CHAR) Value_PromoteChar(b);
+    }
+}
+
+static void
+Type_Copy(Value* copy, Value* self)
+{
+    switch(self->type)
     {
     case TYPE_ARRAY:
-        a->of.array = Queue_Copy(b->of.array);
+        copy->of.array = Queue_Copy(self->of.array);
         break;
     case TYPE_DICT:
-        a->of.dict = Map_Copy(b->of.dict);
+        copy->of.dict = Map_Copy(self->of.dict);
         break;
     case TYPE_STRING:
-        a->of.string = Str_Copy(b->of.string);
+        copy->of.string = Str_Copy(self->of.string);
         break;
-    default:
-        a->of = b->of;
+    case TYPE_CHAR:
+        copy->type = TYPE_STRING;
+        copy->of.string = Char_Promote(*self->of.character);
+        break;
+    case TYPE_NUMBER:
+    case TYPE_BOOL:
+    case TYPE_NULL:
+        copy->of = self->of;
         break;
     }
 }
@@ -2651,7 +2677,7 @@ static void
 VM_Pop(VM* self)
 {
     Value* value = Queue_Back(self->stack);
-    if(value->refs == 0)
+    if(value->refs == 0 || value->type == TYPE_CHAR)
         Queue_PopB(self->stack);
     else
     {
@@ -2963,47 +2989,54 @@ VM_Mov(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    Type_Kill(a->type, a->of);
-    Type_Copy(a, b);
+    if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
+    {
+        if(Str_Size(b->of.string) != 1)
+            Quit("vm: expected char");
+        *a->of.character = b->of.string->value[0];
+    }
+    else
+    if(a->type == b->type)
+    {
+        Type_Kill(a->type, a->of);
+        Type_Copy(a, b);
+    }
+    else
+        Quit("vm: operator `=` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     VM_Pop(self);
-}
-
-static void
-VM_Swap(VM* self)
-{
-    void** a = Queue_At(self->stack, Queue_Size(self->stack) - 1);
-    void** b = Queue_At(self->stack, Queue_Size(self->stack) - 2);
-    void* temp = *a;
-    *a = *b;
-    *b = temp;
 }
 
 static void
 VM_Add(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
-    Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    switch(a->type)
-    {
-    case TYPE_ARRAY:
-        Queue_Append(a->of.array, b->of.array);
-        break;
-    case TYPE_DICT:
-        Map_Append(a->of.dict, b->of.dict);
-        break;
-    case TYPE_STRING:
-        Str_Appends(a->of.string, b->of.string->value);
-        break;
-    case TYPE_NUMBER:
-        a->of.number += b->of.number;
-        break;
-    default:
-        Quit("vm: operator `+` not supported for type `%s`", Type_String(a->type));
-    }
+    Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1); // PROMOTE CHAR.
+    if(a->type == TYPE_CHAR)
+        Quit("vm: cannot add to char");
+    Value_PromoteChars(a, b);
+    if(a->type == b->type)
+        switch(a->type)
+        {
+        case TYPE_ARRAY:
+            Queue_Append(a->of.array, b->of.array);
+            break;
+        case TYPE_DICT:
+            Map_Append(a->of.dict, b->of.dict);
+            break;
+        case TYPE_STRING:
+            Str_Appends(a->of.string, b->of.string->value);
+            break;
+        case TYPE_NUMBER:
+            a->of.number += b->of.number;
+            break;
+        case TYPE_CHAR:
+            break;
+        case TYPE_BOOL:
+        case TYPE_NULL:
+            Quit("vm: operator `+` not supported for type `%s`", Type_String(a->type));
+        }
+    else
+        Quit("vm: operator `+` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     VM_Pop(self);
 }
 
@@ -3012,23 +3045,24 @@ VM_Sub(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    switch(a->type)
-    {
-    case TYPE_ARRAY:
-        Queue_Prepend(a->of.array, b->of.array);
-        break;
-    case TYPE_STRING:
-        Str_Appends(b->of.string, a->of.string->value);
-        VM_Swap(self);
-        break;
-    case TYPE_NUMBER:
-        a->of.number -= b->of.number;
-        break;
-    default:
-        Quit("vm: operator `-` not supported for type `%s`", Type_String(a->type));
-    }
+    if(a->type == b->type)
+        switch(a->type)
+        {
+        case TYPE_ARRAY:
+            Queue_Prepend(a->of.array, b->of.array);
+            break;
+        case TYPE_NUMBER:
+            a->of.number -= b->of.number;
+            break;
+        case TYPE_DICT:
+        case TYPE_STRING:
+        case TYPE_CHAR:
+        case TYPE_BOOL:
+        case TYPE_NULL:
+            Quit("vm: operator `-` not supported for type `%s`", Type_String(a->type));
+        }
+    else
+        Quit("vm: operator `-` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     VM_Pop(self);
 }
 
@@ -3038,7 +3072,7 @@ VM_Mul(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        Quit("vm: operator `*` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     if(a->type != TYPE_NUMBER)
         Quit("vm: operator `*` not supported for type `%s`", Type_String(a->type));
     a->of.number *= b->of.number;
@@ -3051,7 +3085,7 @@ VM_Div(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        Quit("vm: operator `/` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     if(a->type != TYPE_NUMBER)
         Quit("vm: operator `/` not supported for type `%s`", Type_String(a->type));
     a->of.number /= b->of.number;
@@ -3064,7 +3098,7 @@ VM_Lst(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        Quit("vm: operator `<` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     if(a->type != TYPE_NUMBER)
         Quit("vm: operator `<` not supported for type `%s`", Type_String(a->type));
     bool boolean = a->of.number < b->of.number;
@@ -3080,7 +3114,7 @@ VM_Lte(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        Quit("vm: operator `<=` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     if(a->type != TYPE_NUMBER)
         Quit("vm: operator `<=` not supported for type `%s`", Type_String(a->type));
     bool boolean = a->of.number <= b->of.number;
@@ -3096,7 +3130,7 @@ VM_Grt(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        Quit("vm: operator `>` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     if(a->type != TYPE_NUMBER)
         Quit("vm: operator `>` not supported for type `%s`", Type_String(a->type));
     bool boolean = a->of.number > b->of.number;
@@ -3112,7 +3146,7 @@ VM_Gte(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        Quit("vm: operator `>=` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     if(a->type != TYPE_NUMBER)
         Quit("vm: operator `>=` not supported for type `%s`", Type_String(a->type));
     bool boolean = a->of.number >= b->of.number;
@@ -3128,7 +3162,7 @@ VM_And(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        Quit("vm: operator `&&` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     if(a->type != TYPE_BOOL)
         Quit("vm: operator `&&` not supported for type `%s`", Type_String(a->type));
     a->of.boolean = a->of.boolean && b->of.boolean;
@@ -3141,7 +3175,7 @@ VM_Lor(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        Quit("vm: operator `||` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     if(a->type != TYPE_BOOL)
         Quit("vm: operator `||` not supported for type `%s`", Type_String(a->type));
     a->of.boolean = a->of.boolean || b->of.boolean;
@@ -3153,8 +3187,9 @@ VM_Eql(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
+    Value_PromoteChars(a, b);
     if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        Quit("vm: operator `==` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     bool boolean = Value_Equal(a, b);
     VM_Pop(self);
     VM_Pop(self);
@@ -3168,7 +3203,7 @@ VM_Neq(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type != b->type)
-        Quit("vm: operator types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        Quit("vm: operator `!=` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     bool boolean = !Value_Equal(a, b);
     VM_Pop(self);
     VM_Pop(self);
@@ -3266,15 +3301,40 @@ VM_Ins(VM* self)
     VM_Pop(self);
 }
 
-static Str*
-Str_Index(Str* self, int index)
+static Value*
+VM_Index(Value* storage, Value* index)
 {
-    if(index >= 0 && index < Str_Size(self))
+    Value* value = NULL;
+    if(storage->type == TYPE_ARRAY)
     {
-        char string[] = { self->value[index], '\0' };
-        return Str_Init(string);
+        value = Queue_Get(storage->of.array, index->of.number);
     }
-    return NULL;
+    else
+    if(storage->type == TYPE_STRING)
+    {
+        char* character = Str_Get(storage->of.string, index->of.number);
+        if(character)
+        {
+            Of of = { .character = character };
+            value = Value_Init(of, TYPE_CHAR);
+        }
+    }
+    else
+        Quit("vm: type `%s` cannot be indexed", Type_String(storage->type));
+    // Not allowed to return null.
+    if(value == NULL)
+        Quit("vm: type `%s` indexed out of bounds", Type_String(storage->type));
+    return value;
+}
+
+static Value*
+VM_Lookup(Value* storage, Value* key)
+{
+    if(storage->type != TYPE_DICT)
+        Quit("vm: type `%s` cannot be looked up", Type_String(storage->type));
+    Value* value = Map_Get(storage->of.dict, key->of.string->value);
+    // Allowed to return null.
+    return value;
 }
 
 static void
@@ -3284,30 +3344,10 @@ VM_Get(VM* self)
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     Value* value = NULL;
     if(b->type == TYPE_NUMBER)
-    {
-        if(a->type == TYPE_ARRAY)
-            value = Queue_Get(a->of.array, b->of.number);
-        else
-        if(a->type == TYPE_STRING)
-        {
-            int index = b->of.number;
-            Str* string = Str_Index(a->of.string, b->of.number);
-            if(string)
-            {
-                Of of = { .string = string };
-                value = Value_Init(of, TYPE_STRING);
-            }
-        }
-        else
-            Quit("vm: type `%s` cannot be indexed", Type_String(a->type));
-    }
+        value = VM_Index(a, b);
     else
     if(b->type == TYPE_STRING)
-    {
-        if(a->type != TYPE_DICT)
-            Quit("vm: type `%s` cannot be indexed", Type_String(a->type));
-        value = Map_Get(a->of.dict, b->of.string->value); // Can return null.
-    }
+        value = VM_Lookup(a, b);
     else
         Quit("vm: type `%s` cannot be indexed", Type_String(a->type));
     VM_Pop(self);

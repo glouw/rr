@@ -1,7 +1,6 @@
 main()
 {
-    str := "roman";
-    if(str[123] == null)
+    if("a"[0] == "a")
     {
         ret 0;
     }

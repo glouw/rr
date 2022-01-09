@@ -29,7 +29,11 @@ main()
     {
         pass += 1;
     }
-    if(pass == 7)
+    if(type("a"[0]) == "string")
+    {
+        pass += 1;
+    }
+    if(pass == 8)
     {
         ret 0;
     }
