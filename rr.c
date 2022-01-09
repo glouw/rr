@@ -15,6 +15,24 @@
 #include <unistd.h>
 #include <stdarg.h>
 
+static void*
+Malloc(int size)
+{
+    return malloc(size);
+}
+
+static void*
+Realloc(void *ptr, size_t size)
+{
+    return realloc(ptr, size);
+}
+
+static void
+Free(void* pointer)
+{
+    free(pointer);
+}
+
 #define QUEUE_BLOCK_SIZE (8)
 #define MAP_UNPRIMED (-1)
 #define MODULE_BUFFER_SIZE (512)
@@ -291,24 +309,6 @@ Quit(const char* const message, ...)
     fprintf(stderr, "\n");
     va_end(args);
     exit(0xFF);
-}
-
-static void*
-Malloc(int size)
-{
-    return malloc(size);
-}
-
-static void*
-Realloc(void *ptr, size_t size)
-{
-    return realloc(ptr, size);
-}
-
-static void
-Free(void* pointer)
-{
-    free(pointer);
 }
 
 static void
@@ -665,6 +665,13 @@ Str_Kill(Str* self)
     Free(self);
 }
 
+static Str*
+Str_FromChar(char c)
+{
+    char string[] = { c, '\0' };
+    return Str_Init(string);
+}
+
 static void
 Str_Swap(Str** self, Str** other)
 {
@@ -717,6 +724,20 @@ Str_PshB(Str* self, char ch)
     self->value[self->size + 0] = ch;
     self->value[self->size + 1] = '\0';
     self->size += 1;
+}
+
+static Str*
+Str_Indent(int indents)
+{
+    int width = 4;
+    Str* ident = Str_Init("");
+    while(indents > 0)
+    {
+        for(int i = 0; i < width; i++)
+            Str_PshB(ident, ' ');
+        indents -= 1;
+    }
+    return ident;
 }
 
 static void
@@ -1788,7 +1809,7 @@ CC_Not(CC* self)
 }
 
 static void
-CC_Direct(CC* self)
+CC_VM_Direct(CC* self)
 {
     Str* number = CC_Number(self);
     Queue_PshB(self->assembly, Str_Format("\tpsh %s", number->value));
@@ -1796,7 +1817,7 @@ CC_Direct(CC* self)
 }
 
 static bool
-CC_Indirect(CC* self)
+CC_VM_Indirect(CC* self)
 {
     bool storage = false;
     Str* ident = NULL;
@@ -1871,10 +1892,10 @@ CC_Factor(CC* self)
         CC_Not(self);
     else
     if(CC_IsDigit(next))
-        CC_Direct(self);
+        CC_VM_Direct(self);
     else
     if(CC_IsIdent(next) || self->prime)
-        storage = CC_Indirect(self);
+        storage = CC_VM_Indirect(self);
     else
     if(next == '(')
         CC_Force(self);
@@ -2315,20 +2336,6 @@ Value_Equal(Value* a, Value* b)
 }
 
 static Str*
-Indent(int indents)
-{
-    int width = 4;
-    Str* ident = Str_Init("");
-    while(indents > 0)
-    {
-        for(int i = 0; i < width; i++)
-            Str_PshB(ident, ' ');
-        indents -= 1;
-    }
-    return ident;
-}
-
-static Str*
 Value_Print(Value* self, bool newline, int indents);
 
 static Str*
@@ -2342,14 +2349,14 @@ Queue_Print(Queue* self, int indents)
         int size = Queue_Size(self);
         for(int i = 0; i < size; i++)
         {
-            Str_Append(print, Indent(indents + 1));
+            Str_Append(print, Str_Indent(indents + 1));
             Str_Append(print, Str_Format("[%d] = ", i));
             Str_Append(print, Value_Print(Queue_Get(self, i), false, indents + 1));
             if(i < size - 1)
                 Str_Appends(print, ",");
             Str_Appends(print, "\n");
         }
-        Str_Append(print, Indent(indents));
+        Str_Append(print, Str_Indent(indents));
         Str_Appends(print, "]");
         return print;
     }
@@ -2368,7 +2375,7 @@ Map_Print(Map* self, int indents)
             Node* bucket = self->bucket[i];
             while(bucket)
             {
-                Str_Append(print, Indent(indents + 1));
+                Str_Append(print, Str_Indent(indents + 1));
                 Str_Append(print, Str_Format("\"%s\" : ", bucket->key->value));
                 Str_Append(print, Value_Print(bucket->value, false, indents + 1));
                 if(i < Map_Size(self) - 1)
@@ -2377,7 +2384,7 @@ Map_Print(Map* self, int indents)
                 bucket = bucket->next;
             }
         }
-        Str_Append(print, Indent(indents));
+        Str_Append(print, Str_Indent(indents));
         Str_Appends(print, "}");
         return print;
     }
@@ -2451,18 +2458,11 @@ Value_Init(Of of, Type type)
     return self;
 }
 
-static Str*
-Char_Promote(char c)
-{
-    char string[] = { c, '\0' };
-    return Str_Init(string);
-}
-
 static void
 Value_PromoteChar(Value* self)
 {
     self->type = TYPE_STRING;
-    self->of.string = Char_Promote(*self->of.character);
+    self->of.string = Str_FromChar(*self->of.character);
     self->refs = 0;
 }
 
@@ -2493,7 +2493,7 @@ Type_Copy(Value* copy, Value* self)
         break;
     case TYPE_CHAR:
         copy->type = TYPE_STRING;
-        copy->of.string = Char_Promote(*self->of.character);
+        copy->of.string = Str_FromChar(*self->of.character);
         break;
     case TYPE_NUMBER:
     case TYPE_BOOL:
@@ -2678,14 +2678,14 @@ VM_Store(VM* self, char* operator)
 }
 
 static int
-Datum(VM* self, char* operator)
+VM_Datum(VM* self, char* operator)
 {
     VM_Store(self, operator);
     return ((Queue_Size(self->data) - 1) << 8) | OPCODE_PSH;
 }
 
 static int
-Indirect(Opcode oc, Map* labels, char* label)
+VM_Indirect(Opcode oc, Map* labels, char* label)
 {
     int* address = Map_Get(labels, label);
     if(address == NULL)
@@ -2694,7 +2694,7 @@ Indirect(Opcode oc, Map* labels, char* label)
 }
 
 static int
-Direct(Opcode oc, char* number)
+VM_Direct(Opcode oc, char* number)
 {
     return (atoi(number) << 8) | oc;
 }
@@ -2721,13 +2721,13 @@ VM_Assemble(Queue* assembly)
                 instruction = OPCODE_AND;
             else
             if(Equals(mnemonic, "brf"))
-                instruction = Indirect(OPCODE_BRF, labels, operator);
+                instruction = VM_Indirect(OPCODE_BRF, labels, operator);
             else
             if(Equals(mnemonic, "del"))
                 instruction = OPCODE_DEL;
             else
             if(Equals(mnemonic, "cal"))
-                instruction = Indirect(OPCODE_CAL, labels, operator);
+                instruction = VM_Indirect(OPCODE_CAL, labels, operator);
             else
             if(Equals(mnemonic, "cpy"))
                 instruction = OPCODE_CPY;
@@ -2751,7 +2751,7 @@ VM_Assemble(Queue* assembly)
                 instruction = OPCODE_GET;
             else
             if(Equals(mnemonic, "glb"))
-                instruction = Direct(OPCODE_GLB, operator);
+                instruction = VM_Direct(OPCODE_GLB, operator);
             else
             if(Equals(mnemonic, "grt"))
                 instruction = OPCODE_GRT;
@@ -2763,13 +2763,13 @@ VM_Assemble(Queue* assembly)
                 instruction = OPCODE_INS;
             else
             if(Equals(mnemonic, "jmp"))
-                instruction = Indirect(OPCODE_JMP, labels, operator);
+                instruction = VM_Indirect(OPCODE_JMP, labels, operator);
             else
             if(Equals(mnemonic, "len"))
                 instruction = OPCODE_LEN;
             else
             if(Equals(mnemonic, "loc"))
-                instruction = Direct(OPCODE_LOC, operator);
+                instruction = VM_Direct(OPCODE_LOC, operator);
             else
             if(Equals(mnemonic, "lod"))
                 instruction = OPCODE_LOD;
@@ -2823,7 +2823,7 @@ VM_Assemble(Queue* assembly)
                 instruction = OPCODE_TYP;
             else
             if(Equals(mnemonic, "psh"))
-                instruction = Datum(self, operator);
+                instruction = VM_Datum(self, operator);
             else
                 Quit("asm: unknown mnemonic `%s`", mnemonic);
             self->instructions[pc] = instruction;
