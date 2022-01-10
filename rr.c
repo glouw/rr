@@ -20,25 +20,6 @@
 #define MODULE_BUFFER_SIZE (512)
 #define STR_CAP_SIZE (16)
 
-
-static void*
-Malloc(int size)
-{
-    return malloc(size);
-}
-
-static void*
-Realloc(void *ptr, size_t size)
-{
-    return realloc(ptr, size);
-}
-
-static void
-Free(void* pointer)
-{
-    free(pointer);
-}
-
 typedef void
 (*Kill)(void*);
 
@@ -249,6 +230,43 @@ typedef struct
 }
 Frame;
 
+static void*
+Malloc(int size)
+{
+    return malloc(size);
+}
+
+static void*
+Realloc(void *ptr, size_t size)
+{
+    return realloc(ptr, size);
+}
+
+static void
+Free(void* pointer)
+{
+    free(pointer);
+}
+
+static void
+Quit(const char* const message, ...)
+{
+    va_list args;
+    va_start(args, message);
+    fprintf(stderr, "error: ");
+    vfprintf(stderr, message, args);
+    fprintf(stderr, "\n");
+    va_end(args);
+    exit(0xFF);
+}
+
+static void
+Delete(Kill kill, void* value)
+{
+    if(kill)
+        kill(value);
+}
+
 static bool
 Equals(char* a, char* b)
 {
@@ -323,25 +341,6 @@ Class_String(Class self)
         return "function";
     }
     return "N/A";
-}
-
-static void
-Quit(const char* const message, ...)
-{
-    va_list args;
-    va_start(args, message);
-    fprintf(stderr, "error: ");
-    vfprintf(stderr, message, args);
-    fprintf(stderr, "\n");
-    va_end(args);
-    exit(0xFF);
-}
-
-static void
-Delete(Kill kill, void* value)
-{
-    if(kill)
-        kill(value);
 }
 
 static Block*
@@ -1212,19 +1211,6 @@ Meta_Kill(Meta* self)
 }
 
 static void
-CC_Quit(CC* self, const char* const message, ...)
-{
-    Module* back = Queue_Back(self->modules);
-    va_list args;
-    va_start(args, message);
-    fprintf(stderr, "compilation error: file `%s`: line `%d`: ", back ? back->name->value : "?", back ? back->line : 0);
-    vfprintf(stderr, message, args);
-    fprintf(stderr, "\n");
-    va_end(args);
-    exit(0xFE);
-}
-
-static void
 Module_Buffer(Module* self)
 {
     self->index = 0;
@@ -1288,6 +1274,19 @@ Module_Advance(Module* self)
     if(at == '\n')
         self->line += 1;
     self->index += 1;
+}
+
+static void
+CC_Quit(CC* self, const char* const message, ...)
+{
+    Module* back = Queue_Back(self->modules);
+    va_list args;
+    va_start(args, message);
+    fprintf(stderr, "compilation error: file `%s`: line `%d`: ", back ? back->name->value : "?", back ? back->line : 0);
+    vfprintf(stderr, message, args);
+    fprintf(stderr, "\n");
+    va_end(args);
+    exit(0xFE);
 }
 
 static void
