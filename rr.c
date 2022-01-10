@@ -91,6 +91,14 @@ typedef void*
 typedef bool
 (*Equal)(void*, void*);
 
+typedef struct
+{
+    char* entry;
+    bool dump;
+    bool help;
+}
+Args;
+
 typedef enum
 {
     FRONT,
@@ -249,6 +257,44 @@ typedef struct
     int sp;
 }
 Frame;
+
+static bool
+Equals(char* a, char* b)
+{
+    return strcmp(a, b) == 0;
+}
+
+Args
+Args_Parse(int argc, char* argv[])
+{
+    Args self = {
+        .entry = NULL,
+        .dump = false,
+        .help = false,
+    };
+    for(int i = 1; i < argc; i++)
+    {
+        char* arg = argv[i];
+        if(arg[0] == '-')
+        {
+            if(Equals(arg, "-d")) self.dump = true;
+            if(Equals(arg, "-h")) self.help = true;
+        }
+        else
+            self.entry = arg;
+    }
+    return self;
+}
+
+void
+Args_Help(void)
+{
+    puts(
+        "The Roman II Programming Language\n"
+        "-h: this help screen\n"
+        "-d: print generated assembly to stdout" 
+    );
+}
 
 static char*
 Type_String(Type self)
@@ -757,12 +803,6 @@ Str_Resize(Str* self, char ch, int size)
     else
         while(self->size > size)
             Str_PopB(self);
-}
-
-static bool
-Equals(char* a, char* b)
-{
-    return strcmp(a, b) == 0;
 }
 
 static bool
@@ -3442,46 +3482,6 @@ VM_Run(VM* self)
         case OPCODE_PSH: VM_Psh(self, address); break;
         }
     }
-}
-
-typedef struct
-{
-    char* entry;
-    bool dump;
-    bool help;
-}
-Args;
-
-Args
-Args_Parse(int argc, char* argv[])
-{
-    Args self = {
-        .entry = NULL,
-        .dump = false,
-        .help = false,
-    };
-    for(int i = 1; i < argc; i++)
-    {
-        char* arg = argv[i];
-        if(arg[0] == '-')
-        {
-            if(Equals(arg, "-d")) self.dump = true;
-            if(Equals(arg, "-h")) self.help = true;
-        }
-        else
-            self.entry = arg;
-    }
-    return self;
-}
-
-void
-Args_Help(void)
-{
-    puts(
-        "The Roman II Programming Language\n"
-        "-h: this help screen\n"
-        "-d: print generated assembly to stdout" 
-    );
 }
 
 int
