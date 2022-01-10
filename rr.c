@@ -38,8 +38,6 @@ Free(void* pointer)
 #define MODULE_BUFFER_SIZE (512)
 #define STR_CAP_SIZE (16)
 
-#define DEBUG (0)
-
 #define OPCODES   \
     X(OPCODE_ADD) \
     X(OPCODE_AND) \
@@ -1265,9 +1263,6 @@ static void
 Module_Advance(Module* self)
 {
     int at = Module_At(self);
-#if DEBUG
-    putchar(at);
-#endif
     if(at == '\n')
         self->line += 1;
     self->index += 1;
@@ -2965,30 +2960,36 @@ VM_Add(VM* self)
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1); // PROMOTE CHAR.
     if(a->type == TYPE_CHAR)
         Quit("vm: cannot add to char");
-    Value_PromoteChars(a, b);
-    if(a->type == b->type)
-        switch(a->type)
-        {
-        case TYPE_ARRAY:
-            Queue_Append(a->of.array, b->of.array);
-            break;
-        case TYPE_DICT:
-            Map_Append(a->of.dict, b->of.dict);
-            break;
-        case TYPE_STRING:
-            Str_Appends(a->of.string, b->of.string->value);
-            break;
-        case TYPE_NUMBER:
-            a->of.number += b->of.number;
-            break;
-        case TYPE_CHAR:
-            break;
-        case TYPE_BOOL:
-        case TYPE_NULL:
-            Quit("vm: operator `+` not supported for type `%s`", Type_String(a->type));
-        }
     else
-        Quit("vm: operator `+` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+    if(a->type == TYPE_ARRAY && b->type != TYPE_ARRAY)
+        Queue_PshB(a->of.array, Value_Copy(b));
+    else
+    {
+        Value_PromoteChars(a, b);
+        if(a->type == b->type)
+            switch(a->type)
+            {
+            case TYPE_ARRAY:
+                Queue_Append(a->of.array, b->of.array);
+                break;
+            case TYPE_DICT:
+                Map_Append(a->of.dict, b->of.dict);
+                break;
+            case TYPE_STRING:
+                Str_Appends(a->of.string, b->of.string->value);
+                break;
+            case TYPE_NUMBER:
+                a->of.number += b->of.number;
+                break;
+            case TYPE_CHAR:
+                break;
+            case TYPE_BOOL:
+            case TYPE_NULL:
+                Quit("vm: operator `+` not supported for type `%s`", Type_String(a->type));
+            }
+        else
+            Quit("vm: operator `+` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+    }
     VM_Pop(self);
 }
 
@@ -2997,6 +2998,9 @@ VM_Sub(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
+    if(a->type == TYPE_ARRAY && b->type != TYPE_ARRAY)
+        Queue_PshF(a->of.array, Value_Copy(b));
+    else
     if(a->type == b->type)
         switch(a->type)
         {
@@ -3397,9 +3401,6 @@ VM_Run(VM* self)
         self->pc += 1;
         Opcode oc = instruction & 0xFF;
         int address = instruction >> 8;
-#if DEBUG
-        fprintf(stderr, ">>> %s (%d)\n", Opcode_String(oc), address);
-#endif
         switch(oc)
         {
         case OPCODE_ADD: VM_Add(self); break;
@@ -3443,29 +3444,73 @@ VM_Run(VM* self)
     }
 }
 
+typedef struct
+{
+    char* entry;
+    bool dump;
+    bool help;
+}
+Args;
+
+Args
+Args_Parse(int argc, char* argv[])
+{
+    Args self = {
+        .entry = NULL,
+        .dump = false,
+        .help = false,
+    };
+    for(int i = 1; i < argc; i++)
+    {
+        char* arg = argv[i];
+        if(arg[0] == '-')
+        {
+            if(Equals(arg, "-d")) self.dump = true;
+            if(Equals(arg, "-h")) self.help = true;
+        }
+        else
+            self.entry = arg;
+    }
+    return self;
+}
+
+void
+Args_Help(void)
+{
+    puts(
+        "The Roman II Programming Language\n"
+        "-h: this help screen\n"
+        "-d: print generated assembly to stdout" 
+    );
+}
+
 int
 main(int argc, char* argv[])
 {
-    if(argc == 2)
+    Args args = Args_Parse(argc, argv);
+    if(args.entry)
     {
-        Str* entry = Str_Init(argv[1]);
+        int ret = 0;
+        Str* entry = Str_Init(args.entry);
         CC* cc = CC_Init();
         CC_Reserve(cc);
         CC_LoadModule(cc, entry);
         CC_Parse(cc);
-#if DEBUG
-        ASM_Dump(cc->assembly);
-#endif
-        VM* vm = VM_Assemble(cc->assembly);
-        int ret = VM_Run(vm);
-#if DEBUG
-        VM_Text(vm);
-        VM_Data(vm);
-#endif
+        if(args.dump)
+            ASM_Dump(cc->assembly);
+        else
+        {
+            VM* vm = VM_Assemble(cc->assembly);
+            ret = VM_Run(vm);
+            VM_Kill(vm);
+        }
         CC_Kill(cc);
-        VM_Kill(vm);
         Str_Kill(entry);
         return ret;
     }
-    Quit("usage: rr main.rr");
+    else
+    if(args.help)
+        Args_Help();
+    else
+        Quit("usage: rr -h");
 }
