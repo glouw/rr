@@ -15,6 +15,12 @@
 #include <unistd.h>
 #include <stdarg.h>
 
+#define QUEUE_BLOCK_SIZE (8)
+#define MAP_UNPRIMED (-1)
+#define MODULE_BUFFER_SIZE (512)
+#define STR_CAP_SIZE (16)
+
+
 static void*
 Malloc(int size)
 {
@@ -32,55 +38,6 @@ Free(void* pointer)
 {
     free(pointer);
 }
-
-#define QUEUE_BLOCK_SIZE (8)
-#define MAP_UNPRIMED (-1)
-#define MODULE_BUFFER_SIZE (512)
-#define STR_CAP_SIZE (16)
-
-#define OPCODES   \
-    X(OPCODE_ADD) \
-    X(OPCODE_AND) \
-    X(OPCODE_BRF) \
-    X(OPCODE_CAL) \
-    X(OPCODE_CPY) \
-    X(OPCODE_DEL) \
-    X(OPCODE_DIV) \
-    X(OPCODE_END) \
-    X(OPCODE_EQL) \
-    X(OPCODE_FLS) \
-    X(OPCODE_FMT) \
-    X(OPCODE_GET) \
-    X(OPCODE_GLB) \
-    X(OPCODE_GRT) \
-    X(OPCODE_GTE) \
-    X(OPCODE_INS) \
-    X(OPCODE_JMP) \
-    X(OPCODE_LEN) \
-    X(OPCODE_LOC) \
-    X(OPCODE_LOD) \
-    X(OPCODE_LOR) \
-    X(OPCODE_LST) \
-    X(OPCODE_LTE) \
-    X(OPCODE_MOV) \
-    X(OPCODE_MUL) \
-    X(OPCODE_NEQ) \
-    X(OPCODE_NOT) \
-    X(OPCODE_POP) \
-    X(OPCODE_PRT) \
-    X(OPCODE_PSB) \
-    X(OPCODE_PSF) \
-    X(OPCODE_RET) \
-    X(OPCODE_SAV) \
-    X(OPCODE_SPD) \
-    X(OPCODE_SUB) \
-    X(OPCODE_TYP) \
-    X(OPCODE_PSH)
-
-#define CLASSES              \
-    X(CLASS_VARIABLE_GLOBAL) \
-    X(CLASS_VARIABLE_LOCAL)  \
-    X(CLASS_FUNCTION)
 
 typedef void
 (*Kill)(void*);
@@ -108,17 +65,51 @@ End;
 
 typedef enum
 {
-#define X(class) class,
-CLASSES
-#undef X
+    CLASS_VARIABLE_GLOBAL,
+    CLASS_VARIABLE_LOCAL,
+    CLASS_FUNCTION
 }
 Class;
 
 typedef enum
 {
-#define X(opcode) opcode,
-OPCODES
-#undef X
+    OPCODE_ADD,
+    OPCODE_AND,
+    OPCODE_BRF,
+    OPCODE_CAL,
+    OPCODE_CPY,
+    OPCODE_DEL,
+    OPCODE_DIV,
+    OPCODE_END,
+    OPCODE_EQL,
+    OPCODE_FLS,
+    OPCODE_FMT,
+    OPCODE_GET,
+    OPCODE_GLB,
+    OPCODE_GRT,
+    OPCODE_GTE,
+    OPCODE_INS,
+    OPCODE_JMP,
+    OPCODE_LEN,
+    OPCODE_LOC,
+    OPCODE_LOD,
+    OPCODE_LOR,
+    OPCODE_LST,
+    OPCODE_LTE,
+    OPCODE_MOV,
+    OPCODE_MUL,
+    OPCODE_NEQ,
+    OPCODE_NOT,
+    OPCODE_POP,
+    OPCODE_PRT,
+    OPCODE_PSB,
+    OPCODE_PSF,
+    OPCODE_RET,
+    OPCODE_SAV,
+    OPCODE_SPD,
+    OPCODE_SUB,
+    OPCODE_TYP,
+    OPCODE_PSH,
 }
 Opcode;
 
@@ -319,26 +310,17 @@ Type_String(Type self)
     return "N/A";
 }
 
-static inline char*
-Opcode_String(Opcode oc)
-{
-    switch(oc)
-    {
-#define X(opcode) case opcode: return #opcode;
-OPCODES
-#undef X
-    }
-    return "N/A";
-}
-
 static char*
 Class_String(Class self)
 {
     switch(self)
     {
-#define X(class) case class: return #class;
-CLASSES
-#undef X
+    case CLASS_VARIABLE_GLOBAL:
+        return "global";
+    case CLASS_VARIABLE_LOCAL:
+        return "local";
+    case CLASS_FUNCTION:
+        return "function";
     }
     return "N/A";
 }
