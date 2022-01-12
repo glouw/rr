@@ -1863,6 +1863,14 @@ CC_VM_Indirect(CC* self)
         if(Str_Equals(ident, "len"))
             Queue_PshB(self->assembly, Str_Init("\tlen"));
         else
+        if(Str_Equals(ident, "ins"))
+        {
+            Queue_PshB(self->assembly, Str_Init("\tins"));
+            // The third argument of insert is the value, and this is
+            // copied to ensure references aren't inserted into dicts.
+            Queue_PshB(self->assembly, Str_Init("\tcpy"));
+        }
+        else
         if(Str_Equals(ident, "del"))
             Queue_PshB(self->assembly, Str_Init("\tdel"));
         else
@@ -1887,6 +1895,7 @@ static void
 CC_Reserve(CC* self)
 {
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("len"));
+    CC_Declare(self, CLASS_FUNCTION, 3, Str_Init("ins"));
     CC_Declare(self, CLASS_FUNCTION, 2, Str_Init("del"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("type"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("print"));
@@ -3314,7 +3323,7 @@ VM_Index(Value* storage, Value* index)
 }
 
 static Value*
-VM_Lookup(VM* self, Value* storage, Value* key)
+VM_Lookup(Value* storage, Value* key)
 {
     if(storage->type != TYPE_DICT)
         Quit("vm: type `%s` cannot be looked up", Type_String(storage->type));
@@ -3333,7 +3342,7 @@ VM_Get(VM* self)
         value = VM_Index(a, b);
     else
     if(b->type == TYPE_STRING)
-        value = VM_Lookup(self, a, b);
+        value = VM_Lookup(a, b);
     else
         Quit("vm: type `%s` cannot be indexed", Type_String(a->type));
     VM_Pop(self);

@@ -1,0 +1,14 @@
+main()
+{
+    a := {};
+    b := 1;
+    ins(&a, "dict", &b);
+    if(a == {"dict" : 1})
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}
