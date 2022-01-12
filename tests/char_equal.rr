@@ -20,18 +20,18 @@ C(str)
 
 B(str)
 {
-    ret C(&str);
+    ret C(str);
 }
 
 A(str)
 {
-    ret B(&str);
+    ret B(str);
 }
 
 main()
 {
     str := "test" + "test";
-    pass := A(&str);
+    pass := A(str);
     if(pass == 3)
     {
         ret 0;

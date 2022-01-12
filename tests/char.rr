@@ -3,7 +3,7 @@ main()
     str := "string";
     str[0] = "S";
     str[1] = "T";
-    print(&str);
+    print(str);
     if(str == "STring")
     {
         ret 0;

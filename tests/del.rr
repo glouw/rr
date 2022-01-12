@@ -2,11 +2,11 @@ main()
 {
     a := [0,1,2,3,4];
     b := { "key": "value"};
-    del(&a, 0);
-    del(&a, 1);
-    del(&a, len(a) - 1);
-    del(&b, "keyadfsafd");
-    print(&a);
+    del(a, 0);
+    del(a, 1);
+    del(a, len(a) - 1);
+    del(b, "keyadfsafd");
+    print(a);
     if(a == [1, 3])
     {
         ret 0;

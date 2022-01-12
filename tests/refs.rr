@@ -1,0 +1,17 @@
+fun(a, b, c, d)
+{
+    val := "asf";
+    print(refs(a));
+    ret val;
+}
+
+main()
+{
+    a := 1;
+    b := a;
+    c := b;
+    d := c;
+    val := fun(a, b, c, d);
+    print(val);
+    ret 0;
+}

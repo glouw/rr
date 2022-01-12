@@ -1,0 +1,13 @@
+main()
+{
+    a := 1;
+    b := copy(a);
+    if(a ? b)
+    {
+        ret 1;
+    }
+    else
+    {
+        ret 0;
+    }
+}

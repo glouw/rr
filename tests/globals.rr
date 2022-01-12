@@ -6,12 +6,12 @@ add(a, b)
     ret a + b;
 }
 
-C := add(1, add(&A, &B));
+C := add(1, add(A, B));
 D := {
     "value" : 100
 };
 
-E := add(&D["value"], &C);
+E := add(D["value"], C);
 
 main()
 {

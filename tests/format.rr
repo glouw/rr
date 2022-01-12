@@ -6,7 +6,7 @@ main()
         {"goose": "louw"},
         [ 0, 1, 2, 3, 4, "foo", { "asdf" : 1 }]
     ];
-    if(print(&a) == 209)
+    if(print(a) == 209)
     {
         ret 0;
     }

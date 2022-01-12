@@ -2,16 +2,39 @@ main()
 {
     a := [ 1,2,3,4, "string", true, false, { "adam": "gustav"}, [] ];
 
+    print("LEN");
+    print(len([]));
+    print("");
+
+    str := "asdf";
+
+    strs := [];
+    j := 0;
+    while(j < 10)
+    {
+        strs += "asdf";
+        j += 1;
+    }
+    print(strs);
+
+    if(str[0] == "a")
+    {
+        print("GOOD");
+    }
+
+    print("SAME?");
+    print(strs[0] ? strs[0]);
+
     # Print piece by piece.
     i := 0;
-    while(i < len(&a))
+    while(i < len(a))
     {
-        print(&a[i]);
+        print("{} : {}" % [i, a[i]]);
         i += 1;
     }
 
     # Print the whole thing
-    print(&a);
+    print(a);
 
     ret 0;
 }

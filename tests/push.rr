@@ -1,0 +1,13 @@
+a()
+{
+    ret "asfd";
+}
+
+main()
+{
+    A := a();
+    A += "asdf";
+    B := a();
+    print(B);
+    ret 0;
+}

@@ -1,0 +1,14 @@
+fun()
+{
+    value := {
+        "asfd" : 1
+    };
+    ret value;
+}
+
+main()
+{
+    v := fun();
+    print(v["asfd"]);
+    ret 0;
+}
