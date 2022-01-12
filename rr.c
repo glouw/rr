@@ -14,6 +14,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <sys/time.h>
 
 #define QUEUE_BLOCK_SIZE (8)
 #define MAP_UNPRIMED (-1)
@@ -85,12 +86,12 @@ typedef enum
     OPCODE_PRT,
     OPCODE_PSB,
     OPCODE_PSF,
+    OPCODE_PSH,
     OPCODE_RET,
     OPCODE_SAV,
     OPCODE_SPD,
     OPCODE_SUB,
     OPCODE_TYP,
-    OPCODE_PSH,
 }
 Opcode;
 
@@ -260,6 +261,14 @@ Quit(const char* const message, ...)
     exit(0xFF);
 }
 
+static inline double
+US(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * 1e6 + tv.tv_usec;
+}
+
 static void
 Delete(Kill kill, void* value)
 {
@@ -267,10 +276,10 @@ Delete(Kill kill, void* value)
         kill(value);
 }
 
-static bool
+static inline bool
 Equals(char* a, char* b)
 {
-    return strcmp(a, b) == 0;
+    return a[0] != b[0] ? false : (strcmp(a, b) == 0);
 }
 
 Args
@@ -615,6 +624,8 @@ Queue_Del(Queue* self, int index)
                 Queue_PopBSoft(self);
             }
         }
+        else
+            Quit("vm: array delete: out of range error");
     }
 }
 
@@ -665,14 +676,14 @@ Queue_Equal(Queue* self, Queue* other, Equal equal)
     return true;
 }
 
-static void
+static inline void
 Str_Alloc(Str* self, int cap)
 {
     self->cap = cap;
     self->value = Realloc(self->value, (1 + cap) * sizeof(*self->value));
 }
 
-static Str*
+static inline Str*
 Str_Init(char* string)
 {
     Str* self = Malloc(sizeof(*self));
@@ -683,21 +694,21 @@ Str_Init(char* string)
     return self;
 }
 
-static void
+static inline void
 Str_Kill(Str* self)
 {
     Delete(Free, self->value);
     Free(self);
 }
 
-static Str*
+static inline Str*
 Str_FromChar(char c)
 {
     char string[] = { c, '\0' };
     return Str_Init(string);
 }
 
-static void
+static inline void
 Str_Swap(Str** self, Str** other)
 {
     Str* temp = *self;
@@ -705,43 +716,43 @@ Str_Swap(Str** self, Str** other)
     *other = temp;
 }
 
-static Str*
+static inline Str*
 Str_Copy(Str* self)
 {
     return Str_Init(self->value);
 }
 
-static int
+static inline int
 Str_Size(Str* self)
 {
     return self->size;
 }
 
-static char*
+static inline char*
 Str_End(Str* self)
 {
     return &self->value[Str_Size(self) - 1];
 }
 
-static char
+static inline char
 Str_Back(Str* self)
 {
     return *Str_End(self);
 }
 
-static char*
+static inline char*
 Str_Begin(Str* self)
 {
     return &self->value[0];
 }
 
-static int
+static inline int
 Str_Empty(Str* self)
 {
     return Str_Size(self) == 0;
 }
 
-static void
+static inline void
 Str_PshB(Str* self, char ch)
 {
     if(Str_Size(self) == self->cap)
@@ -751,7 +762,7 @@ Str_PshB(Str* self, char ch)
     self->size += 1;
 }
 
-static Str*
+static inline Str*
 Str_Indent(int indents)
 {
     int width = 4;
@@ -765,40 +776,35 @@ Str_Indent(int indents)
     return ident;
 }
 
-static void
+static inline void
 Str_PopB(Str* self)
 {
     self->size -= 1;
     self->value[self->size] = '\0';
 }
 
-static void
-Str_Resize(Str* self, char ch, int size)
+static inline void
+Str_Resize(Str* self, int size)
 {
-    if(self->size < size)
-    {
+    if(size > self->cap)
         Str_Alloc(self, size);
-        while(self->size < size)
-            Str_PshB(self, ch);
-    }
-    else
-        while(self->size > size)
-            Str_PopB(self);
+    self->size = size;
+    self->value[size] = '\0';
 }
 
-static bool
+static inline bool
 Str_Equals(Str* a, char* b)
 {
     return Equals(a->value, b);
 }
 
-static bool
+static inline bool
 Str_Equal(Str* a, Str* b)
 {
     return Equals(a->value, b->value);
 }
 
-static void
+static inline void
 Str_Appends(Str* self, char* str)
 {
     while(*str)
@@ -808,14 +814,14 @@ Str_Appends(Str* self, char* str)
     }
 }
 
-static void
+static inline void
 Str_Append(Str* self, Str* other)
 {
     Str_Appends(self, other->value);
     Str_Kill(other);
 }
 
-static Str*
+static inline Str*
 Str_Base(Str* path)
 {
     Str* base = Str_Copy(path);
@@ -827,7 +833,7 @@ Str_Base(Str* path)
     return base;
 }
 
-static Str*
+static inline Str*
 Str_Moves(char** from)
 {
     Str* self = Malloc(sizeof(*self));
@@ -838,7 +844,7 @@ Str_Moves(char** from)
     return self;
 }
 
-static Str*
+static inline Str*
 Str_Skip(Str* self, char c)
 {
     char* value = self->value;
@@ -851,37 +857,38 @@ Str_Skip(Str* self, char c)
     return Str_Init(value);
 }
 
-static bool
+static inline bool
 Str_IsBoolean(Str* ident)
 {
     return Str_Equals(ident, "true") || Str_Equals(ident, "false");
 }
 
-static bool
+static inline bool
 Str_IsNull(Str* ident)
 {
     return Str_Equals(ident, "null");
 }
 
-static Str*
+static inline Str*
 Str_Format(char* format, ...)
 {
     va_list args;
     va_start(args, format);
-    int size = vsnprintf(NULL, 0, format, args);
-    va_end(args);
     Str* line = Str_Init("");
-    if(size > 0)
+    Str_Resize(line, STR_CAP_SIZE);
+    int size = vsnprintf(line->value, line->size, format, args);
+    va_end(args);
+    if(size > line->size)
     {
         va_start(args, format);
-        Str_Resize(line, '\0', size + 1);
+        Str_Resize(line, size);
         vsprintf(line->value, format, args);
         va_end(args);
     }
     return line;
 }
 
-static char*
+static inline char*
 Str_Get(Str* self, int index)
 {
     if(index < 0 || index >= Str_Size(self))
@@ -889,15 +896,17 @@ Str_Get(Str* self, int index)
     return &self->value[index];
 }
 
-static void
+static inline void
 Str_Del(Str* self, int index)
 {
-    if(Str_Get(self, index) != NULL)
+    if(Str_Get(self, index))
     {
         for(int i = index; i < Str_Size(self) - 1; i++)
             self->value[i] = self->value[i + 1];
         Str_PopB(self);
     }
+    else
+        Quit("vm: string delete: out of range error");
 }
 
 static Node*
@@ -1296,7 +1305,7 @@ CC_LoadModule(CC* self, Str* file)
     if(Queue_Empty(self->modules))
     {
         path = Str_Init("");
-        Str_Resize(path, '\0', 4096);
+        Str_Resize(path, 4096);
         getcwd(Str_Begin(path), Str_Size(path));
         strcat(Str_Begin(path), "/");
         strcat(Str_Begin(path), file->value);
@@ -1620,7 +1629,7 @@ CC_EmptyExpression(CC* self)
 {
     CC_Expression(self);
     CC_Match(self, ";");
-    Queue_PshB(self->assembly, Str_Format("\tpop"));
+    Queue_PshB(self->assembly, Str_Init("\tpop"));
 }
 
 static void
@@ -1628,7 +1637,7 @@ CC_Assign(CC* self)
 {
     CC_Match(self, ":=");
     CC_Expression(self);
-    Queue_PshB(self->assembly, Str_Format("\tcpy"));
+    Queue_PshB(self->assembly, Str_Init("\tcpy"));
     CC_Match(self, ";");
 }
 
@@ -1648,7 +1657,7 @@ CC_Global(CC* self, Str* ident)
     Queue_PshB(self->assembly, Str_Format("%s:", label->value));
     CC_Assign(self);
     CC_Declare(self, CLASS_VARIABLE_GLOBAL, self->globals, ident);
-    Queue_PshB(self->assembly, Str_Format("\tret"));
+    Queue_PshB(self->assembly, Str_Init("\tret"));
     self->globals += 1;
     return label;
 }
@@ -1686,7 +1695,7 @@ CC_PopScope(CC* self, Queue* scope)
         self->locals -= 1;
     }
     for(int i = 0; i < popped; i++)
-        Queue_PshB(self->assembly, Str_Format("\tpop"));
+        Queue_PshB(self->assembly, Str_Init("\tpop"));
     Queue_Kill(scope);
     return popped;
 }
@@ -1721,7 +1730,7 @@ CC_Resolve(CC* self)
         CC_Match(self, "[");
         CC_Expression(self);
         CC_Match(self, "]");
-        Queue_PshB(self->assembly, Str_Format("\tget"));
+        Queue_PshB(self->assembly, Str_Init("\tget"));
     }
 }
 
@@ -1739,7 +1748,7 @@ static void
 CC_ByVal(CC* self)
 {
     CC_Expression(self);
-    Queue_PshB(self->assembly, Str_Format("\tcpy"));
+    Queue_PshB(self->assembly, Str_Init("\tcpy"));
 }
 
 static void
@@ -1772,24 +1781,24 @@ static void
 CC_Call(CC* self, Str* ident, Meta* meta)
 {
     for(int i = 0; i < meta->stack; i++)
-        Queue_PshB(self->assembly, Str_Format("\tspd"));
+        Queue_PshB(self->assembly, Str_Init("\tspd"));
     Queue_PshB(self->assembly, Str_Format("\tcal %s", ident->value));
-    Queue_PshB(self->assembly, Str_Format("\tlod"));
+    Queue_PshB(self->assembly, Str_Init("\tlod"));
 }
 
 static void
 CC_Dict(CC* self)
 {
-    Queue_PshB(self->assembly, Str_Format("\tpsh {}"));
-    Queue_PshB(self->assembly, Str_Format("\tcpy"));
+    Queue_PshB(self->assembly, Str_Init("\tpsh {}"));
+    Queue_PshB(self->assembly, Str_Init("\tcpy"));
     CC_Match(self, "{");
     while(CC_Next(self) != '}')
     {
         CC_Expression(self); // No need to copy, because dict keys aren't tracked as stack values.
         CC_Match(self, ":");
         CC_Expression(self);
-        Queue_PshB(self->assembly, Str_Format("\tcpy"));
-        Queue_PshB(self->assembly, Str_Format("\tins"));
+        Queue_PshB(self->assembly, Str_Init("\tcpy"));
+        Queue_PshB(self->assembly, Str_Init("\tins"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
     }
@@ -1799,14 +1808,14 @@ CC_Dict(CC* self)
 static void
 CC_Array(CC* self)
 {
-    Queue_PshB(self->assembly, Str_Format("\tpsh []"));
-    Queue_PshB(self->assembly, Str_Format("\tcpy"));
+    Queue_PshB(self->assembly, Str_Init("\tpsh []"));
+    Queue_PshB(self->assembly, Str_Init("\tcpy"));
     CC_Match(self, "[");
     while(CC_Next(self) != ']')
     {
         CC_Expression(self);
-        Queue_PshB(self->assembly, Str_Format("\tcpy"));
-        Queue_PshB(self->assembly, Str_Format("\tpsb"));
+        Queue_PshB(self->assembly, Str_Init("\tcpy"));
+        Queue_PshB(self->assembly, Str_Init("\tpsb"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
     }
@@ -1821,7 +1830,7 @@ CC_Not(CC* self)
 {
     CC_Match(self, "!");
     CC_Factor(self);
-    Queue_PshB(self->assembly, Str_Format("\tnot"));
+    Queue_PshB(self->assembly, Str_Init("\tnot"));
 }
 
 static void
@@ -1852,16 +1861,16 @@ CC_VM_Indirect(CC* self)
         Meta* meta = CC_Expect(self, ident, CC_IsFunction);
         CC_Args(self, meta->stack);
         if(Str_Equals(ident, "len"))
-            Queue_PshB(self->assembly, Str_Format("\tlen"));
+            Queue_PshB(self->assembly, Str_Init("\tlen"));
         else
         if(Str_Equals(ident, "del"))
-            Queue_PshB(self->assembly, Str_Format("\tdel"));
+            Queue_PshB(self->assembly, Str_Init("\tdel"));
         else
         if(Str_Equals(ident, "type"))
-            Queue_PshB(self->assembly, Str_Format("\ttyp"));
+            Queue_PshB(self->assembly, Str_Init("\ttyp"));
         else
         if(Str_Equals(ident, "print"))
-            Queue_PshB(self->assembly, Str_Format("\tprt"));
+            Queue_PshB(self->assembly, Str_Init("\tprt"));
         else
             CC_Call(self, ident, meta);
     }
@@ -1945,7 +1954,7 @@ CC_Term(CC* self)
             if(!storage)
                 CC_Quit(self, "factor - left hand side must be storage");
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\tmul"));
+            Queue_PshB(self->assembly, Str_Init("\tmul"));
         }
         else
         if(Str_Equals(operator, "/="))
@@ -1953,24 +1962,24 @@ CC_Term(CC* self)
             if(!storage)
                 CC_Quit(self, "factor - left hand side must be storage");
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\tdiv"));
+            Queue_PshB(self->assembly, Str_Init("\tdiv"));
         }
         else
         {
             storage = false;
-            Queue_PshB(self->assembly, Str_Format("\tcpy"));
+            Queue_PshB(self->assembly, Str_Init("\tcpy"));
             CC_Factor(self);
             if(Str_Equals(operator, "*"))
-                Queue_PshB(self->assembly, Str_Format("\tmul"));
+                Queue_PshB(self->assembly, Str_Init("\tmul"));
             else
             if(Str_Equals(operator, "/"))
-                Queue_PshB(self->assembly, Str_Format("\tdiv"));
+                Queue_PshB(self->assembly, Str_Init("\tdiv"));
             else
             if(Str_Equals(operator, "%"))
-                Queue_PshB(self->assembly, Str_Format("\tfmt"));
+                Queue_PshB(self->assembly, Str_Init("\tfmt"));
             else
             if(Str_Equals(operator, "||"))
-                Queue_PshB(self->assembly, Str_Format("\tlor"));
+                Queue_PshB(self->assembly, Str_Init("\tlor"));
             else
                 CC_Quit(self, "operator `%s` not supported", operator->value);
         }
@@ -1997,7 +2006,7 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_Quit(self, "term - left hand side must be storage");
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\tmov"));
+            Queue_PshB(self->assembly, Str_Init("\tmov"));
         }
         else
         if(Str_Equals(operator, "+="))
@@ -2005,7 +2014,7 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_Quit(self, "term - left hand side must be storage");
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\tadd"));
+            Queue_PshB(self->assembly, Str_Init("\tadd"));
         }
         else
         if(Str_Equals(operator, "-="))
@@ -2013,57 +2022,57 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_Quit(self, "term - left hand side must be storage");
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\tsub"));
+            Queue_PshB(self->assembly, Str_Init("\tsub"));
         }
         else
         if(Str_Equals(operator, "=="))
         {
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\teql"));
+            Queue_PshB(self->assembly, Str_Init("\teql"));
         }
         else
         if(Str_Equals(operator, "!="))
         {
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\tneq"));
+            Queue_PshB(self->assembly, Str_Init("\tneq"));
         }
         else
         if(Str_Equals(operator, ">"))
         {
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\tgrt"));
+            Queue_PshB(self->assembly, Str_Init("\tgrt"));
         }
         else
         if(Str_Equals(operator, "<"))
         {
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\tlst"));
+            Queue_PshB(self->assembly, Str_Init("\tlst"));
         }
         else
         if(Str_Equals(operator, ">="))
         {
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\tgte"));
+            Queue_PshB(self->assembly, Str_Init("\tgte"));
         }
         else
         if(Str_Equals(operator, "<="))
         {
             CC_Expression(self);
-            Queue_PshB(self->assembly, Str_Format("\tlte"));
+            Queue_PshB(self->assembly, Str_Init("\tlte"));
         }
         else
         {
             storage = false;
-            Queue_PshB(self->assembly, Str_Format("\tcpy"));
+            Queue_PshB(self->assembly, Str_Init("\tcpy"));
             CC_Term(self);
             if(Str_Equals(operator, "+"))
-                Queue_PshB(self->assembly, Str_Format("\tadd"));
+                Queue_PshB(self->assembly, Str_Init("\tadd"));
             else
             if(Str_Equals(operator, "-"))
-                Queue_PshB(self->assembly, Str_Format("\tsub"));
+                Queue_PshB(self->assembly, Str_Init("\tsub"));
             else
             if(Str_Equals(operator, "&&"))
-                Queue_PshB(self->assembly, Str_Format("\tand"));
+                Queue_PshB(self->assembly, Str_Init("\tand"));
             else
                 CC_Quit(self, "operator `%s` not supported", operator->value);
         }
@@ -2137,8 +2146,8 @@ static void
 CC_Ret(CC* self)
 {
     CC_Expression(self);
-    Queue_PshB(self->assembly, Str_Format("\tsav"));
-    Queue_PshB(self->assembly, Str_Format("\tfls"));
+    Queue_PshB(self->assembly, Str_Init("\tsav"));
+    Queue_PshB(self->assembly, Str_Init("\tfls"));
     CC_Match(self, ";");
 }
 
@@ -2223,9 +2232,9 @@ CC_Function(CC* self, Str* ident)
     Queue_PshB(self->assembly, Str_Format("%s:", ident->value));
     CC_Block(self, 0, 0, false);
     CC_PopScope(self, params);
-    Queue_PshB(self->assembly, Str_Format("\tpsh null"));
-    Queue_PshB(self->assembly, Str_Format("\tsav"));
-    Queue_PshB(self->assembly, Str_Format("\tret"));
+    Queue_PshB(self->assembly, Str_Init("\tpsh null"));
+    Queue_PshB(self->assembly, Str_Init("\tsav"));
+    Queue_PshB(self->assembly, Str_Init("\tret"));
 }
 
 static void
@@ -2234,7 +2243,7 @@ CC_Spool(CC* self, Queue* start)
     Queue* spool = Queue_Init((Kill) Str_Kill, NULL);
     Str* main = Str_Init("main");
     CC_Expect(self, main, CC_IsFunction);
-    Queue_PshB(spool, Str_Format("!start:"));
+    Queue_PshB(spool, Str_Init("!start:"));
     for(int i = 0; i < Queue_Size(start); i++)
     {
         Str* label = Queue_Get(start, i);
@@ -2549,18 +2558,18 @@ ASM_Label(Queue* assembly, int* size)
     Map* labels = Map_Init((Kill) Free, (Copy) NULL);
     for(int i = 0; i < Queue_Size(assembly); i++)
     {
-        Str* line = Str_Copy(Queue_Get(assembly, i));
-        if(line->value[0] == '\t') // Instruction.
+        Str* stub = Queue_Get(assembly, i);
+        if(stub->value[0] == '\t')
             *size += 1;
-        else // Label.
+        else 
         {
+            Str* line = Str_Copy(stub);
             char* label = strtok(line->value, ":");
-            int* at = Int_Init(*size);
             if(Map_Exists(labels, label))
                 Quit("asm: label %s already defined", label);
-            Map_Set(labels, Str_Init(label), at);
+            Map_Set(labels, Str_Init(label), Int_Init(*size));
+            Str_Kill(line);
         }
-        Str_Kill(line);
     }
     return labels;
 }
@@ -2724,12 +2733,12 @@ VM_Assemble(Queue* assembly)
     int pc = 0;
     for(int i = 0; i < Queue_Size(assembly); i++)
     {
-        Str* line = Str_Copy(Queue_Get(assembly, i));
-        if(line->value[0] == '\t')
+        Str* stub = Queue_Get(assembly, i);
+        if(stub->value[0] == '\t')
         {
+            Str* line = Str_Init(stub->value + 1);
             int instruction = 0;
-            char* mnemonic = strtok(line->value, " \t\n");
-            char* operator = strtok(NULL, "\n");
+            char* mnemonic = strtok(line->value, " \n");
             if(Equals(mnemonic, "add"))
                 instruction = OPCODE_ADD;
             else
@@ -2737,16 +2746,16 @@ VM_Assemble(Queue* assembly)
                 instruction = OPCODE_AND;
             else
             if(Equals(mnemonic, "brf"))
-                instruction = VM_Indirect(OPCODE_BRF, labels, operator);
-            else
-            if(Equals(mnemonic, "del"))
-                instruction = OPCODE_DEL;
+                instruction = VM_Indirect(OPCODE_BRF, labels, strtok(NULL, "\n"));
             else
             if(Equals(mnemonic, "cal"))
-                instruction = VM_Indirect(OPCODE_CAL, labels, operator);
+                instruction = VM_Indirect(OPCODE_CAL, labels, strtok(NULL, "\n"));
             else
             if(Equals(mnemonic, "cpy"))
                 instruction = OPCODE_CPY;
+            else
+            if(Equals(mnemonic, "del"))
+                instruction = OPCODE_DEL;
             else
             if(Equals(mnemonic, "div"))
                 instruction = OPCODE_DIV;
@@ -2767,7 +2776,7 @@ VM_Assemble(Queue* assembly)
                 instruction = OPCODE_GET;
             else
             if(Equals(mnemonic, "glb"))
-                instruction = VM_Direct(OPCODE_GLB, operator);
+                instruction = VM_Direct(OPCODE_GLB, strtok(NULL, "\n"));
             else
             if(Equals(mnemonic, "grt"))
                 instruction = OPCODE_GRT;
@@ -2779,13 +2788,13 @@ VM_Assemble(Queue* assembly)
                 instruction = OPCODE_INS;
             else
             if(Equals(mnemonic, "jmp"))
-                instruction = VM_Indirect(OPCODE_JMP, labels, operator);
+                instruction = VM_Indirect(OPCODE_JMP, labels, strtok(NULL, "\n"));
             else
             if(Equals(mnemonic, "len"))
                 instruction = OPCODE_LEN;
             else
             if(Equals(mnemonic, "loc"))
-                instruction = VM_Direct(OPCODE_LOC, operator);
+                instruction = VM_Direct(OPCODE_LOC, strtok(NULL, "\n"));
             else
             if(Equals(mnemonic, "lod"))
                 instruction = OPCODE_LOD;
@@ -2811,17 +2820,20 @@ VM_Assemble(Queue* assembly)
             if(Equals(mnemonic, "not"))
                 instruction = OPCODE_NOT;
             else
-            if(Equals(mnemonic, "prt"))
-                instruction = OPCODE_PRT;
-            else
             if(Equals(mnemonic, "pop"))
                 instruction = OPCODE_POP;
+            else
+            if(Equals(mnemonic, "prt"))
+                instruction = OPCODE_PRT;
             else
             if(Equals(mnemonic, "psb"))
                 instruction = OPCODE_PSB;
             else
             if(Equals(mnemonic, "psf"))
                 instruction = OPCODE_PSF;
+            else
+            if(Equals(mnemonic, "psh"))
+                instruction = VM_Datum(self, strtok(NULL, "\n"));
             else
             if(Equals(mnemonic, "ret"))
                 instruction = OPCODE_RET;
@@ -2838,14 +2850,11 @@ VM_Assemble(Queue* assembly)
             if(Equals(mnemonic, "typ"))
                 instruction = OPCODE_TYP;
             else
-            if(Equals(mnemonic, "psh"))
-                instruction = VM_Datum(self, operator);
-            else
                 Quit("asm: unknown mnemonic `%s`", mnemonic);
             self->instructions[pc] = instruction;
             pc += 1;
+            Str_Kill(line);
         }
-        Str_Kill(line);
     }
     Map_Kill(labels);
     return self;
@@ -3305,7 +3314,7 @@ VM_Index(Value* storage, Value* index)
 }
 
 static Value*
-VM_Lookup(Value* storage, Value* key)
+VM_Lookup(VM* self, Value* storage, Value* key)
 {
     if(storage->type != TYPE_DICT)
         Quit("vm: type `%s` cannot be looked up", Type_String(storage->type));
@@ -3324,7 +3333,7 @@ VM_Get(VM* self)
         value = VM_Index(a, b);
     else
     if(b->type == TYPE_STRING)
-        value = VM_Lookup(a, b);
+        value = VM_Lookup(self, a, b);
     else
         Quit("vm: type `%s` cannot be indexed", Type_String(a->type));
     VM_Pop(self);
@@ -3449,18 +3458,18 @@ VM_Run(VM* self)
         case OPCODE_LTE: VM_Lte(self); break;
         case OPCODE_MOV: VM_Mov(self); break;
         case OPCODE_MUL: VM_Mul(self); break;
-        case OPCODE_NOT: VM_Not(self); break;
         case OPCODE_NEQ: VM_Neq(self); break;
+        case OPCODE_NOT: VM_Not(self); break;
         case OPCODE_POP: VM_Pop(self); break;
         case OPCODE_PRT: VM_Prt(self); break;
         case OPCODE_PSB: VM_Psb(self); break;
         case OPCODE_PSF: VM_Psf(self); break;
+        case OPCODE_PSH: VM_Psh(self, address); break;
         case OPCODE_RET: VM_Ret(self); break;
         case OPCODE_SAV: VM_Sav(self); break;
         case OPCODE_SPD: VM_Spd(self); break;
         case OPCODE_SUB: VM_Sub(self); break;
         case OPCODE_TYP: VM_Typ(self); break;
-        case OPCODE_PSH: VM_Psh(self, address); break;
         }
     }
 }
