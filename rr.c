@@ -1865,10 +1865,10 @@ CC_VM_Indirect(CC* self)
         else
         if(Str_Equals(ident, "ins"))
         {
-            Queue_PshB(self->assembly, Str_Init("\tins"));
             // The third argument of insert is the value, and this is
             // copied to ensure references aren't inserted into dicts.
             Queue_PshB(self->assembly, Str_Init("\tcpy"));
+            Queue_PshB(self->assembly, Str_Init("\tins"));
         }
         else
         if(Str_Equals(ident, "del"))
@@ -2996,7 +2996,7 @@ static void
 VM_Add(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
-    Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1); // PROMOTE CHAR.
+    Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type == TYPE_CHAR)
         Quit("vm: cannot add to char");
     else
