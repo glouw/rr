@@ -1,8 +1,9 @@
 main()
 {
     a := {};
-    b := 1;
+    b := 0;
     ins(&a, "dict", &b);
+    a["dict"] = a["dict"] + 1;
     if(a == {"dict" : 1})
     {
         ret 0;
