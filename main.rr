@@ -1,40 +1,41 @@
+split(string)
+{
+    word := "";
+    words := [];
+    size := len(string);
+    for(i := 0; i < size; i += 1)
+    {
+        char := string[i];
+        print("`{}`" % [char]);
+        if((char == " ") || (char == "\n") || (i == size - 1))
+        {
+            words += word;
+            word = "";
+        }
+        else
+        {
+            word += char;
+        }
+    }
+    print(string);
+    ret words;
+}
+
 main()
 {
-    a := [ 1,2,3,4, "string", true, false, { "adam": "gustav"}, [] ];
-
-    print("LEN");
-    print(len([]));
-    print("");
-
-    str := "asdf";
-
-    strs := [];
-    j := 0;
-    while(j < 10)
+    file := open("./words.txt", "r");
+    if(good(file))
     {
-        strs += "asdf";
-        j += 1;
+        size := len(file);
+        raw := read(file, size);
+        A := split(raw);
+        B := split(raw);
+        print(A);
+        print(B);
+        ret 0;
     }
-    print(strs);
-
-    if(str[0] == "a")
+    else
     {
-        print("GOOD");
+        ret 1;
     }
-
-    print("SAME?");
-    print(strs[0] ? strs[0]);
-
-    # Print piece by piece.
-    i := 0;
-    while(i < len(a))
-    {
-        print("{} : {}" % [i, a[i]]);
-        i += 1;
-    }
-
-    # Print the whole thing
-    print(a);
-
-    ret 0;
 }

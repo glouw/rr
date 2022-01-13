@@ -1,0 +1,15 @@
+main()
+{
+    file := open("file.txt", "r");
+    a := read(file, 3);
+    b := read(file, 1);
+    c := read(file, 5);
+    if((a == "the") && (c == "quick"))
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

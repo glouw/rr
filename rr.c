@@ -68,6 +68,7 @@ typedef enum
     OPCODE_FMT,
     OPCODE_GET,
     OPCODE_GLB,
+    OPCODE_GOD,
     OPCODE_GRT,
     OPCODE_GTE,
     OPCODE_INS,
@@ -83,22 +84,26 @@ typedef enum
     OPCODE_MUL,
     OPCODE_NEQ,
     OPCODE_NOT,
+    OPCODE_OPN,
     OPCODE_POP,
     OPCODE_PRT,
     OPCODE_PSB,
     OPCODE_PSF,
     OPCODE_PSH,
+    OPCODE_RED,
     OPCODE_REF,
     OPCODE_RET,
     OPCODE_SAV,
     OPCODE_SPD,
     OPCODE_SUB,
     OPCODE_TYP,
+    OPCODE_WRT,
 }
 Opcode;
 
 typedef enum
 {
+    TYPE_FILE,
     TYPE_ARRAY,
     TYPE_CHAR,
     TYPE_DICT,
@@ -116,6 +121,14 @@ typedef struct
     int cap;
 }
 Str;
+
+typedef struct
+{
+    Str* path;
+    Str* mode;
+    FILE* file;
+}
+File;
 
 typedef struct Node
 {
@@ -188,6 +201,7 @@ Meta;
 
 typedef union
 {
+    File* file;
     Queue* array;
     Map* dict;
     Str* string;
@@ -321,6 +335,8 @@ Type_String(Type self)
 {
     switch(self)
     {
+    case TYPE_FILE:
+        return "file";
     case TYPE_ARRAY:
         return "array";
     case TYPE_CHAR:
@@ -909,6 +925,55 @@ Str_Del(Str* self, int index)
     }
     else
         Quit("vm: string delete: out of range error");
+}
+
+static File*
+File_Init(Str* path, Str* mode)
+{
+    File* self = Malloc(sizeof(*self));
+    self->path = path;
+    self->mode = mode;
+    self->file = fopen(self->path->value, self->mode->value);
+    return self;
+}
+
+static bool
+File_Equal(File* a, File* b)
+{
+    return Str_Equal(a->path, b->path) 
+        && Str_Equal(a->mode, b->mode)
+        && a->file == b->file;
+}
+
+static void
+File_Kill(File* self)
+{
+    Str_Kill(self->path);
+    Str_Kill(self->mode);
+    if(self->file)
+        fclose(self->file);
+    Free(self);
+}
+
+static File*
+File_Copy(File* self)
+{
+    return File_Init(Str_Copy(self->path), Str_Copy(self->mode));
+}
+
+static int
+File_Size(File* self)
+{
+    if(self->file)
+    {
+        int prev = ftell(self->file);
+        fseek(self->file, 0L, SEEK_END);
+        int size = ftell(self->file);
+        fseek(self->file, prev, SEEK_SET);
+        return size;
+    }
+    else
+        return 0;
 }
 
 static Node*
@@ -1525,9 +1590,9 @@ CC_Str(CC* self)
             Str_PshB(str, CC_Read(self));
             if(lead == '\\')
             {
-                int escape = CC_Peak(self);
-                if(!CC_IsEsc(escape))
-                    CC_Quit(self, "unknown escape char `0x%02X`\n", escape);
+                int esc = CC_Peak(self);
+                if(!CC_IsEsc(esc))
+                    CC_Quit(self, "unknown escape char `0x%02X`\n", esc);
                 Str_PshB(str, CC_Read(self));
             }
         }
@@ -1816,7 +1881,7 @@ CC_Not(CC* self)
 }
 
 static void
-CC_VM_Direct(CC* self)
+CC_Direct(CC* self)
 {
     Str* number = CC_Number(self);
     Queue_PshB(self->assembly, Str_Format("\tpsh %s", number->value));
@@ -1824,7 +1889,7 @@ CC_VM_Direct(CC* self)
 }
 
 static bool
-CC_VM_Indirect(CC* self)
+CC_Indirect(CC* self)
 {
     bool storage = false;
     Str* ident = NULL;
@@ -1845,11 +1910,23 @@ CC_VM_Indirect(CC* self)
         if(Str_Equals(ident, "len"))
             Queue_PshB(self->assembly, Str_Init("\tlen"));
         else
+        if(Str_Equals(ident, "good"))
+            Queue_PshB(self->assembly, Str_Init("\tgod"));
+        else
+        if(Str_Equals(ident, "open"))
+            Queue_PshB(self->assembly, Str_Init("\topn"));
+        else
+        if(Str_Equals(ident, "read"))
+            Queue_PshB(self->assembly, Str_Init("\tred"));
+        else
         if(Str_Equals(ident, "copy"))
             Queue_PshB(self->assembly, Str_Init("\tcpy"));
         else
         if(Str_Equals(ident, "ins"))
             Queue_PshB(self->assembly, Str_Init("\tins"));
+        else
+        if(Str_Equals(ident, "write"))
+            Queue_PshB(self->assembly, Str_Init("\twrt"));
         else
         if(Str_Equals(ident, "refs"))
             Queue_PshB(self->assembly, Str_Init("\tref"));
@@ -1877,13 +1954,18 @@ CC_VM_Indirect(CC* self)
 static void
 CC_Reserve(CC* self)
 {
+    CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("good"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("copy"));
+    CC_Declare(self, CLASS_FUNCTION, 2, Str_Init("open"));
+    CC_Declare(self, CLASS_FUNCTION, 2, Str_Init("read"));
+    CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("close"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("refs"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("len"));
     CC_Declare(self, CLASS_FUNCTION, 3, Str_Init("ins"));
     CC_Declare(self, CLASS_FUNCTION, 2, Str_Init("del"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("type"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("print"));
+    CC_Declare(self, CLASS_FUNCTION, 2, Str_Init("write"));
 }
 
 static void
@@ -1911,10 +1993,10 @@ CC_Factor(CC* self)
         CC_Not(self);
     else
     if(CC_IsDigit(next))
-        CC_VM_Direct(self);
+        CC_Direct(self);
     else
     if(CC_IsIdent(next) || self->prime)
-        storage = CC_VM_Indirect(self);
+        storage = CC_Indirect(self);
     else
     if(next == '(')
         CC_Force(self);
@@ -2124,7 +2206,7 @@ CC_Branches(CC* self, int head, int tail, int loop)
         CC_Block(self, head, tail, loop);
     Queue_PshB(self->assembly, Str_Format("@l%d:", end));
     Str* backup = NULL;
-    if(Str_Equals(buffer, "elif") || Str_Equals(buffer, "else"))
+    if(Str_Empty(buffer) || Str_Equals(buffer, "elif") || Str_Equals(buffer, "else"))
         Str_Kill(buffer);
     else
         backup = buffer;
@@ -2326,6 +2408,9 @@ Type_Kill(Type type, Of of)
 {
     switch(type)
     {
+    case TYPE_FILE:
+        File_Kill(of.file);
+        break;
     case TYPE_ARRAY:
         Queue_Kill(of.array);
         break;
@@ -2348,6 +2433,8 @@ Value_Len(Value* self)
 {
     switch(self->type)
     {
+    case TYPE_FILE:
+        return File_Size(self->of.file);
     case TYPE_ARRAY:
         return Queue_Size(self->of.array);
     case TYPE_DICT:
@@ -2379,7 +2466,7 @@ Value_Inc(Value* self)
 static void
 Value_Kill(Value* self)
 {
-    if(self->refs == 0 || self->type == TYPE_CHAR)
+    if(self->refs == 0)
     {
         Type_Kill(self->type, self->of);
         Free(self);
@@ -2391,9 +2478,17 @@ Value_Kill(Value* self)
 static bool
 Value_Equal(Value* a, Value* b)
 {
+    if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
+        return *a->of.character == b->of.string->value[0];
+    else
+    if(b->type == TYPE_CHAR && a->type == TYPE_STRING)
+        return *b->of.character == a->of.string->value[0];
+    else
     if(a->type == b->type)
         switch(a->type)
         {
+        case TYPE_FILE:
+            return File_Equal(a->of.file, b->of.file);
         case TYPE_ARRAY:
             return Queue_Equal(a->of.array, b->of.array, (Equal) Value_Equal);
         case TYPE_DICT:
@@ -2473,6 +2568,9 @@ Value_Print(Value* self, bool newline, int indents)
     Str* print = Str_Init("");
     switch(self->type)
     {
+    case TYPE_FILE:
+        Str_Append(print, Str_Format("{ \"%s\" : \"%s\" : %p }", self->of.file->path->value, self->of.file->mode->value, self->of.file->file));
+        break;
     case TYPE_ARRAY:
         Str_Append(print, Queue_Print(self->of.array, indents));
         break;
@@ -2511,6 +2609,9 @@ Value_Init(Of of, Type type)
     self->refs = 0;
     switch(type)
     {
+    case TYPE_FILE:
+        self->of.file = of.file;
+        break;
     case TYPE_ARRAY:
         self->of.array = Queue_Init((Kill) Value_Kill, (Copy) Value_Copy);
         break;
@@ -2536,29 +2637,13 @@ Value_Init(Of of, Type type)
 }
 
 static void
-Value_PromoteChar(Value* self)
-{
-    self->type = TYPE_STRING;
-    self->of.string = Str_FromChar(*self->of.character);
-    self->refs = 0;
-}
-
-static void
-Value_PromoteChars(Value* a, Value* b)
-{
-    if((a->type == TYPE_CHAR && b->type == TYPE_STRING)
-    || (b->type == TYPE_CHAR && a->type == TYPE_STRING))
-    {
-        if(a->type == TYPE_CHAR) Value_PromoteChar(a);
-        if(b->type == TYPE_CHAR) Value_PromoteChar(b);
-    }
-}
-
-static void
 Type_Copy(Value* copy, Value* self)
 {
     switch(self->type)
     {
+    case TYPE_FILE:
+        copy->of.file = File_Copy(self->of.file);
+        break;
     case TYPE_ARRAY:
         copy->of.array = Queue_Copy(self->of.array);
         break;
@@ -2823,6 +2908,9 @@ VM_Assemble(Queue* assembly)
             if(Equals(mnemonic, "glb"))
                 instruction = VM_Direct(OPCODE_GLB, strtok(NULL, "\n"));
             else
+            if(Equals(mnemonic, "god"))
+                instruction = OPCODE_GOD;
+            else
             if(Equals(mnemonic, "grt"))
                 instruction = OPCODE_GRT;
             else
@@ -2868,6 +2956,9 @@ VM_Assemble(Queue* assembly)
             if(Equals(mnemonic, "not"))
                 instruction = OPCODE_NOT;
             else
+            if(Equals(mnemonic, "opn"))
+                instruction = OPCODE_OPN;
+            else
             if(Equals(mnemonic, "pop"))
                 instruction = OPCODE_POP;
             else
@@ -2882,6 +2973,9 @@ VM_Assemble(Queue* assembly)
             else
             if(Equals(mnemonic, "psh"))
                 instruction = VM_Datum(self, strtok(NULL, "\n"));
+            else
+            if(Equals(mnemonic, "red"))
+                instruction = OPCODE_RED;
             else
             if(Equals(mnemonic, "ref"))
                 instruction = OPCODE_REF;
@@ -2900,6 +2994,9 @@ VM_Assemble(Queue* assembly)
             else
             if(Equals(mnemonic, "typ"))
                 instruction = OPCODE_TYP;
+            else
+            if(Equals(mnemonic, "wrt"))
+                instruction = OPCODE_WRT;
             else
                 Quit("asm: unknown mnemonic `%s`", mnemonic);
             self->instructions[pc] = instruction;
@@ -3039,13 +3136,15 @@ VM_Add(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type == TYPE_CHAR)
-        Quit("vm: cannot add to char");
+        Quit("vm: cannot add to char"); // Prevents str[0] += "a";
     else
     if(a->type == TYPE_ARRAY && b->type != TYPE_ARRAY)
         Queue_PshB(a->of.array, Value_Copy(b));
     else
     {
-        Value_PromoteChars(a, b);
+        if(a->type == TYPE_STRING && b->type == TYPE_CHAR)
+            Str_PshB(a->of.string, *b->of.character);
+        else
         if(a->type == b->type)
             switch(a->type)
             {
@@ -3061,10 +3160,10 @@ VM_Add(VM* self)
             case TYPE_NUMBER:
                 a->of.number += b->of.number;
                 break;
-            case TYPE_CHAR:
-                break;
+            case TYPE_CHAR: // Impossible because copy promotes char to string.
             case TYPE_BOOL:
             case TYPE_NULL:
+            case TYPE_FILE:
                 Quit("vm: operator `+` not supported for type `%s`", Type_String(a->type));
             }
         else
@@ -3095,6 +3194,7 @@ VM_Sub(VM* self)
         case TYPE_CHAR:
         case TYPE_BOOL:
         case TYPE_NULL:
+        case TYPE_FILE:
             Quit("vm: operator `-` not supported for type `%s`", Type_String(a->type));
         }
     else
@@ -3223,9 +3323,6 @@ VM_Eql(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    Value_PromoteChars(a, b);
-    if(a->type != b->type)
-        Quit("vm: operator `==` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     bool boolean = Value_Equal(a, b);
     VM_Pop(self);
     VM_Pop(self);
@@ -3238,8 +3335,6 @@ VM_Neq(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator `!=` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
     bool boolean = !Value_Equal(a, b);
     VM_Pop(self);
     VM_Pop(self);
@@ -3406,7 +3501,8 @@ VM_Get(VM* self)
     }
     else
     {
-        Value_Inc(value);
+        if(value->type != TYPE_CHAR)
+            Value_Inc(value);
         Queue_PshB(self->stack, value);
     }
 }
@@ -3495,6 +3591,79 @@ VM_Mem(VM* self)
     Queue_PshB(self->stack, Value_Init(of, TYPE_BOOL));
 }
 
+static void
+VM_Opn(VM* self)
+{
+    Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
+    Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
+    if(a->type != TYPE_STRING)
+        Quit("vm: expected string for file open for file name");
+    if(b->type != TYPE_STRING)
+        Quit("vm: expected string for file open for file mode");
+    File* file = File_Init(Str_Copy(a->of.string), Str_Copy(b->of.string));
+    VM_Pop(self);
+    VM_Pop(self);
+    Of of = { .file = file };
+    Queue_PshB(self->stack, Value_Init(of, TYPE_FILE));
+}
+
+static void
+VM_Red(VM* self)
+{
+    Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
+    Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
+    if(a->type != TYPE_FILE)
+        Quit("vm: expected file");
+    if(b->type != TYPE_NUMBER)
+        Quit("vm: expected number");
+    Str* buffer = Str_Init("");
+    if(a->of.file->file)
+    {
+        Str_Resize(buffer, b->of.number);
+        int size = fread(buffer->value, sizeof(char), b->of.number, a->of.file->file);
+        int diff = b->of.number - size;
+        while(diff)
+        {
+            Str_PopB(buffer);
+            diff -= 1;
+        }
+    }
+    VM_Pop(self);
+    VM_Pop(self);
+    Of of = { .string = buffer };
+    Queue_PshB(self->stack, Value_Init(of, TYPE_STRING));
+}
+
+static void
+VM_Wrt(VM* self)
+{
+    Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
+    Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
+    if(a->type != TYPE_FILE)
+        Quit("vm: expected file");
+    if(b->type != TYPE_STRING)
+        Quit("vm: expected string");
+    size_t bytes = 0;
+    if(a->of.file->file)
+        bytes = fwrite(b->of.string->value, sizeof(char), Str_Size(b->of.string), a->of.file->file);
+    VM_Pop(self);
+    VM_Pop(self);
+    Of of = { .number = bytes };
+    Queue_PshB(self->stack, Value_Init(of, TYPE_NUMBER));
+}
+
+static void
+VM_God(VM* self)
+{
+    Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
+    if(a->type != TYPE_FILE)
+        Quit("vm: expected file");
+    bool boolean = a->of.file->file != NULL;
+    VM_Pop(self);
+    Of of = { .boolean = boolean };
+    Queue_PshB(self->stack, Value_Init(of, TYPE_BOOL));
+}
+
 static int
 VM_Run(VM* self)
 {
@@ -3519,6 +3688,7 @@ VM_Run(VM* self)
         case OPCODE_FMT: VM_Fmt(self); break;
         case OPCODE_GET: VM_Get(self); break;
         case OPCODE_GLB: VM_Glb(self, address); break;
+        case OPCODE_GOD: VM_God(self); break;
         case OPCODE_GRT: VM_Grt(self); break;
         case OPCODE_GTE: VM_Gte(self); break;
         case OPCODE_INS: VM_Ins(self); break;
@@ -3534,17 +3704,20 @@ VM_Run(VM* self)
         case OPCODE_MUL: VM_Mul(self); break;
         case OPCODE_NEQ: VM_Neq(self); break;
         case OPCODE_NOT: VM_Not(self); break;
+        case OPCODE_OPN: VM_Opn(self); break;
         case OPCODE_POP: VM_Pop(self); break;
         case OPCODE_PRT: VM_Prt(self); break;
         case OPCODE_PSB: VM_Psb(self); break;
         case OPCODE_PSF: VM_Psf(self); break;
         case OPCODE_PSH: VM_Psh(self, address); break;
+        case OPCODE_RED: VM_Red(self); break;
         case OPCODE_REF: VM_Ref(self); break;
         case OPCODE_RET: VM_Ret(self); break;
         case OPCODE_SAV: VM_Sav(self); break;
         case OPCODE_SPD: VM_Spd(self); break;
         case OPCODE_SUB: VM_Sub(self); break;
         case OPCODE_TYP: VM_Typ(self); break;
+        case OPCODE_WRT: VM_Wrt(self); break;
         }
     }
 }
