@@ -229,13 +229,6 @@ struct Value
 
 typedef struct
 {
-    Value* a;
-    Value* b;
-}
-Head;
-
-typedef struct
-{
     Queue* data;
     Queue* stack;
     Queue* frame;
@@ -752,6 +745,14 @@ static inline int
 Str_Size(Str* self)
 {
     return self->size;
+}
+
+static void
+Str_Replace(Str* self, char x, char y)
+{
+    for(int i = 0; i < Str_Size(self); i++)
+        if(self->value[i] == x)
+            self->value[i] = y;
 }
 
 static inline char*
@@ -1613,7 +1614,7 @@ CC_Str(CC* self)
         if(ch == '\\')
         {
             ch = CC_Read(self);
-            int byte = CC_EscToByte(ch); // Just a check.
+            int byte = CC_EscToByte(ch);
             if(byte == -1)
                 CC_Quit(self, "unknown escape char `0x%02X`\n", ch);
             Str_PshB(str, ch);
@@ -1661,14 +1662,6 @@ CC_Parents(Str* module)
         Str_Appends(parents, "../");
     }
     return parents;
-}
-
-static void
-Str_Replace(Str* self, char x, char y)
-{
-    for(int i = 0; i < Str_Size(self); i++)
-        if(self->value[i] == x)
-            self->value[i] = y;
 }
 
 static void
@@ -1882,9 +1875,14 @@ CC_Dict(CC* self)
     CC_Match(self, "{");
     while(CC_Next(self) != '}')
     {
-        CC_Expression(self); // No need to copy, because dict keys aren't tracked as stack values.
-        CC_Match(self, ":");
         CC_Expression(self);
+        if(CC_Next(self) == ':')
+        {
+            CC_Match(self, ":");
+            CC_Expression(self);
+        }
+        else
+            Queue_PshB(self->assembly, Str_Init("\tpsh true"));
         Queue_PshB(self->assembly, Str_Init("\tins"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
@@ -1960,9 +1958,6 @@ CC_Indirect(CC* self)
         if(Str_Equals(ident, "copy"))
             Queue_PshB(self->assembly, Str_Init("\tcpy"));
         else
-        if(Str_Equals(ident, "ins"))
-            Queue_PshB(self->assembly, Str_Init("\tins"));
-        else
         if(Str_Equals(ident, "write"))
             Queue_PshB(self->assembly, Str_Init("\twrt"));
         else
@@ -1999,7 +1994,6 @@ CC_Reserve(CC* self)
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("close"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("refs"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("len"));
-    CC_Declare(self, CLASS_FUNCTION, 3, Str_Init("ins"));
     CC_Declare(self, CLASS_FUNCTION, 2, Str_Init("del"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("type"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("print"));
@@ -2254,16 +2248,16 @@ CC_Branches(CC* self, int head, int tail, int loop)
 static void
 CC_While(CC* self)
 {
-    int entry = CC_Label(self);
-    int final = CC_Label(self);
-    Queue_PshB(self->assembly, Str_Format("@l%d:", entry));
+    int A = CC_Label(self);
+    int B = CC_Label(self);
+    Queue_PshB(self->assembly, Str_Format("@l%d:", A));
     CC_Match(self, "(");
     CC_Expression(self);
-    Queue_PshB(self->assembly, Str_Format("\tbrf @l%d", final));
+    Queue_PshB(self->assembly, Str_Format("\tbrf @l%d", B));
     CC_Match(self, ")");
-    CC_Block(self, entry, final, true);
-    Queue_PshB(self->assembly, Str_Format("\tjmp @l%d", entry));
-    Queue_PshB(self->assembly, Str_Format("@l%d:", final));
+    CC_Block(self, A, B, true);
+    Queue_PshB(self->assembly, Str_Format("\tjmp @l%d", A));
+    Queue_PshB(self->assembly, Str_Format("@l%d:", B));
 }
 
 static void
@@ -2304,24 +2298,6 @@ CC_Ret(CC* self)
 }
 
 static void
-CC_Continue(CC* self, int head, bool loop)
-{
-    if(!loop)
-        CC_Quit(self, "`continue` can only be used within while or for loops");
-    CC_Match(self, ";");
-    Queue_PshB(self->assembly, Str_Format("\tjmp @l%d", head));
-}
-
-static void
-CC_Break(CC* self, int tail, bool loop)
-{
-    if(!loop)
-        CC_Quit(self, "`break` can only be used within while or for loops");
-    CC_Match(self, ";");
-    Queue_PshB(self->assembly, Str_Format("\tjmp @l%d", tail));
-}
-
-static void
 CC_Block(CC* self, int head, int tail, bool loop)
 {
     Queue* scope = Queue_Init((Kill) Str_Kill, (Copy) NULL);
@@ -2355,10 +2331,26 @@ CC_Block(CC* self, int head, int tail, bool loop)
                 CC_Ret(self);
             else
             if(Str_Equals(ident, "continue"))
-                CC_Continue(self, head, loop);
+            {
+                if(loop)
+                {
+                    CC_Match(self, ";");
+                    Queue_PshB(self->assembly, Str_Format("\tjmp @l%d", head));
+                }
+                else
+                    CC_Quit(self, "`continue` can only be used within while or for loops");
+            }
             else
             if(Str_Equals(ident, "break"))
-                CC_Break(self, tail, loop);
+            {
+                if(loop)
+                {
+                    CC_Match(self, ";");
+                    Queue_PshB(self->assembly, Str_Format("\tjmp @l%d", tail));
+                }
+                else
+                    CC_Quit(self, "`break` can only be used within while or for loops");
+            }
             else
             if(CC_Next(self) == ':')
             {
@@ -2530,9 +2522,9 @@ Char_Init(Value* string, int index)
         Char* self = Malloc(sizeof(*self));
         self->string = string;
         self->value = value;
-        // Chars reference a string, and increment the ref count
-        // of the string so that when a char is returned from a function
-        // it's parent string is not destroyed.
+        // Chars increment the ref count of their parent
+        // string so that when a char is returned from a function
+        // the parent string is not destroyed...
         Value_Inc(self->string);
         return self;
     }
@@ -2542,8 +2534,7 @@ Char_Init(Value* string, int index)
 static void
 Char_Kill(Char* self)
 {
-    // It's then up to the char to free that string should the
-    // char be destroyed, and the string no longer tracked.
+    // ... The char will then free that string, if necessary.
     Value_Kill(self->string);
     Free(self);
 }
@@ -2556,9 +2547,6 @@ Value_Equal(Value* a, Value* b)
     else
     if(b->type == TYPE_CHAR && a->type == TYPE_STRING)
         return *b->of.character->value == a->of.string->value[0];
-    else
-    if(a->type == TYPE_NULL || b->type == TYPE_NULL)
-        return a->type == TYPE_NULL && b->type == TYPE_NULL;
     else
     if(a->type == b->type)
         switch(a->type)
@@ -3119,53 +3107,47 @@ VM_Cpy(VM* self)
 }
 
 static void
-VM_TypeExpect(VM* self, Type type, Type expect)
+VM_TypeExpect(VM* self, Type a, Type b)
 {
     (void) self; // For debug markers one day.
-    if(type != expect)
-        Quit("`vm: got `%s` but expected `%s`",
-                Type_String(type), Type_String(expect));
+    if(a != b)
+        Quit("`vm: got `%s` but expected `%s`", Type_String(a), Type_String(b));
 }
 
 static void
-VM_BadOperator(VM* self, Type type, const char* operator)
+VM_BadOperator(VM* self, Type a, const char* op)
 {
     (void) self;
-    Quit("vm: operator `%s` not supported for type `%s`",
-            operator, Type_String(type));
+    Quit("vm: operator `%s` not supported for type `%s`", op, Type_String(a));
 }
 
 static void
-VM_TypeMatch(VM* self, Type a, Type b, const char* operator)
+VM_TypeMatch(VM* self, Type a, Type b, const char* op)
 {
     (void) self;
     if(a != b)
-        Quit("vm: operator `%s` types `%s` and `%s` mismatch",
-            operator, Type_String(a), Type_String(b));
+        Quit("vm: operator `%s` types `%s` and `%s` mismatch", op, Type_String(a), Type_String(b));
 }
 
 static void
-VM_Bounds(VM* self, Type type, int index)
+VM_Bounds(VM* self, Type a, int index)
 {
     (void) self;
-    Quit("vm: type `%s` out of bounds with index `%d`",
-            Type_String(type), index);
+    Quit("vm: type `%s` out of bounds with index `%d`", Type_String(a), index);
 }
 
 static void
 VM_TypeBadIndex(VM* self, Type a, Type b)
 {
     (void) self;
-    Quit("vm: type `%s` cannot be indexed with type `%s`",
-            Type_String(a), Type_String(b));
+    Quit("vm: type `%s` cannot be indexed with type `%s`", Type_String(a), Type_String(b));
 }
 
 static void
-VM_TypeBad(VM* self, Type type)
+VM_TypeBad(VM* self, Type a)
 {
     (void) self;
-    Quit("vm: type `%s` cannot be used for this operation",
-            Type_String(type));
+    Quit("vm: type `%s` cannot be used for this operation", Type_String(a));
 }
 
 static void
@@ -3181,10 +3163,7 @@ VM_End(VM* self)
 {
     VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
     int ret = self->ret->of.number;
-    if(self->ret->refs == 0) // Expression at teardown.
-        Value_Kill(self->ret);
-    else
-        self->ret->refs = 0; // Owned by data.
+    Value_Kill(self->ret);
     return ret;
 }
 
@@ -3308,7 +3287,7 @@ VM_Add(VM* self)
             case TYPE_NUMBER:
                 a->of.number += b->of.number;
                 break;
-            case TYPE_CHAR: // Impossible because copy promotes char to string.
+            case TYPE_CHAR:
             case TYPE_BOOL:
             case TYPE_NULL:
             case TYPE_FILE:
@@ -3543,14 +3522,6 @@ VM_Psf(VM* self)
     VM_Pop(self);
 }
 
-static Str*
-Value_StrExtract(Value* self)
-{
-    Str* key = self->of.string;
-    self->type = TYPE_NULL;
-    return key;
-}
-
 static void
 VM_Ins(VM* self)
 {
@@ -3558,18 +3529,12 @@ VM_Ins(VM* self)
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* c = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     VM_TypeExpect(self, a->type, TYPE_DICT);
-    if(b->type == TYPE_STRING || b->type == TYPE_CHAR)
-    {
-        // In case of the key being a char, this value copy will
-        // promote the char to a string. Since dict keys are read-only
-        // and not values, the string is extracted from the value.
-        //
-        // The key is not reference counted, unlike `c` below. Keys
-        // are freed at teardown.
-        Value* temp = Value_Copy(b);
-        Map_Set(a->of.dict, Value_StrExtract(temp), c);
-        Value_Kill(temp);
-    }
+    if(b->type == TYPE_CHAR)
+        VM_TypeBadIndex(self, a->type, b->type);
+    else
+    if(b->type == TYPE_STRING)
+        // Keys are not reference counted so a string copy is okay.
+        Map_Set(a->of.dict, Str_Copy(b->of.string), c);
     else
         VM_TypeBad(self, b->type);
     Value_Inc(c);

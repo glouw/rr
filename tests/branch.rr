@@ -2,7 +2,6 @@ main()
 {
     pass := 0;
 
-    # ~~~~~~~~~~~~~~~
     if(true)
     {
         pass += 1;
@@ -20,7 +19,6 @@ main()
         pass = 0;
     }
 
-    # ~~~~~~~~~~~~~~~
     if(false)
     {
         pass = 0;
@@ -38,7 +36,6 @@ main()
         pass = 0;
     }
 
-    # ~~~~~~~~~~~~~~~
     if(false)
     {
         pass = 0;
@@ -56,7 +53,6 @@ main()
         pass = 0;
     }
 
-    # ~~~~~~~~~~~~~~~
     if(false)
     {
         pass = 0;
@@ -74,7 +70,6 @@ main()
         pass += 1;
     }
 
-    # ~~~~~~~~~~~~~~~
     if(true)
     {
         pass += 1;
@@ -92,7 +87,6 @@ main()
         pass += 1;
     }
 
-    # ~~~~~~~~~~~~~~~
     if(false)
     {
         pass += 1;
@@ -110,7 +104,6 @@ main()
         pass += 1;
     }
 
-    # ~~~~~~~~~~~~~~~
     if(false)
     {
         pass += 1;
@@ -128,7 +121,6 @@ main()
         pass += 1;
     }
 
-    # ~~~~~~~~~~~~~~~
     if(false)
     {
         pass += 1;
@@ -146,8 +138,8 @@ main()
         pass += 1;
     }
 
-    # ~~~~~~~~~~~~~~~
-    if(true) {} if(true) {} elif(true) {} if(true) {} else {} # Just to see if this compiles.
+    # Just to see if this compiles.
+    if(true) {} if(true) {} elif(true) {} if(true) {} else {}
 
     if(pass == 8)
     {

@@ -1,9 +1,10 @@
+set  := {
+    "a", "b", "c"
+};
+
 main()
 {
-    a := {};
-    b := 0;
-    a["dict"] := b;
-    if(a["dict"] == b)
+    if(set["a"] != null)
     {
         ret 0;
     }
