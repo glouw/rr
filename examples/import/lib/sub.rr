@@ -1,0 +1,4 @@
+lib_sub(a, b)
+{
+    ret a - b;
+}

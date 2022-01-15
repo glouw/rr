@@ -1,0 +1,15 @@
+main()
+{
+    if((null == null)
+    && ("st" != null)
+    && (1 != null)
+    && (null != "st")
+    && (null != 1))
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

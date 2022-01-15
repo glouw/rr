@@ -199,25 +199,33 @@ typedef struct
 }
 Meta;
 
+typedef struct Value Value;
+
+typedef struct
+{
+    Value* string;
+    char* value;
+}
+Char;
+
 typedef union
 {
     File* file;
     Queue* array;
     Map* dict;
     Str* string;
-    char* character;
+    Char* character;
     double number;
     bool boolean;
 }
 Of;
 
-typedef struct
+struct Value
 {
     Type type;
     Of of;
     int refs;
-}
-Value;
+};
 
 typedef struct
 {
@@ -1458,11 +1466,29 @@ CC_IsOp(int c)
         || c == '<' || c == '>' || c == '!' || c == '&' || c == '|' || c == '?';
 }
 
-static bool
-CC_IsEsc(int c)
+static int
+CC_EscToByte(int ch)
 {
-    return c == '"' || c == '/' || c == 'b' || c == 'f' || c == 'n' || c == 'r' 
-        || c == 't' || c == 'u' || c == '\\';
+    switch(ch)
+    {
+    case '"':
+        return '\"';
+    case '\\':
+        return '\\';
+    case '/':
+        return '/';
+    case 'b':
+        return '\b';
+    case 'f':
+        return '\f';
+    case 'n':
+        return '\n';
+    case 'r':
+        return '\r';
+    case 't':
+        return '\t';
+    }
+    return -1;
 }
 
 static bool
@@ -1580,21 +1606,17 @@ CC_Str(CC* self)
     Str* str = Str_Init("");
     CC_Spin(self);
     CC_Match(self, "\"");
-    while(true)
+    while(CC_Peak(self) != '"')
     {
-        int lead = CC_Peak(self);
-        if(lead == '"')
-            break;
-        else
+        int ch = CC_Read(self);
+        Str_PshB(str, ch);
+        if(ch == '\\')
         {
-            Str_PshB(str, CC_Read(self));
-            if(lead == '\\')
-            {
-                int esc = CC_Peak(self);
-                if(!CC_IsEsc(esc))
-                    CC_Quit(self, "unknown escape char `0x%02X`\n", esc);
-                Str_PshB(str, CC_Read(self));
-            }
+            ch = CC_Read(self);
+            int byte = CC_EscToByte(ch); // Just a check.
+            if(byte == -1)
+                CC_Quit(self, "unknown escape char `0x%02X`\n", ch);
+            Str_PshB(str, ch);
         }
     }
     CC_Match(self, "\"");
@@ -1642,11 +1664,20 @@ CC_Parents(Str* module)
 }
 
 static void
+Str_Replace(Str* self, char x, char y)
+{
+    for(int i = 0; i < Str_Size(self); i++)
+        if(self->value[i] == x)
+            self->value[i] = y;
+}
+
+static void
 CC_Include(CC* self)
 {
     Str* module = CC_Mod(self);
     CC_Match(self, ";");
     Str* skipped = Str_Skip(module, '.');
+    Str_Replace(skipped, '.', '/');
     Str_Appends(skipped, ".rr");
     Str* parents = CC_Parents(module);
     Str_Appends(parents, skipped->value);
@@ -1807,7 +1838,14 @@ CC_Resolve(CC* self)
         CC_Match(self, "[");
         CC_Expression(self);
         CC_Match(self, "]");
-        Queue_PshB(self->assembly, Str_Init("\tget"));
+        if(CC_Next(self) == ':')
+        {
+            CC_Match(self, ":=");
+            CC_Expression(self);
+            Queue_PshB(self->assembly, Str_Init("\tins"));
+        }
+        else
+            Queue_PshB(self->assembly, Str_Init("\tget"));
     }
 }
 
@@ -2404,6 +2442,9 @@ CC_Parse(CC* self)
 }
 
 static void
+Char_Kill(Char*);
+
+static void
 Type_Kill(Type type, Of of)
 {
     switch(type)
@@ -2420,8 +2461,10 @@ Type_Kill(Type type, Of of)
     case TYPE_STRING:
         Str_Kill(of.string);
         break;
-    case TYPE_NUMBER:
     case TYPE_CHAR:
+        Char_Kill(of.character);
+        break;
+    case TYPE_NUMBER:
     case TYPE_BOOL:
     case TYPE_NULL:
         break;
@@ -2451,6 +2494,9 @@ Value_Len(Value* self)
     return -1;
 }
 
+static Str*
+Value_Print(Value* self, bool newline, int indents);
+
 static void
 Value_Dec(Value* self)
 {
@@ -2475,14 +2521,44 @@ Value_Kill(Value* self)
         Value_Dec(self);
 }
 
+static Char*
+Char_Init(Value* string, int index)
+{
+    char* value = Str_Get(string->of.string, index);
+    if(value)
+    {
+        Char* self = Malloc(sizeof(*self));
+        self->string = string;
+        self->value = value;
+        // Chars reference a string, and increment the ref count
+        // of the string so that when a char is returned from a function
+        // it's parent string is not destroyed.
+        Value_Inc(self->string);
+        return self;
+    }
+    return NULL;
+}
+
+static void
+Char_Kill(Char* self)
+{
+    // It's then up to the char to free that string should the
+    // char be destroyed, and the string no longer tracked.
+    Value_Kill(self->string);
+    Free(self);
+}
+
 static bool
 Value_Equal(Value* a, Value* b)
 {
     if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
-        return *a->of.character == b->of.string->value[0];
+        return *a->of.character->value == b->of.string->value[0];
     else
     if(b->type == TYPE_CHAR && a->type == TYPE_STRING)
-        return *b->of.character == a->of.string->value[0];
+        return *b->of.character->value == a->of.string->value[0];
+    else
+    if(a->type == TYPE_NULL || b->type == TYPE_NULL)
+        return a->type == TYPE_NULL && b->type == TYPE_NULL;
     else
     if(a->type == b->type)
         switch(a->type)
@@ -2500,15 +2576,12 @@ Value_Equal(Value* a, Value* b)
         case TYPE_BOOL:
             return a->of.boolean == b->of.boolean;
         case TYPE_CHAR:
-            return *a->of.character == *b->of.character;
+            return *a->of.character->value == *b->of.character->value;
         case TYPE_NULL:
             return b->type == TYPE_NULL;
         }
     return false;
 }
-
-static Str*
-Value_Print(Value* self, bool newline, int indents);
 
 static Str*
 Queue_Print(Queue* self, int indents)
@@ -2587,7 +2660,7 @@ Value_Print(Value* self, bool newline, int indents)
         Str_Append(print, Str_Format("%s", self->of.boolean ? "true" : "false"));
         break;
     case TYPE_CHAR:
-        Str_Append(print, Str_Format("%c", *self->of.character));
+        Str_Append(print, Str_Format(indents == 0 ? "%c" : "\"%c\"", *self->of.character->value));
         break;
     case TYPE_NULL:
         Str_Appends(print, "null");
@@ -2609,14 +2682,14 @@ Value_Init(Of of, Type type)
     self->refs = 0;
     switch(type)
     {
-    case TYPE_FILE:
-        self->of.file = of.file;
-        break;
     case TYPE_ARRAY:
         self->of.array = Queue_Init((Kill) Value_Kill, (Copy) Value_Copy);
         break;
     case TYPE_DICT:
         self->of.dict = Map_Init((Kill) Value_Kill, (Copy) Value_Copy);
+        break;
+    case TYPE_CHAR:
+        self->of.character = of.character;
         break;
     case TYPE_STRING:
         self->of.string = of.string;
@@ -2627,8 +2700,8 @@ Value_Init(Of of, Type type)
     case TYPE_BOOL:
         self->of.boolean = of.boolean;
         break;
-    case TYPE_CHAR:
-        self->of.character = of.character;
+    case TYPE_FILE:
+        self->of.file = of.file;
         break;
     case TYPE_NULL:
         break;
@@ -2655,7 +2728,7 @@ Type_Copy(Value* copy, Value* self)
         break;
     case TYPE_CHAR:
         copy->type = TYPE_STRING;
-        copy->of.string = Str_FromChar(*self->of.character);
+        copy->of.string = Str_FromChar(*self->of.character->value);
         break;
     case TYPE_NUMBER:
     case TYPE_BOOL:
@@ -2793,6 +2866,27 @@ VM_Pop(VM* self)
     Queue_PopB(self->stack);
 }
 
+static Str*
+Str_ConvertEscs(char* chars)
+{
+    int len = strlen(chars);
+    Str* string = Str_Init("");
+    for(int i = 1; i < len - 1; i++)
+    {
+        char ch = chars[i];
+        if(ch == '\\')
+        {
+            i += 1;
+            int esc = chars[i];
+            ch = CC_EscToByte(esc);
+            if(ch == -1)
+                Quit("vm: unknown escape char `0x%02X`\n", esc);
+        }
+        Str_PshB(string, ch);
+    }
+    return string;
+}
+
 static void
 VM_Store(VM* self, char* operator)
 {
@@ -2807,9 +2901,7 @@ VM_Store(VM* self, char* operator)
     else
     if(ch == '"')
     {
-        int len = strlen(operator);
-        operator[len - 1] = '\0';
-        of.string = Str_Init(operator + 1);
+        of.string = Str_ConvertEscs(operator);
         value = Value_Init(of, TYPE_STRING);
     }
     else
@@ -3021,19 +3113,73 @@ static void
 VM_Cpy(VM* self)
 {
     Value* back = Queue_Back(self->stack);
-    if(back->refs > 0)
-    {
-        Value* value = Value_Copy(back);
-        VM_Pop(self);
-        Queue_PshB(self->stack, value);
-    }
+    Value* value = Value_Copy(back);
+    VM_Pop(self);
+    Queue_PshB(self->stack, value);
+}
+
+static void
+VM_TypeExpect(VM* self, Type type, Type expect)
+{
+    (void) self; // For debug markers one day.
+    if(type != expect)
+        Quit("`vm: got `%s` but expected `%s`",
+                Type_String(type), Type_String(expect));
+}
+
+static void
+VM_BadOperator(VM* self, Type type, const char* operator)
+{
+    (void) self;
+    Quit("vm: operator `%s` not supported for type `%s`",
+            operator, Type_String(type));
+}
+
+static void
+VM_TypeMatch(VM* self, Type a, Type b, const char* operator)
+{
+    (void) self;
+    if(a != b)
+        Quit("vm: operator `%s` types `%s` and `%s` mismatch",
+            operator, Type_String(a), Type_String(b));
+}
+
+static void
+VM_Bounds(VM* self, Type type, int index)
+{
+    (void) self;
+    Quit("vm: type `%s` out of bounds with index `%d`",
+            Type_String(type), index);
+}
+
+static void
+VM_TypeBadIndex(VM* self, Type a, Type b)
+{
+    (void) self;
+    Quit("vm: type `%s` cannot be indexed with type `%s`",
+            Type_String(a), Type_String(b));
+}
+
+static void
+VM_TypeBad(VM* self, Type type)
+{
+    (void) self;
+    Quit("vm: type `%s` cannot be used for this operation",
+            Type_String(type));
+}
+
+static void
+VM_DataGetCheck(VM* self, Value* value)
+{
+    (void) self;
+    if(value->refs == 0)
+        Quit("vm: indexing cannot be done on .data segment objects");
 }
 
 static int
 VM_End(VM* self)
 {
-    if(self->ret->type != TYPE_NUMBER)
-        Quit("`vm: main` return type was type `%s`; expected `%s`", Type_String(self->ret->type), Type_String(TYPE_NUMBER));
+    VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
     int ret = self->ret->of.number;
     if(self->ret->refs == 0) // Expression at teardown.
         Value_Kill(self->ret);
@@ -3105,7 +3251,8 @@ static void
 VM_Psh(VM* self, int address)
 {
     Value* value = Queue_Get(self->data, address);
-    Queue_PshB(self->stack, Value_Copy(value));
+    Value* copy = Value_Copy(value);
+    Queue_PshB(self->stack, copy);
 }
 
 static void
@@ -3117,7 +3264,7 @@ VM_Mov(VM* self)
     {
         if(Str_Size(b->of.string) != 1)
             Quit("vm: expected char");
-        *a->of.character = b->of.string->value[0];
+        *a->of.character->value = b->of.string->value[0];
     }
     else
     if(a->type == b->type)
@@ -3126,24 +3273,25 @@ VM_Mov(VM* self)
         Type_Copy(a, b);
     }
     else
-        Quit("vm: operator `=` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        VM_TypeMatch(self, a->type, b->type, "=");
     VM_Pop(self);
 }
 
 static void
 VM_Add(VM* self)
 {
+    char* operator = "+";
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type == TYPE_CHAR)
-        Quit("vm: cannot add to char"); // Prevents str[0] += "a";
+        VM_TypeBad(self, a->type);
     else
     if(a->type == TYPE_ARRAY && b->type != TYPE_ARRAY)
         Queue_PshB(a->of.array, Value_Copy(b));
     else
     {
         if(a->type == TYPE_STRING && b->type == TYPE_CHAR)
-            Str_PshB(a->of.string, *b->of.character);
+            Str_PshB(a->of.string, *b->of.character->value);
         else
         if(a->type == b->type)
             switch(a->type)
@@ -3164,10 +3312,10 @@ VM_Add(VM* self)
             case TYPE_BOOL:
             case TYPE_NULL:
             case TYPE_FILE:
-                Quit("vm: operator `+` not supported for type `%s`", Type_String(a->type));
+                VM_BadOperator(self, a->type, operator);
             }
         else
-            Quit("vm: operator `+` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+            VM_TypeMatch(self, a->type, b->type, operator);
     }
     VM_Pop(self);
 }
@@ -3175,6 +3323,7 @@ VM_Add(VM* self)
 static void
 VM_Sub(VM* self)
 {
+    char* operator = "-";
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     if(a->type == TYPE_ARRAY && b->type != TYPE_ARRAY)
@@ -3195,10 +3344,10 @@ VM_Sub(VM* self)
         case TYPE_BOOL:
         case TYPE_NULL:
         case TYPE_FILE:
-            Quit("vm: operator `-` not supported for type `%s`", Type_String(a->type));
+            VM_BadOperator(self, a->type, operator);
         }
     else
-        Quit("vm: operator `-` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
+        VM_TypeMatch(self, a->type, b->type, operator);
     VM_Pop(self);
 }
 
@@ -3207,10 +3356,8 @@ VM_Mul(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator `*` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    if(a->type != TYPE_NUMBER)
-        Quit("vm: operator `*` not supported for type `%s`", Type_String(a->type));
+    VM_TypeMatch(self, a->type, b->type, "*");
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
     a->of.number *= b->of.number;
     VM_Pop(self);
 }
@@ -3220,10 +3367,8 @@ VM_Div(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator `/` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    if(a->type != TYPE_NUMBER)
-        Quit("vm: operator `/` not supported for type `%s`", Type_String(a->type));
+    VM_TypeMatch(self, a->type, b->type, "/");
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
     a->of.number /= b->of.number;
     VM_Pop(self);
 }
@@ -3233,10 +3378,8 @@ VM_Lst(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator `<` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    if(a->type != TYPE_NUMBER)
-        Quit("vm: operator `<` not supported for type `%s`", Type_String(a->type));
+    VM_TypeMatch(self, a->type, b->type, "<");
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
     bool boolean = a->of.number < b->of.number;
     VM_Pop(self);
     VM_Pop(self);
@@ -3249,10 +3392,8 @@ VM_Lte(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator `<=` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    if(a->type != TYPE_NUMBER)
-        Quit("vm: operator `<=` not supported for type `%s`", Type_String(a->type));
+    VM_TypeMatch(self, a->type, b->type, "<=");
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
     bool boolean = a->of.number <= b->of.number;
     VM_Pop(self);
     VM_Pop(self);
@@ -3265,10 +3406,8 @@ VM_Grt(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator `>` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    if(a->type != TYPE_NUMBER)
-        Quit("vm: operator `>` not supported for type `%s`", Type_String(a->type));
+    VM_TypeMatch(self, a->type, b->type, ">");
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
     bool boolean = a->of.number > b->of.number;
     VM_Pop(self);
     VM_Pop(self);
@@ -3281,10 +3420,8 @@ VM_Gte(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator `>=` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    if(a->type != TYPE_NUMBER)
-        Quit("vm: operator `>=` not supported for type `%s`", Type_String(a->type));
+    VM_TypeMatch(self, a->type, b->type, ">=");
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
     bool boolean = a->of.number >= b->of.number;
     VM_Pop(self);
     VM_Pop(self);
@@ -3297,10 +3434,8 @@ VM_And(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator `&&` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    if(a->type != TYPE_BOOL)
-        Quit("vm: operator `&&` not supported for type `%s`", Type_String(a->type));
+    VM_TypeMatch(self, a->type, b->type, "&&");
+    VM_TypeExpect(self, a->type, TYPE_BOOL);
     a->of.boolean = a->of.boolean && b->of.boolean;
     VM_Pop(self);
 }
@@ -3310,10 +3445,8 @@ VM_Lor(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != b->type)
-        Quit("vm: operator `||` types `%s` and `%s` mismatch", Type_String(a->type), Type_String(b->type));
-    if(a->type != TYPE_BOOL)
-        Quit("vm: operator `||` not supported for type `%s`", Type_String(a->type));
+    VM_TypeMatch(self, a->type, b->type, "||");
+    VM_TypeExpect(self, a->type, TYPE_BOOL);
     a->of.boolean = a->of.boolean || b->of.boolean;
     VM_Pop(self);
 }
@@ -3352,8 +3485,7 @@ static void
 VM_Not(VM* self)
 {
     Value* value = Queue_Back(self->stack);
-    if(value->type != TYPE_BOOL)
-        Quit("vm: operator `!` not supported for type `%s`", Type_String(value->type));
+    VM_TypeExpect(self, value->type, TYPE_BOOL);
     value->of.boolean = !value->of.boolean;
 }
 
@@ -3361,8 +3493,7 @@ static void
 VM_Brf(VM* self, int address)
 {
     Value* value = Queue_Back(self->stack);
-    if(value->type != TYPE_BOOL)
-        Quit("vm: boolean expression expected");
+    VM_TypeExpect(self, value->type, TYPE_BOOL);
     if(value->of.boolean == false)
         self->pc = address;
     VM_Pop(self);
@@ -3395,8 +3526,7 @@ VM_Psb(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != TYPE_ARRAY)
-        Quit("vm: array expected for push back operand `%s`", Type_String(b->type));
+    VM_TypeExpect(self, a->type, TYPE_ARRAY);
     Queue_PshB(a->of.array, b);
     Value_Inc(b);
     VM_Pop(self);
@@ -3407,11 +3537,18 @@ VM_Psf(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != TYPE_ARRAY)
-        Quit("vm: array expected for push front operand `%s`", Type_String(b->type));
+    VM_TypeExpect(self, a->type, TYPE_ARRAY);
     Queue_PshF(a->of.array, b);
     Value_Inc(b);
     VM_Pop(self);
+}
+
+static Str*
+Value_StrExtract(Value* self)
+{
+    Str* key = self->of.string;
+    self->type = TYPE_NULL;
+    return key;
 }
 
 static void
@@ -3420,13 +3557,21 @@ VM_Ins(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 3);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* c = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != TYPE_DICT)
-        Quit("vm: dict expected");
-    if(b->type != TYPE_STRING)
-        Quit("vm: string expected");
-    Map_Set(a->of.dict, Str_Copy(b->of.string), c);
-    // No need to increment the reference count of b, the string, as just
-    // a copy of the string was copied for the map set.
+    VM_TypeExpect(self, a->type, TYPE_DICT);
+    if(b->type == TYPE_STRING || b->type == TYPE_CHAR)
+    {
+        // In case of the key being a char, this value copy will
+        // promote the char to a string. Since dict keys are read-only
+        // and not values, the string is extracted from the value.
+        //
+        // The key is not reference counted, unlike `c` below. Keys
+        // are freed at teardown.
+        Value* temp = Value_Copy(b);
+        Map_Set(a->of.dict, Value_StrExtract(temp), c);
+        Value_Kill(temp);
+    }
+    else
+        VM_TypeBad(self, b->type);
     Value_Inc(c);
     VM_Pop(self);
     VM_Pop(self);
@@ -3442,17 +3587,15 @@ VM_Ref(VM* self)
 }
 
 static Value*
-VM_Index(Value* storage, Value* index)
+VM_Index(VM* self, Value* storage, Value* index)
 {
     Value* value = NULL;
     if(storage->type == TYPE_ARRAY)
-    {
         value = Queue_Get(storage->of.array, index->of.number);
-    }
     else
     if(storage->type == TYPE_STRING)
     {
-        char* character = Str_Get(storage->of.string, index->of.number);
+        Char* character = Char_Init(storage, index->of.number);
         if(character)
         {
             Of of = { .character = character };
@@ -3460,20 +3603,7 @@ VM_Index(Value* storage, Value* index)
         }
     }
     else
-        Quit("vm: type `%s` cannot be indexed", Type_String(storage->type));
-    // Not allowed to return null.
-    if(value == NULL)
-        Quit("vm: type `%s` indexed out of bounds", Type_String(storage->type));
-    return value;
-}
-
-static Value*
-VM_Lookup(Value* storage, Value* key)
-{
-    if(storage->type != TYPE_DICT)
-        Quit("vm: type `%s` cannot be looked up", Type_String(storage->type));
-    Value* value = Map_Get(storage->of.dict, key->of.string->value);
-    // Allowed to return null.
+        VM_TypeBadIndex(self, storage->type, index->type);
     return value;
 }
 
@@ -3483,15 +3613,22 @@ VM_Get(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     Value* value = NULL;
-    if(a->refs == 0)
-        Quit("vm: gets cannot be done on data");
     if(b->type == TYPE_NUMBER)
-        value = VM_Index(a, b);
+    {
+        VM_DataGetCheck(self, a);
+        value = VM_Index(self, a, b);
+        if(value == NULL)
+            VM_Bounds(self, a->type, b->of.number);
+    }
     else
     if(b->type == TYPE_STRING)
-        value = VM_Lookup(a, b);
+    {
+        VM_DataGetCheck(self, a);
+        VM_TypeExpect(self, a->type, TYPE_DICT);
+        value = Map_Get(a->of.dict, b->of.string->value);
+    }
     else
-        Quit("vm: type `%s` cannot be indexed", Type_String(a->type));
+        VM_TypeBadIndex(self, a->type, b->type);
     VM_Pop(self);
     VM_Pop(self);
     if(value == NULL)
@@ -3501,6 +3638,7 @@ VM_Get(VM* self)
     }
     else
     {
+        // Individual chars aren't reference counted like other objects.
         if(value->type != TYPE_CHAR)
             Value_Inc(value);
         Queue_PshB(self->stack, value);
@@ -3512,10 +3650,8 @@ VM_Fmt(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != TYPE_STRING)
-        Quit("vm: string expected");
-    if(b->type != TYPE_ARRAY)
-        Quit("vm: array expected");
+    VM_TypeExpect(self, a->type, TYPE_STRING);
+    VM_TypeExpect(self, b->type, TYPE_ARRAY);
     Str* formatted = Str_Init("");
     int index = 0;
     char* ref = a->of.string->value;
@@ -3528,7 +3664,7 @@ VM_Fmt(VM* self)
             {
                 Value* value = Queue_Get(b->of.array, index);
                 if(value == NULL)
-                    Quit("vm: string formatter out of range");
+                    VM_Bounds(self, b->type, index);
                 Str_Append(formatted, Value_Print(value, false, 0));
                 index += 1;
                 c += 1;
@@ -3565,17 +3701,17 @@ VM_Del(VM* self)
         if(a->type == TYPE_STRING)
             Str_Del(a->of.string, b->of.number);
         else
-            Quit("vm: type `%s` cannot be indexed for deletion", Type_String(a->type));
+            VM_TypeBadIndex(self, a->type, b->type);
     }
     else
     if(b->type == TYPE_STRING)
     {
         if(a->type != TYPE_DICT)
-            Quit("vm: type `%s` cannot be indexed for deletion", Type_String(a->type));
+            VM_TypeBadIndex(self, a->type, b->type);
         Map_Del(a->of.dict, b->of.string->value);
     }
     else
-        Quit("vm: type `%s` cannot have an element deleted");
+        VM_TypeBad(self, a->type);
     VM_Pop(self);
 }
 
@@ -3596,10 +3732,8 @@ VM_Opn(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != TYPE_STRING)
-        Quit("vm: expected string for file open for file name");
-    if(b->type != TYPE_STRING)
-        Quit("vm: expected string for file open for file mode");
+    VM_TypeExpect(self, a->type, TYPE_STRING);
+    VM_TypeExpect(self, b->type, TYPE_STRING);
     File* file = File_Init(Str_Copy(a->of.string), Str_Copy(b->of.string));
     VM_Pop(self);
     VM_Pop(self);
@@ -3612,10 +3746,8 @@ VM_Red(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != TYPE_FILE)
-        Quit("vm: expected file");
-    if(b->type != TYPE_NUMBER)
-        Quit("vm: expected number");
+    VM_TypeExpect(self, a->type, TYPE_FILE);
+    VM_TypeExpect(self, b->type, TYPE_NUMBER);
     Str* buffer = Str_Init("");
     if(a->of.file->file)
     {
@@ -3639,10 +3771,8 @@ VM_Wrt(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != TYPE_FILE)
-        Quit("vm: expected file");
-    if(b->type != TYPE_STRING)
-        Quit("vm: expected string");
+    VM_TypeExpect(self, a->type, TYPE_FILE);
+    VM_TypeExpect(self, b->type, TYPE_STRING);
     size_t bytes = 0;
     if(a->of.file->file)
         bytes = fwrite(b->of.string->value, sizeof(char), Str_Size(b->of.string), a->of.file->file);
@@ -3656,8 +3786,7 @@ static void
 VM_God(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type != TYPE_FILE)
-        Quit("vm: expected file");
+    VM_TypeExpect(self, a->type, TYPE_FILE);
     bool boolean = a->of.file->file != NULL;
     VM_Pop(self);
     Of of = { .boolean = boolean };
@@ -3734,14 +3863,15 @@ main(int argc, char* argv[])
         CC_Reserve(cc);
         CC_LoadModule(cc, entry);
         CC_Parse(cc);
+        VM* vm = VM_Assemble(cc->assembly);
         if(args.dump)
-            ASM_Dump(cc->assembly);
-        else
         {
-            VM* vm = VM_Assemble(cc->assembly);
-            ret = VM_Run(vm);
-            VM_Kill(vm);
+            ASM_Dump(cc->assembly);
+            VM_Data(vm);
         }
+        else
+            ret = VM_Run(vm);
+        VM_Kill(vm);
         CC_Kill(cc);
         Str_Kill(entry);
         return ret;

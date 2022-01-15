@@ -1,0 +1,14 @@
+main()
+{
+    a := {
+        "key" : 1
+    };
+    if((a["key"] != null) && (a["yek"] == null))
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

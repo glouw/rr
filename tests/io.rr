@@ -1,6 +1,9 @@
+#the quick brown fox
+
 main()
 {
-    file := open("file.txt", "r");
+    file := open("io.rr", "r");
+    s := read(file, 1);
     a := read(file, 3);
     b := read(file, 1);
     c := read(file, 5);

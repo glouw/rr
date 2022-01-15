@@ -1,0 +1,4 @@
+lib_add(a, b)
+{
+    ret a + b;
+}
