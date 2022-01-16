@@ -1,10 +1,8 @@
-set  := {
-    "a", "b", "c"
-};
+set  := { "a", "b", "c" };
 
 main()
 {
-    if(set["a"] != null)
+    if((set["a"] != null) && (set["d"] == null))
     {
         ret 0;
     }

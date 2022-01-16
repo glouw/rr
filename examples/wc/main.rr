@@ -14,7 +14,7 @@ Punct := {
 };
 
 Lookup(char, dict) {
-    string := copy(char);
+    string := copy(char); # Chars promote to strings with a copy.
     if(dict[string] == null) {
         ret false;
     }
@@ -38,7 +38,7 @@ Split(string) {
         }
         elif(IsSpace(char) || IsPunct(char)) {
             if(len(word) > 0) {
-                words += word;
+                words += copy(word);
             }
             word = "";
         }

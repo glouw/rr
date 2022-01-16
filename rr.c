@@ -2522,10 +2522,6 @@ Char_Init(Value* string, int index)
         Char* self = Malloc(sizeof(*self));
         self->string = string;
         self->value = value;
-        // Chars increment the ref count of their parent
-        // string so that when a char is returned from a function
-        // the parent string is not destroyed...
-        Value_Inc(self->string);
         return self;
     }
     return NULL;
@@ -3130,7 +3126,7 @@ VM_TypeMatch(VM* self, Type a, Type b, const char* op)
 }
 
 static void
-VM_Bounds(VM* self, Type a, int index)
+VM_OutOfBounds(VM* self, Type a, int index)
 {
     (void) self;
     Quit("vm: type `%s` out of bounds with index `%d`", Type_String(a), index);
@@ -3148,14 +3144,6 @@ VM_TypeBad(VM* self, Type a)
 {
     (void) self;
     Quit("vm: type `%s` cannot be used for this operation", Type_String(a));
-}
-
-static void
-VM_DataGetCheck(VM* self, Value* value)
-{
-    (void) self;
-    if(value->refs == 0)
-        Quit("vm: indexing cannot be done on .data segment objects");
 }
 
 static int
@@ -3234,17 +3222,32 @@ VM_Psh(VM* self, int address)
     Queue_PshB(self->stack, copy);
 }
 
+static bool
+Value_Subbing(Value* a, Value* b)
+{
+    return a->type == TYPE_CHAR && b->type == TYPE_STRING;
+}
+
+static void
+Value_Sub(Value* a, Value* b)
+{
+    char* x = a->of.character->value;
+    char* y = b->of.string->value;
+    while(*x && *y)
+    {
+        *x = *y;
+        x += 1;
+        y += 1;
+    }
+}
+
 static void
 VM_Mov(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
-    {
-        if(Str_Size(b->of.string) != 1)
-            Quit("vm: expected char");
-        *a->of.character->value = b->of.string->value[0];
-    }
+    if(Value_Subbing(a, b))
+        Value_Sub(a, b);
     else
     if(a->type == b->type)
     {
@@ -3256,46 +3259,56 @@ VM_Mov(VM* self)
     VM_Pop(self);
 }
 
+static bool
+Value_Pushing(Value* a, Value* b)
+{
+    return a->type == TYPE_ARRAY && b->type != TYPE_ARRAY;
+}
+
+static bool
+Value_CharAppending(Value* a, Value* b)
+{
+    return a->type == TYPE_STRING && b->type == TYPE_CHAR;
+}
+
 static void
 VM_Add(VM* self)
 {
     char* operator = "+";
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type == TYPE_CHAR)
-        VM_TypeBad(self, a->type);
-    else
-    if(a->type == TYPE_ARRAY && b->type != TYPE_ARRAY)
-        Queue_PshB(a->of.array, Value_Copy(b));
-    else
+    if(Value_Pushing(a, b))
     {
-        if(a->type == TYPE_STRING && b->type == TYPE_CHAR)
-            Str_PshB(a->of.string, *b->of.character->value);
-        else
-        if(a->type == b->type)
-            switch(a->type)
-            {
-            case TYPE_ARRAY:
-                Queue_Append(a->of.array, b->of.array);
-                break;
-            case TYPE_DICT:
-                Map_Append(a->of.dict, b->of.dict);
-                break;
-            case TYPE_STRING:
-                Str_Appends(a->of.string, b->of.string->value);
-                break;
-            case TYPE_NUMBER:
-                a->of.number += b->of.number;
-                break;
-            case TYPE_CHAR:
-            case TYPE_BOOL:
-            case TYPE_NULL:
-            case TYPE_FILE:
-                VM_BadOperator(self, a->type, operator);
-            }
-        else
-            VM_TypeMatch(self, a->type, b->type, operator);
+        Value_Inc(b);
+        Queue_PshB(a->of.array, b);
     }
+    else
+    if(Value_CharAppending(a, b))
+        Str_PshB(a->of.string, *b->of.character->value);
+    else
+    if(a->type == b->type)
+        switch(a->type)
+        {
+        case TYPE_ARRAY:
+            Queue_Append(a->of.array, b->of.array);
+            break;
+        case TYPE_DICT:
+            Map_Append(a->of.dict, b->of.dict);
+            break;
+        case TYPE_STRING:
+            Str_Appends(a->of.string, b->of.string->value);
+            break;
+        case TYPE_NUMBER:
+            a->of.number += b->of.number;
+            break;
+        case TYPE_CHAR:
+        case TYPE_BOOL:
+        case TYPE_NULL:
+        case TYPE_FILE:
+            VM_BadOperator(self, a->type, operator);
+        }
+    else
+        VM_TypeMatch(self, a->type, b->type, operator);
     VM_Pop(self);
 }
 
@@ -3305,8 +3318,11 @@ VM_Sub(VM* self)
     char* operator = "-";
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
-    if(a->type == TYPE_ARRAY && b->type != TYPE_ARRAY)
-        Queue_PshF(a->of.array, Value_Copy(b));
+    if(Value_Pushing(a, b))
+    {
+        Value_Inc(b);
+        Queue_PshF(a->of.array, b);
+    }
     else
     if(a->type == b->type)
         switch(a->type)
@@ -3533,8 +3549,7 @@ VM_Ins(VM* self)
         VM_TypeBadIndex(self, a->type, b->type);
     else
     if(b->type == TYPE_STRING)
-        // Keys are not reference counted so a string copy is okay.
-        Map_Set(a->of.dict, Str_Copy(b->of.string), c);
+        Map_Set(a->of.dict, Str_Copy(b->of.string), c); // Keys are not reference counted.
     else
         VM_TypeBad(self, b->type);
     Value_Inc(c);
@@ -3552,23 +3567,46 @@ VM_Ref(VM* self)
 }
 
 static Value*
+VM_IndexArray(VM* self, Value* array, Value* index)
+{
+    Value* value = Queue_Get(array->of.array, index->of.number);
+    if(value == NULL)
+        VM_OutOfBounds(self, array->type, index->of.number);
+    Value_Inc(value);
+    return value;
+}
+
+static Value*
+VM_IndexString(VM* self, Value* array, Value* index)
+{
+    Char* character = Char_Init(array, index->of.number);
+    if(character == NULL)
+        VM_OutOfBounds(self, array->type, index->of.number);
+    Of of = { .character = character };
+    Value* value = Value_Init(of, TYPE_CHAR);
+    Value_Inc(array);
+    return value;
+}
+
+static Value*
 VM_Index(VM* self, Value* storage, Value* index)
 {
-    Value* value = NULL;
     if(storage->type == TYPE_ARRAY)
-        value = Queue_Get(storage->of.array, index->of.number);
+        return VM_IndexArray(self, storage, index);
     else
     if(storage->type == TYPE_STRING)
-    {
-        Char* character = Char_Init(storage, index->of.number);
-        if(character)
-        {
-            Of of = { .character = character };
-            value = Value_Init(of, TYPE_CHAR);
-        }
-    }
-    else
-        VM_TypeBadIndex(self, storage->type, index->type);
+        return VM_IndexString(self, storage, index);
+    VM_TypeBadIndex(self, storage->type, index->type);
+    return NULL;
+}
+
+static Value*
+VM_Lookup(VM* self, Value* dict, Value* index)
+{
+    VM_TypeExpect(self, dict->type, TYPE_DICT);
+    Value* value = Map_Get(dict->of.dict, index->of.string->value);
+    if(value != NULL)
+        Value_Inc(value);
     return value;
 }
 
@@ -3579,19 +3617,10 @@ VM_Get(VM* self)
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     Value* value = NULL;
     if(b->type == TYPE_NUMBER)
-    {
-        VM_DataGetCheck(self, a);
         value = VM_Index(self, a, b);
-        if(value == NULL)
-            VM_Bounds(self, a->type, b->of.number);
-    }
     else
     if(b->type == TYPE_STRING)
-    {
-        VM_DataGetCheck(self, a);
-        VM_TypeExpect(self, a->type, TYPE_DICT);
-        value = Map_Get(a->of.dict, b->of.string->value);
-    }
+        value = VM_Lookup(self, a, b);
     else
         VM_TypeBadIndex(self, a->type, b->type);
     VM_Pop(self);
@@ -3602,12 +3631,7 @@ VM_Get(VM* self)
         Queue_PshB(self->stack, Value_Init(of, TYPE_NULL));
     }
     else
-    {
-        // Individual chars aren't reference counted like other objects.
-        if(value->type != TYPE_CHAR)
-            Value_Inc(value);
         Queue_PshB(self->stack, value);
-    }
 }
 
 static void
@@ -3629,7 +3653,7 @@ VM_Fmt(VM* self)
             {
                 Value* value = Queue_Get(b->of.array, index);
                 if(value == NULL)
-                    VM_Bounds(self, b->type, index);
+                    VM_OutOfBounds(self, b->type, index);
                 Str_Append(formatted, Value_Print(value, false, 0));
                 index += 1;
                 c += 1;

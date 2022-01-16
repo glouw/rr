@@ -9,6 +9,12 @@ fun()
 main()
 {
     v := fun();
-    print(v["asfd"]);
-    ret 0;
+    if(v["asfd"] == 1)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
 }

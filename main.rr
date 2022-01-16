@@ -1,0 +1,9 @@
+main()
+{
+    x := "asdf";
+    del(x, 0);
+    x[1] = "ABDFESDFDSF";
+    print(x);
+    print({"key" : 1, "thing" : 3}["key"]);
+    ret 0;
+}

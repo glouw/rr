@@ -1,4 +1,7 @@
 #the quick brown fox
+#
+# The above comment is needed exactly as is
+# for this test to work - do not change it.
 
 main()
 {
