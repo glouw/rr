@@ -1,0 +1,24 @@
+main()
+{
+    if(!("a" < "b"))
+    {
+        print("<");
+        ret 1;
+    }
+    if(!("b" > "a"))
+    {
+        print(">");
+        ret 1;
+    }
+    if(!("a" >= "a"))
+    {
+        print(">=");
+        ret 1;
+    }
+    if(!("a" <= "a"))
+    {
+        print("<=");
+        ret 1;
+    }
+    ret 0;
+}

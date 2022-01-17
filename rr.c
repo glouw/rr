@@ -28,7 +28,7 @@ typedef void*
 (*Copy)(void*);
 
 typedef bool
-(*Equal)(void*, void*);
+(*Compare)(void*, void*);
 
 typedef struct
 {
@@ -73,6 +73,7 @@ typedef enum
     OPCODE_GTE,
     OPCODE_INS,
     OPCODE_JMP,
+    OPCODE_KEY,
     OPCODE_LEN,
     OPCODE_LOC,
     OPCODE_LOD,
@@ -93,8 +94,10 @@ typedef enum
     OPCODE_RED,
     OPCODE_REF,
     OPCODE_RET,
+    OPCODE_RSR,
     OPCODE_SAV,
     OPCODE_SPD,
+    OPCODE_SRT,
     OPCODE_SUB,
     OPCODE_TYP,
     OPCODE_WRT,
@@ -684,13 +687,13 @@ Queue_Append(Queue* self, Queue* other)
 }
 
 static bool
-Queue_Equal(Queue* self, Queue* other, Equal equal)
+Queue_Equal(Queue* self, Queue* other, Compare compare)
 {
     if(Queue_Size(self) != Queue_Size(other))
         return false;
     else
         for(int i = 0; i < Queue_Size(self); i++)
-            if(!equal(Queue_Get(self, i), Queue_Get(other, i)))
+            if(!compare(Queue_Get(self, i), Queue_Get(other, i)))
                 return false;
     return true;
 }
@@ -1259,7 +1262,7 @@ Map_Append(Map* self, Map* other)
 }
 
 static bool
-Map_Equal(Map* self, Map* other, Equal equal)
+Map_Equal(Map* self, Map* other, Compare compare)
 {
     if(Map_Size(self) == Map_Size(other))
     {
@@ -1271,7 +1274,7 @@ Map_Equal(Map* self, Map* other, Equal equal)
                 void* got = Map_Get(other, chain->key->value);
                 if(got == NULL)
                     return false;
-                if(!equal(chain->value, got))
+                if(!compare(chain->value, got))
                     return false;
                 chain = chain->next;
             }
@@ -1949,6 +1952,15 @@ CC_Indirect(CC* self)
         if(Str_Equals(ident, "good"))
             Queue_PshB(self->assembly, Str_Init("\tgod"));
         else
+        if(Str_Equals(ident, "key"))
+            Queue_PshB(self->assembly, Str_Init("\tkey"));
+        else
+        if(Str_Equals(ident, "sort"))
+            Queue_PshB(self->assembly, Str_Init("\tsrt"));
+        else
+        if(Str_Equals(ident, "rsort"))
+            Queue_PshB(self->assembly, Str_Init("\trsr"));
+        else
         if(Str_Equals(ident, "open"))
             Queue_PshB(self->assembly, Str_Init("\topn"));
         else
@@ -1987,7 +1999,10 @@ CC_Indirect(CC* self)
 static void
 CC_Reserve(CC* self)
 {
+    CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("sort"));
+    CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("rsort"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("good"));
+    CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("key"));
     CC_Declare(self, CLASS_FUNCTION, 1, Str_Init("copy"));
     CC_Declare(self, CLASS_FUNCTION, 2, Str_Init("open"));
     CC_Declare(self, CLASS_FUNCTION, 2, Str_Init("read"));
@@ -2530,7 +2545,6 @@ Char_Init(Value* string, int index)
 static void
 Char_Kill(Char* self)
 {
-    // ... The char will then free that string, if necessary.
     Value_Kill(self->string);
     Free(self);
 }
@@ -2550,9 +2564,9 @@ Value_Equal(Value* a, Value* b)
         case TYPE_FILE:
             return File_Equal(a->of.file, b->of.file);
         case TYPE_ARRAY:
-            return Queue_Equal(a->of.array, b->of.array, (Equal) Value_Equal);
+            return Queue_Equal(a->of.array, b->of.array, (Compare) Value_Equal);
         case TYPE_DICT:
-            return Map_Equal(a->of.dict, b->of.dict, (Equal) Value_Equal);
+            return Map_Equal(a->of.dict, b->of.dict, (Compare) Value_Equal);
         case TYPE_STRING:
             return Str_Equal(a->of.string, b->of.string);
         case TYPE_NUMBER:
@@ -2999,6 +3013,9 @@ VM_Assemble(Queue* assembly)
             if(Equals(mnemonic, "jmp"))
                 instruction = VM_Indirect(OPCODE_JMP, labels, strtok(NULL, "\n"));
             else
+            if(Equals(mnemonic, "key"))
+                instruction = OPCODE_KEY;
+            else
             if(Equals(mnemonic, "len"))
                 instruction = OPCODE_LEN;
             else
@@ -3059,11 +3076,17 @@ VM_Assemble(Queue* assembly)
             if(Equals(mnemonic, "ret"))
                 instruction = OPCODE_RET;
             else
+            if(Equals(mnemonic, "rsr"))
+                instruction = OPCODE_RSR;
+            else
             if(Equals(mnemonic, "sav"))
                 instruction = OPCODE_SAV;
             else
             if(Equals(mnemonic, "spd"))
                 instruction = OPCODE_SPD;
+            else
+            if(Equals(mnemonic, "srt"))
+                instruction = OPCODE_SRT;
             else
             if(Equals(mnemonic, "sub"))
                 instruction = OPCODE_SUB;
@@ -3105,7 +3128,7 @@ VM_Cpy(VM* self)
 static void
 VM_TypeExpect(VM* self, Type a, Type b)
 {
-    (void) self; // For debug markers one day.
+    (void) self; // For debug line numbers one day.
     if(a != b)
         Quit("`vm: got `%s` but expected `%s`", Type_String(a), Type_String(b));
 }
@@ -3368,14 +3391,116 @@ VM_Div(VM* self)
     VM_Pop(self);
 }
 
+static bool
+Value_LessThan(Value* a, Value* b)
+{
+    if(a->type == TYPE_STRING)
+        return strcmp(a->of.string->value, b->of.string->value) < 0;
+    else
+    if(a->type == TYPE_NUMBER)
+        return a->of.number < b->of.number;
+    else
+        return false;
+}
+
+static bool
+Value_LessThanEqualTo(Value* a, Value* b)
+{
+    if(a->type == TYPE_STRING)
+        return strcmp(a->of.string->value, b->of.string->value) <= 0;
+    else
+    if(a->type == TYPE_NUMBER)
+        return a->of.number <= b->of.number;
+    else
+        return false;
+}
+
+static bool
+Value_GreaterThan(Value* a, Value* b)
+{
+    if(a->type == TYPE_STRING)
+        return strcmp(a->of.string->value, b->of.string->value) > 0;
+    else
+    if(a->type == TYPE_NUMBER)
+        return a->of.number > b->of.number;
+    else
+        return false;
+}
+
+static bool
+Value_GreaterThanEqualTo(Value* a, Value* b)
+{
+    if(a->type == TYPE_STRING)
+        return strcmp(a->of.string->value, b->of.string->value) >= 0;
+    else
+    if(a->type == TYPE_NUMBER)
+        return a->of.number >= b->of.number;
+    else
+        return false;
+}
+
+static void
+Queue_Swap(Queue* self, int a, int b)
+{
+    void** x = Queue_At(self, a);
+    void** y = Queue_At(self, b);
+    void* temp = *x;
+    *x = *y;
+    *y = temp;
+}
+
+static void
+Queue_Sort(Queue* self, bool compare(void*, void*), int left, int right)
+{
+    if(left >= right)
+        return;
+    Queue_Swap(self, left, (left + right) / 2);
+    int last = left;
+    for(int i = left + 1; i <= right; i++)
+        if(compare(Queue_Get(self, i), Queue_Get(self, left)))
+             Queue_Swap(self, ++last, i);
+   Queue_Swap(self, left, last);
+   Queue_Sort(self, compare, left, last - 1);
+   Queue_Sort(self, compare, last + 1, right);
+}
+
+static void
+Value_Sort(Value* self)
+{
+    Queue_Sort(self->of.array, (Compare) Value_LessThan, 0, Queue_Size(self->of.array) - 1);
+}
+
+static void
+Value_RSort(Value* self)
+{
+    Queue_Sort(self->of.array, (Compare) Value_GreaterThan, 0, Queue_Size(self->of.array) - 1);
+}
+
+static void
+VM_Srt(VM* self)
+{
+    Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
+    VM_TypeExpect(self, a->type, TYPE_ARRAY);
+    Value_Sort(a);
+    VM_Pop(self);
+}
+
+static void
+VM_Rsr(VM* self)
+{
+    Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
+    VM_TypeExpect(self, a->type, TYPE_ARRAY);
+    Value_RSort(a);
+    VM_Pop(self);
+}
+
 static void
 VM_Lst(VM* self)
 {
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     VM_TypeMatch(self, a->type, b->type, "<");
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    bool boolean = a->of.number < b->of.number;
+    bool boolean = Value_LessThan(a, b);
     VM_Pop(self);
     VM_Pop(self);
     Of of = { .boolean = boolean };
@@ -3388,8 +3513,7 @@ VM_Lte(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     VM_TypeMatch(self, a->type, b->type, "<=");
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    bool boolean = a->of.number <= b->of.number;
+    bool boolean = Value_LessThanEqualTo(a, b);
     VM_Pop(self);
     VM_Pop(self);
     Of of = { .boolean = boolean };
@@ -3402,8 +3526,7 @@ VM_Grt(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     VM_TypeMatch(self, a->type, b->type, ">");
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    bool boolean = a->of.number > b->of.number;
+    bool boolean = Value_GreaterThan(a, b);
     VM_Pop(self);
     VM_Pop(self);
     Of of = { .boolean = boolean };
@@ -3416,8 +3539,7 @@ VM_Gte(VM* self)
     Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 2);
     Value* b = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
     VM_TypeMatch(self, a->type, b->type, ">=");
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    bool boolean = a->of.number >= b->of.number;
+    bool boolean = Value_GreaterThanEqualTo(a, b);
     VM_Pop(self);
     VM_Pop(self);
     Of of = { .boolean = boolean };
@@ -3782,6 +3904,29 @@ VM_God(VM* self)
     Queue_PshB(self->stack, Value_Init(of, TYPE_BOOL));
 }
 
+static void
+VM_Key(VM* self)
+{
+    Value* a = Queue_Get(self->stack, Queue_Size(self->stack) - 1);
+    VM_TypeExpect(self, a->type, TYPE_DICT);
+    Of parent;
+    Value* array = Value_Init(parent, TYPE_ARRAY);
+    for(int i = 0; i < Map_Buckets(a->of.dict); i++)
+    {
+        Node* chain = a->of.dict->bucket[i];
+        while(chain)
+        {
+            Of child = { .string = Str_Copy(chain->key) };
+            Value* string = Value_Init(child, TYPE_STRING);
+            Queue_PshB(array->of.array, string);
+            chain = chain->next;
+        }
+    }
+    Value_Sort(array);
+    VM_Pop(self);
+    Queue_PshB(self->stack, array);
+}
+
 static int
 VM_Run(VM* self)
 {
@@ -3811,6 +3956,7 @@ VM_Run(VM* self)
         case OPCODE_GTE: VM_Gte(self); break;
         case OPCODE_INS: VM_Ins(self); break;
         case OPCODE_JMP: VM_Jmp(self, address); break;
+        case OPCODE_KEY: VM_Key(self); break;
         case OPCODE_LEN: VM_Len(self); break;
         case OPCODE_LOC: VM_Loc(self, address); break;
         case OPCODE_LOD: VM_Lod(self); break;
@@ -3831,8 +3977,10 @@ VM_Run(VM* self)
         case OPCODE_RED: VM_Red(self); break;
         case OPCODE_REF: VM_Ref(self); break;
         case OPCODE_RET: VM_Ret(self); break;
+        case OPCODE_RSR: VM_Rsr(self); break;
         case OPCODE_SAV: VM_Sav(self); break;
         case OPCODE_SPD: VM_Spd(self); break;
+        case OPCODE_SRT: VM_Srt(self); break;
         case OPCODE_SUB: VM_Sub(self); break;
         case OPCODE_TYP: VM_Typ(self); break;
         case OPCODE_WRT: VM_Wrt(self); break;
