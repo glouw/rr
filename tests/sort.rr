@@ -1,8 +1,13 @@
+cmp(a, b)
+{
+    ret a < b;
+}
+
 main()
 {
     a := [ 9, 3, 5, 1, 0, 3 ];
     b := [ 0, 1, 3, 3, 5, 9 ];
-    sort(a);
+    sort(a, cmp);
     if(a == b)
     {
         ret 0;

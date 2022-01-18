@@ -1,9 +1,35 @@
+compare(a, b)
+{
+    ret a["key"] > b["key"];
+}
+
+speak(message);
+
+fun()
+{
+    speak("HI THERE");
+}
+
+speak(message)
+{
+    print(message);
+}
+
 main()
 {
-    x := "asdf";
-    del(x, 0);
-    x[1] = "ABDFESDFDSF";
-    print(x);
-    print({"key" : 1, "thing" : 3}["key"]);
+    a := [ 
+        { "key": "z"  },
+        { "key": "zz" },
+        { "key": "a"  },
+        { "key": "c"  },
+        { "key": "b"  },
+    ];
+    b := 1.0;
+    comparator := compare;
+    sort(a, comparator);
+    print(a);
+    f := open("main.rr", "r");
+    print(f);
+    fun();
     ret 0;
 }
