@@ -6,12 +6,12 @@ main()
         pass += 1;
     }
 
-    if(type([]) == "array")
+    if(type([]) == "queue")
     {
         pass += 1;
     }
 
-    if(type({}) == "dict")
+    if(type({}) == "map")
     {
         pass += 1;
     }

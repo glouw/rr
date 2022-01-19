@@ -1,35 +1,13 @@
-compare(a, b)
-{
-    ret a["key"] > b["key"];
-}
-
-speak(message);
-
-fun()
-{
-    speak("HI THERE");
-}
-
-speak(message)
-{
-    print(message);
-}
+imp lib.test {
+    add(a, b);
+};
 
 main()
 {
-    a := [ 
-        { "key": "z"  },
-        { "key": "zz" },
-        { "key": "a"  },
-        { "key": "c"  },
-        { "key": "b"  },
-    ];
-    b := 1.0;
-    comparator := compare;
-    sort(a, comparator);
-    print(a);
-    f := open("main.rr", "r");
-    print(f);
-    fun();
+    a := 1;
+    b := 2;
+    add(a, b);
+    c := 3;
+    print("{} {} {}" % [a, b, c]);
     ret 0;
 }

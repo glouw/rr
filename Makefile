@@ -1,9 +1,13 @@
 CC = gcc -std=gnu99 -pedantic
-CFLAGS = -g -fsanitize=address -fsanitize=undefined -Wall -Wextra -Wpedantic -Wshadow
+CFLAGS = -ldl -g -fsanitize=address -fsanitize=undefined -Wall -Wextra -Wpedantic -Wshadow
 #CFLAGS = -O3 -march=native
-
-rr: rr.c Makefile
-	$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@
+LIB = libroman2.so
+BIN = roman2
+$(BIN): rr.c rr.h Makefile
+	$(CC) -DROMAN2SO=\"$(LIB)\" -L/usr/bin -fpic -shared $< -o $(LIB)
+	$(CC) -DROMAN2SO=\"$(LIB)\" $(CFLAGS) $(LDFLAGS) $< -o $@
+	mv $(LIB) /usr/lib
+	mv $(BIN) /usr/bin
 
 clean:
-	rm -f rr
+	rm -f $(BIN) $(LIB)
