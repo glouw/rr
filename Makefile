@@ -8,6 +8,7 @@ $(BIN): roman2.c roman2.h Makefile
 	sudo mv $(LIB) /usr/lib
 	$(CC) -DROMAN2SO=\"$(BIN)\" $(CFLAGS) $< -o $@ -lroman2
 	sudo mv $(BIN) /usr/bin
+	sudo cp roman2.h /usr/include
 
 clean:
 	rm -f $(BIN) $(LIB)

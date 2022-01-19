@@ -9,6 +9,7 @@ main()
     b := 2;
     add(a, b);
     c := 3;
-    print("{} {} {}" % [a, b, c]);
+    d := 4;
+    print("no stack thrashing detected! {} {} {} {}" % [a, b, c, d]);
     ret 0;
 }

@@ -2059,22 +2059,72 @@ VM_Dll(VM* self)
     int args = *Value_Number(c);
     switch(args)
     {
-    case 0: fun(); break;
-    case 1: fun(Queue_Get(self->stack, start - 1));
-            break;
-    case 2: fun(Queue_Get(self->stack, start - 1),
-                Queue_Get(self->stack, start - 2));
-            break;
-    case 3: fun(Queue_Get(self->stack, start - 1),
-                Queue_Get(self->stack, start - 2),
-                Queue_Get(self->stack, start - 3));
-            break;
-    case 4: fun(Queue_Get(self->stack, start - 1),
-                Queue_Get(self->stack, start - 2),
-                Queue_Get(self->stack, start - 3),
-                Queue_Get(self->stack, start - 4));
-            break;
-    // MAYBE MORE?
+    case 0:
+        fun(); // This is totally bonkers. Is there a way to pass an array through dlsym?
+        break;
+    case 1:
+        fun(Queue_Get(self->stack, start - 1));
+        break;
+    case 2:
+        fun(Queue_Get(self->stack, start - 2),
+            Queue_Get(self->stack, start - 1));
+        break;
+    case 3:
+        fun(Queue_Get(self->stack, start - 3),
+            Queue_Get(self->stack, start - 2),
+            Queue_Get(self->stack, start - 1));
+        break;
+    case 4:
+        fun(Queue_Get(self->stack, start - 4),
+            Queue_Get(self->stack, start - 3),
+            Queue_Get(self->stack, start - 2),
+            Queue_Get(self->stack, start - 1));
+        break;
+    case 5:
+        fun(Queue_Get(self->stack, start - 5),
+            Queue_Get(self->stack, start - 4),
+            Queue_Get(self->stack, start - 3),
+            Queue_Get(self->stack, start - 2),
+            Queue_Get(self->stack, start - 1));
+        break;
+    case 6:
+        fun(Queue_Get(self->stack, start - 6),
+            Queue_Get(self->stack, start - 5),
+            Queue_Get(self->stack, start - 4),
+            Queue_Get(self->stack, start - 3),
+            Queue_Get(self->stack, start - 2),
+            Queue_Get(self->stack, start - 1));
+        break;
+    case 7:
+        fun(Queue_Get(self->stack, start - 7),
+            Queue_Get(self->stack, start - 6),
+            Queue_Get(self->stack, start - 5),
+            Queue_Get(self->stack, start - 4),
+            Queue_Get(self->stack, start - 3),
+            Queue_Get(self->stack, start - 2),
+            Queue_Get(self->stack, start - 1));
+        break;
+    case 8:
+        fun(Queue_Get(self->stack, start - 8),
+            Queue_Get(self->stack, start - 7),
+            Queue_Get(self->stack, start - 6),
+            Queue_Get(self->stack, start - 5),
+            Queue_Get(self->stack, start - 4),
+            Queue_Get(self->stack, start - 3),
+            Queue_Get(self->stack, start - 2),
+            Queue_Get(self->stack, start - 1));
+        break;
+    case 9:
+        fun(Queue_Get(self->stack, start - 9),
+            Queue_Get(self->stack, start - 8),
+            Queue_Get(self->stack, start - 7),
+            Queue_Get(self->stack, start - 6),
+            Queue_Get(self->stack, start - 5),
+            Queue_Get(self->stack, start - 4),
+            Queue_Get(self->stack, start - 3),
+            Queue_Get(self->stack, start - 2),
+            Queue_Get(self->stack, start - 1));
+        break;
     }
     VM_Pop(self);
     VM_Pop(self);
