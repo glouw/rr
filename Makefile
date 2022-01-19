@@ -1,14 +1,26 @@
+TITLE = roman2
+DEBUG = 1
+
+ifeq (1,$(DEBUG))
+CFLAGS = -g -fsanitize=address -fsanitize=undefined
+else
+CFLAGS = -O3 -march=native
+endif
+
+WARNINGS = -Wall -Wextra -Wpedantic -Wshadow
 CC = gcc -std=gnu99 -pedantic
-CFLAGS = -ldl -g -fsanitize=address -fsanitize=undefined -Wall -Wextra -Wpedantic -Wshadow
-#CFLAGS = -O3 -march=native
-LIB = libroman2.so
-BIN = roman2
-$(BIN): roman2.c roman2.h Makefile
-	$(CC) -DROMAN2SO=\"$(BIN)\" $(CFLAGS) -fpic -shared libroman2.c -o $(LIB)
-	sudo mv $(LIB) /usr/lib
-	$(CC) -DROMAN2SO=\"$(BIN)\" $(CFLAGS) $< -o $@ -lroman2
+
+BIN = $(TITLE)
+LIB = lib$(TITLE).so
+
+$(BIN): roman2.c roman2.h Makefile $(LIB)
+	$(CC) -DROMAN2SO=\"$(TITLE)\" $(CFLAGS) $(WARNINGS) $< -o $@ -ldl -l$(TITLE)
 	sudo mv $(BIN) /usr/bin
 	sudo cp roman2.h /usr/include
+
+$(LIB):libroman2.c roman2.h Makefile
+	$(CC) -DROMAN2SO=\"$(TITLE)\" $(CFLAGS) $(WARNINGS) $< -o $@ -fpic -shared 
+	sudo mv $(LIB) /usr/lib
 
 clean:
 	rm -f $(BIN) $(LIB)

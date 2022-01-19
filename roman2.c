@@ -1635,7 +1635,10 @@ VM_Store(VM* self, Map* labels, char* operand)
     if(String_IsNumber(ch))
         value = Value_NewNumber(atof(operand));
     else
+    {
+        value = NULL;
         Quit("vm: unknown psh operand `%s` encountered", operand);
+    }
     Queue_PshB(self->data, value);
 }
 
