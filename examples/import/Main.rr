@@ -1,4 +1,4 @@
-Inc Lib.Lib;
+inc Lib.Lib;
 
 Main()
 {

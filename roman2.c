@@ -1432,13 +1432,13 @@ CC_Parse(CC* self)
     while(CC_Peak(self) != EOF)
     {
         RR_String* ident = CC_Ident(self);
-        if(RR_String_Equals(ident, "Inc"))
+        if(RR_String_Equals(ident, "inc"))
         {
             CC_Include(self);
             RR_String_Kill(ident);
         }
         else
-        if(RR_String_Equals(ident, "Imp"))
+        if(RR_String_Equals(ident, "imp"))
         {
             CC_Import(self);
             RR_String_Kill(ident);

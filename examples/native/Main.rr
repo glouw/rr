@@ -1,15 +1,15 @@
-Imp Lib.Test
+imp Lib.Test
 {
     Test_Add(a, b);
 };
 
-Imp Lib.Other
+imp Lib.Other
 {
     Other_Sub(a, b);
     Other_Test();
 };
 
-Imp Lib.Other
+imp Lib.Other
 {
     Other_Test2();
 };
