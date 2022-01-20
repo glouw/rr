@@ -1,0 +1,22 @@
+Change(value)
+{
+    value = 99;
+}
+
+Main()
+{
+    a := {
+        "key" : {
+            "key" : 1
+        }
+    };
+    Change(a["key"]["key"]);
+    if(a["key"]["key"] == 99)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

@@ -1,0 +1,28 @@
+A(a)
+{
+    r := Refs(a);
+    ret r;
+}
+
+Fun(a, b, c, d)
+{
+    val := "asf";
+    ret A(a);
+}
+
+Main()
+{
+    a := 1;
+    b := a;
+    c := b;
+    d := c;
+    r := Fun(a, b, c, d);
+    if(r == 9)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

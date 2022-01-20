@@ -1,0 +1,20 @@
+Fun()
+{
+    value := {
+        "asfd" : 1
+    };
+    ret value;
+}
+
+Main()
+{
+    v := Fun();
+    if(v["asfd"] == 1)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

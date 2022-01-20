@@ -1,0 +1,17 @@
+Fun(a, b)
+{
+    Del(a, "a");
+    Print(b);
+}
+
+Main()
+{
+    a := {
+        "a": {
+            "b": 1
+        }
+    };
+    Fun(a, a["a"]);
+    Print(a);
+    ret 0;
+}

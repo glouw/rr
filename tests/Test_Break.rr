@@ -1,0 +1,31 @@
+Main()
+{
+    a := 0;
+    b := 0;
+    A := 10;
+    B := 99;
+    while(true)
+    {
+        if(a == A)
+        {
+            break;
+        }
+        while(true)
+        {
+            if(b == B)
+            {
+                break;
+            }
+            b += 1;
+        }
+        a += 1;
+    }
+    if(a == A)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

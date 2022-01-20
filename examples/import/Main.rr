@@ -1,0 +1,8 @@
+Inc Lib.Lib;
+
+Main()
+{
+    Print(Lib_Add(1, 99));
+    Print(Lib_Sub(1, 99));
+    ret 0;
+}

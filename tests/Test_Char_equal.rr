@@ -1,0 +1,43 @@
+C(str)
+{
+    pass := 0;
+    str += str[0];
+    str[0] = "T";
+    if(str[0] == "T")
+    {
+        pass += 1;
+    }
+    if("T" == str[0])
+    {
+        pass += 1;
+    }
+    if(str[0] == str[0]) # Should result in a CHAR by CHAR comparison.
+    {
+        pass += 1;
+    }
+    ret pass;
+}
+
+B(str)
+{
+    ret C(str);
+}
+
+A(str)
+{
+    ret B(str);
+}
+
+Main()
+{
+    str := "test" + "test";
+    pass := A(str);
+    if(pass == 3)
+    {
+        ret 0;
+    }
+    else
+    {
+         ret 1;
+    }
+}

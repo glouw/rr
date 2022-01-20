@@ -1,0 +1,21 @@
+#the quick brown fox
+#
+# The above comment is needed exactly as is
+# for this test to work - do not change it.
+
+Main()
+{
+    file := Open("Test_Io.rr", "r");
+    s := Read(file, 1);
+    a := Read(file, 3);
+    b := Read(file, 1);
+    c := Read(file, 5);
+    if((a == "the") && (c == "quick"))
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

@@ -1,0 +1,18 @@
+Fib(n)
+{
+    if(n == 0) {
+        ret 0;
+    }
+    elif((n == 1) || (n == 2)) {
+        ret 1;
+    }
+    else {
+        ret Fib(n - 1) + Fib(n - 2);
+    }
+}
+
+Main()
+{
+    Print(Fib(25));
+    ret 0;
+}

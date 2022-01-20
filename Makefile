@@ -14,12 +14,12 @@ BIN = $(TITLE)
 LIB = lib$(TITLE).so
 
 $(BIN): roman2.c roman2.h Makefile $(LIB)
-	$(CC) -DROMAN2SO=\"$(TITLE)\" $(CFLAGS) $(WARNINGS) $< -o $@ -ldl -l$(TITLE)
+	$(CC) -DRR_LIBROMAN2=\"$(TITLE)\" $(CFLAGS) $(WARNINGS) $< -o $@ -ldl -l$(TITLE)
 	sudo mv $(BIN) /usr/bin
 	sudo cp roman2.h /usr/include
 
 $(LIB):libroman2.c roman2.h Makefile
-	$(CC) -DROMAN2SO=\"$(TITLE)\" $(CFLAGS) $(WARNINGS) $< -o $@ -fpic -shared 
+	$(CC) -DRR_LIBROMAN2=\"$(TITLE)\" $(CFLAGS) $(WARNINGS) $< -o $@ -fpic -shared 
 	sudo mv $(LIB) /usr/lib
 
 clean:

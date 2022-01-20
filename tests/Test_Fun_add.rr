@@ -1,0 +1,16 @@
+Add(a, b)
+{
+    ret a + b;
+}
+
+Main()
+{
+    if(Add(3, 4) == 7) 
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

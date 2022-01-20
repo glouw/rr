@@ -1,8 +1,0 @@
-inc lib.lib;
-
-main()
-{
-    print(lib_add(1, 99));
-    print(lib_sub(1, 99));
-    ret 0;
-}

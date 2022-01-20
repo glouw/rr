@@ -1,0 +1,15 @@
+Main()
+{
+    str := "string";
+    str[0] = "S";
+    str[1] = "T";
+    Print(str);
+    if(str == "STring")
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

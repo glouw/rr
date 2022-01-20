@@ -1,0 +1,13 @@
+Main()
+{
+    message := "Hello, world!";
+    size := Print(message);
+    if(size == 13) # NEW LINE NOT INCLUDED.
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

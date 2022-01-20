@@ -1,0 +1,15 @@
+NullRet()
+{
+}
+
+Main()
+{
+    if(NullRet() == null)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1;
+    }
+}

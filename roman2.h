@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <sys/time.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
@@ -8,25 +9,25 @@
 
 #define LEN(a) (sizeof(a) / sizeof(*a))
 
+typedef struct RR_File RR_File;
+typedef struct RR_Function RR_Function;
+typedef struct RR_Queue RR_Queue;
+typedef struct RR_Char RR_Char;
+typedef struct RR_Map RR_Map;
+typedef struct RR_String RR_String;
+typedef struct RR_Value RR_Value;
+typedef struct RR_Block RR_Block;
+typedef struct RR_Node RR_Node;
+typedef union RR_Of RR_Of;
+
 typedef bool
-(*Compare)(void*, void*);
+(*RR_Compare)(void*, void*);
 
 typedef void
-(*Kill)(void*);
+(*RR_Kill)(void*);
 
 typedef void*
-(*Copy)(void*);
-
-typedef struct Node Node;
-typedef struct Value Value;
-typedef struct String String;
-typedef struct File File;
-typedef struct Queue Queue;
-typedef struct Function Function;
-typedef struct Map Map;
-typedef struct Block Block;
-typedef struct Char Char;
-typedef union Of Of;
+(*RR_Copy)(void*);
 
 typedef enum
 {
@@ -40,469 +41,466 @@ typedef enum
     TYPE_BOOL,
     TYPE_NULL,
 }
-Type;
-
-/* MISC */
+RR_Type;
 
 void*
-Malloc(int size);
+RR_Malloc(int size);
 
 void*
-Realloc(void *ptr, size_t size);
+RR_Realloc(void *ptr, size_t size);
 
 void
-Free(void* pointer);
-
-void
-Quit(const char* const message, ...);
+RR_Free(void* pointer);
 
 double
-Microseconds(void);
+RR_Microseconds(void);
 
 void
-Delete(Kill kill, void* value);
+RR_Delete(RR_Kill kill, void* value);
 
 bool
-Equals(char* a, char* b);
+RR_Equals(char* a, char* b);
 
-/* TYPE */
+RR_Type
+RR_Value_ToType(RR_Value* self);
 
-char*
-Type_String(Type);
+RR_File*
+RR_Value_ToFile(RR_Value* self);
 
-void
-Type_Kill(Type type, Of* of);
+RR_Queue*
+RR_Value_ToQueue(RR_Value* self);
 
-void
-Type_Copy(Value* copy, Value* self);
+RR_Map*
+RR_Value_ToMap(RR_Value* self);
 
-/* VALUE */
+RR_String*
+RR_Value_ToString(RR_Value* self);
 
-Type
-Value_Type(Value*);
-
-File*
-Value_File(Value*);
-
-Queue*
-Value_Queue(Value*);
-
-Map*
-Value_Map(Value*);
-
-String*
-Value_String(Value*);
-
-Char*
-Value_Char(Value*);
+RR_Char*
+RR_Value_ToChar(RR_Value* self);
 
 double*
-Value_Number(Value*);
+RR_Value_ToNumber(RR_Value* self);
 
 bool*
-Value_Bool(Value*);
+RR_Value_ToBool(RR_Value* self);
 
-Function*
-Value_Function(Value*);
-
-int
-Value_Len(Value*);
+RR_Function*
+RR_Value_ToFunction(RR_Value* self);
 
 int
-Value_Refs(Value*);
+RR_Value_Len(RR_Value* self);
 
-Of*
-Value_Of(Value*);
+int
+RR_Value_Refs(RR_Value* self);
 
-void
-Value_Dec(Value*);
-
-void
-Value_Inc(Value*);
+RR_Of*
+RR_Value_Of(RR_Value* self);
 
 void
-Value_Kill(Value*);
-
-bool
-Value_LessThan(Value* a, Value* b);
-
-bool
-Value_GreaterThanEqualTo(Value* a, Value* b);
-
-bool
-Value_GreaterThan(Value* a, Value* b);
-
-bool
-Value_LessThanEqualTo(Value* a, Value* b);
-
-bool
-Value_Equal(Value* a, Value* b);
-
-Value*
-Value_Copy(Value*);
-
-Value*
-Value_NewQueue(void);
-
-Value*
-Value_NewMap(void);
-
-Value*
-Value_NewFunction(Function*);
-
-Value*
-Value_NewChar(Char*);
-
-Value*
-Value_NewString(String*);
-
-Value*
-Value_NewNumber(double);
-
-Value*
-Value_NewBool(bool);
-
-Value*
-Value_NewFile(File*);
-
-Value*
-Value_NewNull(void);
-
-String*
-Value_Print(Value*, bool newline, int indents);
+RR_Value_Dec(RR_Value* self);
 
 void
-Value_Println(Value*);
-
-bool
-Value_Subbing(Value* a, Value* b);
+RR_Value_Inc(RR_Value* self);
 
 void
-Value_Sub(Value* a, Value* b);
+RR_Value_Kill(RR_Value* self);
 
 bool
-Value_Pushing(Value* a, Value* b);
+RR_Value_LessThan(RR_Value* a, RR_Value* b);
 
 bool
-Value_CharAppending(Value* a, Value* b);
+RR_Value_GreaterThanEqualTo(RR_Value* a, RR_Value* b);
 
-/* STRING */
+bool
+RR_Value_GreaterThan(RR_Value* a, RR_Value* b);
+
+bool
+RR_Value_LessThanEqualTo(RR_Value* a, RR_Value* b);
+
+bool
+RR_Value_Equal(RR_Value* a, RR_Value* b);
+
+RR_Value*
+RR_Value_Copy(RR_Value* self);
+
+RR_Value*
+RR_Value_Init(RR_Of of, RR_Type type);
+
+RR_Value*
+RR_Value_NewQueue(void);
+
+RR_Value*
+RR_Value_NewMap(void);
+
+RR_Value*
+RR_Value_NewFunction(RR_Function* function);
+
+RR_Value*
+RR_Value_NewChar(RR_Char* character);
+
+RR_Value*
+RR_Value_NewString(RR_String* string);
+
+RR_Value*
+RR_Value_NewNumber(double number);
+
+RR_Value*
+RR_Value_NewBool(bool boolean);
+
+RR_Value*
+RR_Value_NewFile(RR_File* file);
+
+RR_Value*
+RR_Value_NewNull(void);
+
+RR_String*
+RR_Value_Sprint(RR_Value* self, bool newline, int indents);
 
 void
-String_Alloc(String*, int cap);
+RR_Value_Print(RR_Value* self);
+
+bool
+RR_Value_Subbing(RR_Value* a, RR_Value* b);
+
+void
+RR_Value_Sub(RR_Value* a, RR_Value* b);
+
+bool
+RR_Value_Pushing(RR_Value* a, RR_Value* b);
+
+bool
+RR_Value_CharAppending(RR_Value* a, RR_Value* b);
+
+void
+RR_String_Alloc(RR_String* self, int cap);
 
 char*
-String_Value(String*);
+RR_String_Value(RR_String* self);
 
-String*
-String_Init(char* string);
-
-void
-String_Kill(String*);
-
-String*
-String_FromChar(char c);
+RR_String*
+RR_String_Init(char* string);
 
 void
-String_Swap(String**, String** other);
+RR_String_Kill(RR_String* self);
 
-String*
-String_Copy(String*);
+RR_String*
+RR_String_FromChar(char c);
+
+void
+RR_String_Swap(RR_String** self, RR_String** other);
+
+RR_String*
+RR_String_Copy(RR_String* self);
 
 int
-String_Size(String*);
+RR_String_Size(RR_String* self);
 
 void
-String_Replace(String*, char x, char y);
+RR_String_Replace(RR_String* self, char x, char y);
 
 char*
-String_End(String*);
+RR_String_End(RR_String* self);
 
 char
-String_Back(String*);
+RR_String_Back(RR_String* self);
 
 char*
-String_Begin(String*);
+RR_String_Begin(RR_String* self);
 
 int
-String_Empty(String*);
+RR_String_Empty(RR_String* self);
 
 void
-String_PshB(String*, char ch);
+RR_String_PshB(RR_String* self, char ch);
 
-String*
-String_Indent(int indents);
-
-void
-String_PopB(String*);
+RR_String*
+RR_String_Indent(int indents);
 
 void
-String_Resize(String*, int size);
+RR_String_PopB(RR_String* self);
+
+void
+RR_String_Resize(RR_String* self, int size);
 
 bool
-String_Equals(String* a, char* b);
+RR_String_Equals(RR_String* a, char* b);
 
 bool
-String_Equal(String* a, String* b);
+RR_String_Equal(RR_String* a, RR_String* b);
 
 void
-String_Appends(String*, char* str);
+RR_String_Appends(RR_String* self, char* str);
 
 void
-String_Append(String*, String* other);
+RR_String_Append(RR_String* self, RR_String* other);
 
-String*
-String_Base(String* path);
+RR_String*
+RR_String_Base(RR_String* path);
 
-String*
-String_Moves(char** from);
+RR_String*
+RR_String_Moves(char** from);
 
-String*
-String_Skip(String*, char c);
-
-bool
-String_IsBoolean(String* ident);
+RR_String*
+RR_String_Skip(RR_String* self, char c);
 
 bool
-String_IsNull(String* ident);
+RR_String_IsBoolean(RR_String* ident);
 
-String*
-String_Format(char* format, ...);
+bool
+RR_String_IsNull(RR_String* ident);
+
+RR_String*
+RR_String_Format(char* format, ...);
 
 char*
-String_Get(String*, int index);
+RR_String_Get(RR_String* self, int index);
 
 bool
-String_Del(String*, int index);
+RR_String_Del(RR_String* self, int index);
 
 int
-String_EscToByte(int ch);
+RR_String_EscToByte(int ch);
 
 bool
-String_IsUpper(int c);
+RR_String_IsUpper(int c);
 
 bool
-String_IsLower(int c);
+RR_String_IsLower(int c);
 
 bool
-String_IsAlpha(int c);
+RR_String_IsAlpha(int c);
 
 bool
-String_IsDigit(int c);
+RR_String_IsDigit(int c);
 
 bool
-String_IsNumber(int c);
+RR_String_IsNumber(int c);
 
 bool
-String_IsIdentLeader(int c);
+RR_String_IsIdentLeader(int c);
 
 bool
-String_IsIdent(int c);
+RR_String_IsIdent(int c);
 
 bool
-String_IsModule(int c);
+RR_String_IsModule(int c);
 
 bool
-String_IsOp(int c);
+RR_String_IsOp(int c);
 
 bool
-String_IsSpace(int c);
+RR_String_IsSpace(int c);
 
-/* FILE */
-
-File*
-File_Init(String* path, String* mode);
+RR_File*
+RR_File_Init(RR_String* path, RR_String* mode);
 
 bool
-File_Equal(File* a, File* b);
+RR_File_Equal(RR_File* a, RR_File* b);
 
 void
-File_Kill(File*);
+RR_File_Kill(RR_File* self);
 
-File*
-File_Copy(File*);
+RR_File*
+RR_File_Copy(RR_File* self);
 
 int
-File_Size(File*);
+RR_File_Size(RR_File* self);
 
 FILE*
-File_File(File*);
+RR_File_File(RR_File* self);
 
-/* FUNCTION */
-
-Function*
-Function_Init(String* name, int size, int address);
+RR_Function*
+RR_Function_Init(RR_String* name, int size, int address);
 
 void
-Function_Kill(Function*);
+RR_Function_Kill(RR_Function* self);
 
-Function*
-Function_Copy(Function*);
-
-int
-Function_Size(Function*);
+RR_Function*
+RR_Function_Copy(RR_Function* self);
 
 int
-Function_Address(Function*);
+RR_Function_Size(RR_Function* self);
+
+int
+RR_Function_Address(RR_Function* self);
 
 bool
-Function_Equal(Function* a, Function* b);
-
-/* QUEUE */
+RR_Function_Equal(RR_Function* a, RR_Function* b);
 
 int
-Queue_Size(Queue*);
+RR_Queue_Size(RR_Queue* self);
 
 bool
-Queue_Empty(Queue*);
+RR_Queue_Empty(RR_Queue* self);
 
-Block**
-Queue_BlockF(Queue*);
+RR_Block**
+RR_QueueBlockF(RR_Queue* self);
 
-Block**
-Queue_BlockB(Queue*);
-
-void*
-Queue_Front(Queue*);
+RR_Block**
+RR_QueueBlockB(RR_Queue* self);
 
 void*
-Queue_Back(Queue*);
+RR_Queue_Front(RR_Queue* self);
 
-Queue*
-Queue_Init(Kill kill, Copy copy);
+void*
+RR_Queue_Back(RR_Queue* self);
+
+RR_Queue*
+RR_Queue_Init(RR_Kill kill, RR_Copy copy);
 
 void
-Queue_Kill(Queue*);
+RR_Queue_Kill(RR_Queue* self);
 
 void**
-Queue_At(Queue*, int index);
+RR_Queue_At(RR_Queue* self, int index);
 
 void*
-Queue_Get(Queue*, int index);
+RR_Queue_Get(RR_Queue* self, int index);
 
 void
-Queue_Alloc(Queue*, int blocks);
+RR_Queue_Alloc(RR_Queue* self, int blocks);
 
 void
-Queue_PshB(Queue*, void* value);
+RR_Queue_PshB(RR_Queue* self, void* value);
 
 void
-Queue_PshF(Queue*, void* value);
+RR_Queue_PshF(RR_Queue* self, void* value);
 
 void
-Queue_PopB(Queue*);
+RR_Queue_PopB(RR_Queue* self);
 
 void
-Queue_PopF(Queue*);
+RR_Queue_PopF(RR_Queue* self);
 
 void
-Queue_PopFSoft(Queue*);
+RR_Queue_PopFSoft(RR_Queue* self);
 
 void
-Queue_PopBSoft(Queue*);
+RR_Queue_PopBSoft(RR_Queue* self);
 
 bool
-Queue_Del(Queue*, int index);
+RR_Queue_Del(RR_Queue* self, int index);
 
-Queue*
-Queue_Copy(Queue*);
-
-void
-Queue_Prepend(Queue*, Queue* other);
+RR_Queue*
+RR_Queue_Copy(RR_Queue* self);
 
 void
-Queue_Append(Queue*, Queue* other);
+RR_Queue_Prepend(RR_Queue* self, RR_Queue* other);
+
+void
+RR_Queue_Append(RR_Queue* self, RR_Queue* other);
 
 bool
-Queue_Equal(Queue*, Queue* other, Compare compare);
+RR_Queue_Equal(RR_Queue* self, RR_Queue* other, RR_Compare compare);
 
 void
-Queue_Swap(Queue*, int a, int b);
+RR_Queue_Swap(RR_Queue* self, int a, int b);
 
 void
-Queue_RangedSort(Queue*, bool (*compare)(void*, void*), int left, int right);
+RR_Queue_RangedSort(RR_Queue* self, bool (*compare)(void*, void*), int left, int right);
 
 void
-Queue_Sort(Queue*, bool (*compare)(void*, void*));
+RR_Queue_Sort(RR_Queue* self, bool (*compare)(void*, void*));
 
-String*
-Queue_Print(Queue*, int indents);
+RR_String*
+RR_Queue_Print(RR_Queue* self, int indents);
 
-/* MAP */
+RR_Node*
+RR_Node_Init(RR_String* key, void* value);
+
+void
+RR_Node_Set(RR_Node* self, RR_Kill kill, RR_String* key, void* value);
+
+void
+RR_Node_Kill(RR_Node* self, RR_Kill kill);
+
+void
+RR_Node_Push(RR_Node** self, RR_Node* node);
+
+RR_Node*
+RR_Node_Copy(RR_Node* self, RR_Copy copy);
 
 int
-Map_Buckets(Map*);
+RR_Map_Buckets(RR_Map* self);
 
 bool
-Map_Resizable(Map*);
+RR_Map_Resizable(RR_Map* self);
 
-Map*
-Map_Init(Kill kill, Copy copy);
+RR_Map*
+RR_Map_Init(RR_Kill kill, RR_Copy copy);
 
 int
-Map_Size(Map*);
+RR_Map_Size(RR_Map* self);
 
 bool
-Map_Empty(Map*);
+RR_Map_Empty(RR_Map* self);
 
 void
-Map_Kill(Map*);
+RR_Map_Kill(RR_Map* self);
 
 unsigned
-Map_Hash(Map*, char* key);
+RR_Map_Hash(RR_Map* self, char* key);
 
-Node**
-Map_Bucket(Map*, char* key);
-
-void
-Map_Alloc(Map*, int index);
+RR_Node**
+RR_Map_Bucket(RR_Map* self, char* key);
 
 void
-Map_Rehash(Map*);
+RR_Map_Alloc(RR_Map* self, int index);
+
+void
+RR_Map_Rehash(RR_Map* self);
 
 bool
-Map_Full(Map*);
+RR_Map_Full(RR_Map* self);
 
 void
-Map_Emplace(Map*, String* key, Node* node);
+RR_Map_Emplace(RR_Map* self, RR_String* key, RR_Node* node);
 
-Node*
-Map_At(Map*, char* key);
+RR_Node*
+RR_Map_At(RR_Map* self, char* key);
 
 bool
-Map_Exists(Map*, char* key);
+RR_Map_Exists(RR_Map* self, char* key);
 
 void
-Map_Del(Map*, char* key);
+RR_Map_Del(RR_Map* self, char* key);
 
 void
-Map_Set(Map*, String* key, void* value);
+RR_Map_Set(RR_Map* self, RR_String* key, void* value);
 
 void*
-Map_Get(Map*, char* key);
+RR_Map_Get(RR_Map* self, char* key);
 
-Map*
-Map_Copy(Map*);
+RR_Map*
+RR_Map_Copy(RR_Map* self);
 
 void
-Map_Append(Map*, Map* other);
+RR_Map_Append(RR_Map* self, RR_Map* other);
 
 bool
-Map_Equal(Map*, Map* other, Compare compare);
+RR_Map_Equal(RR_Map* self, RR_Map* other, RR_Compare compare);
 
-String*
-Map_Print(Map*, int indents);
+RR_String*
+RR_Map_Print(RR_Map* self, int indents);
 
-Value*
-Map_Key(Map*);
+RR_Value*
+RR_Map_Key(RR_Map* self);
 
-/* CHAR */
-
-Char*
-Char_Init(Value* string, int index);
+RR_Char*
+RR_Char_Init(RR_Value* string, int index);
 
 char*
-Char_Value(Char*);
+RR_Char_Value(RR_Char* self);
 
 void
-Char_Kill(Char*);
+RR_Char_Kill(RR_Char* self);
+
+char*
+RR_Type_ToString(RR_Type self);
+
+void
+RR_Type_Kill(RR_Type type, RR_Of* of);
+
+void
+RR_Type_Copy(RR_Value* copy, RR_Value* self);

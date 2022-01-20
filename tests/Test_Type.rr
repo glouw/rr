@@ -1,0 +1,48 @@
+Main()
+{
+    pass := 0;
+    if(Type("asdf") == "string")
+    {
+        pass += 1;
+    }
+
+    if(Type([]) == "queue")
+    {
+        pass += 1;
+    }
+
+    if(Type({}) == "map")
+    {
+        pass += 1;
+    }
+
+    if(Type(false) == "bool")
+    {
+        pass += 1;
+    }
+
+    if(Type(1) == "number")
+    {
+        pass += 1;
+    }
+
+    if(Type(null) == "null")
+    {
+        pass += 1;
+    }
+
+    string := "a";
+    if(Type(string[0]) == "char")
+    {
+        pass += 1;
+    }
+
+    if(pass == 7)
+    {
+        ret 0;
+    }
+    else
+    {
+        ret 1; 
+    }
+}
