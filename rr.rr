@@ -1,0 +1,154 @@
+MODULE_BUFFER_SIZE := 16;
+
+Args()
+{
+    self := {
+        "entry" : "",
+        "dump" : false,
+        "help" : false,
+    };
+    ret self;
+}
+
+CLASS := {
+    "CLASS_VARIABLE_GLOBAL"           : 0,
+    "CLASS_VARIABLE_LOCAL"            : 1,
+    "CLASS_FUNCTION"                  : 2,
+    "CLASS_FUNCTION_PROTOTYPE"        : 3,
+    "CLASS_FUNCTION_PROTOTYPE_NATIVE" : 4,
+};
+
+OPCODE := {
+    "OPCODE_ADD" : 0,
+    "OPCODE_AND" : 1,
+    "OPCODE_BRF" : 2,
+    "OPCODE_CAL" : 3,
+    "OPCODE_CPY" : 4,
+    "OPCODE_DEL" : 5,
+    "OPCODE_DIV" : 6,
+    "OPCODE_DLL" : 7,
+    "OPCODE_END" : 8,
+    "OPCODE_EQL" : 9,
+    "OPCODE_FLS" : 10,
+    "OPCODE_FMT" : 11,
+    "OPCODE_GET" : 12,
+    "OPCODE_GLB" : 13,
+    "OPCODE_GOD" : 14,
+    "OPCODE_GRT" : 15,
+    "OPCODE_GTE" : 16,
+    "OPCODE_INS" : 17,
+    "OPCODE_JMP" : 18,
+    "OPCODE_KEY" : 19,
+    "OPCODE_LEN" : 20,
+    "OPCODE_LOC" : 21,
+    "OPCODE_LOD" : 22,
+    "OPCODE_LOR" : 23,
+    "OPCODE_LST" : 24,
+    "OPCODE_LTE" : 25,
+    "OPCODE_MEM" : 26,
+    "OPCODE_MOV" : 27,
+    "OPCODE_MUL" : 28,
+    "OPCODE_NEQ" : 29,
+    "OPCODE_NOT" : 30,
+    "OPCODE_OPN" : 31,
+    "OPCODE_POP" : 32,
+    "OPCODE_PRT" : 33,
+    "OPCODE_PSB" : 34,
+    "OPCODE_PSF" : 35,
+    "OPCODE_PSH" : 36,
+    "OPCODE_RED" : 37,
+    "OPCODE_REF" : 38,
+    "OPCODE_RET" : 39,
+    "OPCODE_SAV" : 40,
+    "OPCODE_SPD" : 41,
+    "OPCODE_SRT" : 42,
+    "OPCODE_SUB" : 43,
+    "OPCODE_TYP" : 44,
+    "OPCODE_VRT" : 45,
+    "OPCODE_WRT" : 46,
+};                 
+
+CC()
+{
+    self := {
+        "modules" : [],
+        "assembly" : [],
+        "data" : [],
+        "identifiers" : {},
+        "included" : {},
+        "prime" : "",
+        "globals" : 0,
+        "locals" : 0,
+        "labels" : 0,
+    };
+    ret self;
+}
+
+Module_Buffer(self)
+{
+    self["index"] = 0;
+    self["buffer"] = Read(self["file"], MODULE_BUFFER_SIZE);
+    self["size"] = Len(self["buffer"]);
+}
+
+Module(name)
+{
+    self := {
+        "file" : "",
+        "name" : name,
+        "index" : 0,
+        "size" : 0,
+        "line" : 1,
+        "buffer" : "",
+    };
+    file := Open(name, "r");
+    if(Good(file))
+    {
+        self["file"] = file;
+        Module_Buffer(self);
+    }
+    ret self;
+}
+
+Meta(class, stack, path)
+{
+    self := {
+        "class" : class,
+        "stack": stack,
+        "path" : path,
+    };
+    ret self;
+}
+
+VM()
+{
+    self := {
+        "data" : [],
+        "stack" : [],
+        "frame" : [],
+        "track": {},
+        "ret" : null,
+        "instructions" : [],
+        "size" : 0, 
+        "pc" : 0,
+        "spds" : 0,
+    };
+    ret self;
+}
+
+Frame(pc, sp)
+{
+    self := {
+        "pc" : pc,
+        "sp" : sp,
+    };
+    ret self;
+}
+                   
+Main()             
+{
+    vm := VM();
+    module := Module("rr.rr");
+    Print(module);
+    ret 0;
+}

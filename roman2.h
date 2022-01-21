@@ -7,7 +7,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#define LEN(a) (sizeof(a) / sizeof(*a))
+#define RR_LEN(a) (sizeof(a) / sizeof(*a))
 
 typedef struct RR_File RR_File;
 typedef struct RR_Function RR_Function;
@@ -168,9 +168,6 @@ RR_Value_Sub(RR_Value* a, RR_Value* b);
 
 bool
 RR_Value_Pushing(RR_Value* a, RR_Value* b);
-
-bool
-RR_Value_CharAppending(RR_Value* a, RR_Value* b);
 
 void
 RR_String_Alloc(RR_String* self, int cap);

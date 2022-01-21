@@ -359,7 +359,6 @@ RR_Value*
 RR_Value_Copy(RR_Value* self)
 {
     RR_Value* copy = RR_Malloc(sizeof(*copy));
-    copy->type = self->type;
     copy->refs = 0;
     RR_Type_Copy(copy, self);
     return copy;
@@ -516,12 +515,6 @@ bool
 RR_Value_Pushing(RR_Value* a, RR_Value* b)
 {
     return a->type == TYPE_QUEUE && b->type != TYPE_QUEUE;
-}
-
-bool
-RR_Value_CharAppending(RR_Value* a, RR_Value* b)
-{
-    return a->type == TYPE_STRING && b->type == TYPE_CHAR;
 }
 
 void
@@ -1403,7 +1396,7 @@ RR_Map_Buckets(RR_Map* self)
 bool
 RR_Map_Resizable(RR_Map* self)
 {
-    return self->prime_index < (int) LEN(RR_Map_Primes) - 1;
+    return self->prime_index < (int) RR_LEN(RR_Map_Primes) - 1;
 }
 
 RR_Map*
@@ -1772,6 +1765,7 @@ RR_Type_Kill(RR_Type type, RR_Of* of)
 void
 RR_Type_Copy(RR_Value* copy, RR_Value* self)
 {
+    copy->type = self->type;
     switch(self->type)
     {
     case TYPE_FILE:
@@ -1790,7 +1784,7 @@ RR_Type_Copy(RR_Value* copy, RR_Value* self)
         copy->of.string = RR_String_Copy(self->of.string);
         break;
     case TYPE_CHAR:
-        copy->type = TYPE_STRING;
+        copy->type = TYPE_STRING; // Promote.
         copy->of.string = RR_String_FromChar(*self->of.character->value);
         break;
     case TYPE_NUMBER:

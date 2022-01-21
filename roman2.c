@@ -215,15 +215,15 @@ Module_Buffer(Module* self)
 }
 
 Module*
-Module_Init(RR_String* path)
+Module_Init(RR_String* name)
 {
-    FILE* file = fopen(RR_String_Value(path), "r");
+    FILE* file = fopen(RR_String_Value(name), "r");
     if(file)
     {
         Module* self = RR_Malloc(sizeof(*self));
         self->file = file;
         self->line = 1;
-        self->name = RR_String_Copy(path);
+        self->name = RR_String_Copy(name);
         Module_Buffer(self);
         return self;
     }
@@ -710,6 +710,7 @@ CC_Resolve(CC* self)
         {
             CC_Match(self, ":=");
             CC_Expression(self);
+            RR_Queue_PshB(self->assembly, RR_String_Init("\tcpy"));
             RR_Queue_PshB(self->assembly, RR_String_Init("\tins"));
         }
         else
@@ -762,7 +763,7 @@ CC_NativeCalling(CC* self, RR_String* ident, Meta* meta)
 }
 
 void
-CCMap(CC* self)
+CC_Map(CC* self)
 {
     RR_Queue_PshB(self->assembly, RR_String_Init("\tpsh {}"));
     CC_Match(self, "{");
@@ -776,6 +777,7 @@ CCMap(CC* self)
         }
         else
             RR_Queue_PshB(self->assembly, RR_String_Init("\tpsh true"));
+        RR_Queue_PshB(self->assembly, RR_String_Init("\tcpy"));
         RR_Queue_PshB(self->assembly, RR_String_Init("\tins"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
@@ -784,13 +786,14 @@ CCMap(CC* self)
 }
 
 void
-CCQueue(CC* self)
+CC_Queue(CC* self)
 {
     RR_Queue_PshB(self->assembly, RR_String_Init("\tpsh []"));
     CC_Match(self, "[");
     while(CC_Next(self) != ']')
     {
         CC_Expression(self);
+        RR_Queue_PshB(self->assembly, RR_String_Init("\tcpy"));
         RR_Queue_PshB(self->assembly, RR_String_Init("\tpsb"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
@@ -932,7 +935,7 @@ CC_ReserveFunctions(CC* self)
         { 1, "Print" },
         { 2, "Write" },
     };
-    for(int i = 0; i < (int) LEN(items); i++)
+    for(int i = 0; i < (int) RR_LEN(items); i++)
         CC_Define(self, CLASS_FUNCTION, items[i].args, RR_String_Init(items[i].name), RR_String_Init(""));
 }
 
@@ -970,10 +973,10 @@ CC_Factor(CC* self)
         CC_Force(self);
     else
     if(next == '{')
-        CCMap(self);
+        CC_Map(self);
     else
     if(next == '[')
-        CCQueue(self);
+        CC_Queue(self);
     else
     if(next == '"')
         CC_String(self);
@@ -1060,6 +1063,7 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_Quit(self, "the left hand side of operator `%s` must be storage", operator);
             CC_Expression(self);
+            RR_Queue_PshB(self->assembly, RR_String_Init("\tcpy"));
             RR_Queue_PshB(self->assembly, RR_String_Init("\tmov"));
         }
         else
@@ -1068,6 +1072,7 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_Quit(self, "the left hand side of operator `%s` must be storage", operator);
             CC_Expression(self);
+            RR_Queue_PshB(self->assembly, RR_String_Init("\tcpy")); // Incase of self referential list push back.
             RR_Queue_PshB(self->assembly, RR_String_Init("\tadd"));
         }
         else
@@ -1076,6 +1081,7 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_Quit(self, "the left hand side of operator `%s` must be storage", operator);
             CC_Expression(self);
+            RR_Queue_PshB(self->assembly, RR_String_Init("\tcpy")); // Incase of self referential list push front.
             RR_Queue_PshB(self->assembly, RR_String_Init("\tsub"));
         }
         else
@@ -1920,7 +1926,7 @@ void
 VM_Loc(VM* self, int address)
 {
     Frame* frame = RR_Queue_Back(self->frame);
-    RR_Value* value = RR_Queue_Get(self->stack, frame->sp + address);
+    RR_Value* value = RR_Queue_Get(self->stack, address + frame->sp);
     RR_Value_Inc(value);
     RR_Queue_PshB(self->stack, value);
 }
@@ -1957,7 +1963,7 @@ void
 VM_Psh(VM* self, int address)
 {
     RR_Value* value = RR_Queue_Get(self->data, address);
-    RR_Value* copy = RR_Value_Copy(value);
+    RR_Value* copy = RR_Value_Copy(value); // Copy, because constant.
     RR_Queue_PshB(self->stack, copy);
 }
 
@@ -1969,13 +1975,13 @@ VM_Mov(VM* self)
     if(RR_Value_Subbing(a, b))
         RR_Value_Sub(a, b);
     else
-    if(RR_Value_ToType(a) == RR_Value_ToType(b))
     {
+        RR_Type type = RR_Value_ToType(a);
+        if(type == TYPE_NULL)
+            Quit("vm: cannot move `%s` to type `null`", RR_Type_ToString(RR_Value_ToType(b)));
         RR_Type_Kill(RR_Value_ToType(a), RR_Value_Of(a));
         RR_Type_Copy(a, b);
     }
-    else
-        VMTypeMatch(self, RR_Value_ToType(a), RR_Value_ToType(b), "=");
     VM_Pop(self);
 }
 
@@ -1990,9 +1996,6 @@ VM_Add(VM* self)
         RR_Value_Inc(b);
         RR_Queue_PshB(RR_Value_ToQueue(a), b);
     }
-    else
-    if(RR_Value_CharAppending(a, b))
-        RR_String_PshB(RR_Value_ToString(a), *RR_Char_Value(RR_Value_ToChar(b)));
     else
     if(RR_Value_ToType(a) == RR_Value_ToType(b))
         switch(RR_Value_ToType(a))
@@ -2385,8 +2388,8 @@ VM_Psb(VM* self)
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
     RR_Value* b = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 1);
     VMTypeExpect(self, RR_Value_ToType(a), TYPE_QUEUE);
-    RR_Value_Inc(b);
     RR_Queue_PshB(RR_Value_ToQueue(a), b);
+    RR_Value_Inc(b);
     VM_Pop(self);
 }
 
@@ -2396,8 +2399,8 @@ VM_Psf(VM* self)
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
     RR_Value* b = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 1);
     VMTypeExpect(self, RR_Value_ToType(a), TYPE_QUEUE);
-    RR_Value_Inc(b);
     RR_Queue_PshF(RR_Value_ToQueue(a), b);
+    RR_Value_Inc(b);
     VM_Pop(self);
 }
 
@@ -2412,10 +2415,12 @@ VM_Ins(VM* self)
         VMTypeBadIndex(self, RR_Value_ToType(a), RR_Value_ToType(b));
     else
     if(RR_Value_ToType(b) == TYPE_STRING)
+    {
         RR_Map_Set(RR_Value_ToMap(a), RR_String_Copy(RR_Value_ToString(b)), c); // Keys are not reference counted.
+        RR_Value_Inc(c);
+    }
     else
         VMTypeBad(self, RR_Value_ToType(b));
-    RR_Value_Inc(c);
     VM_Pop(self);
     VM_Pop(self);
 }
