@@ -11,16 +11,21 @@ WARNINGS = -Wall -Wextra -Wpedantic -Wshadow
 CC = gcc -std=gnu99 -pedantic
 
 BIN = $(TITLE)
+SRC = $(TITLE).c
+HDR = $(TITLE).h
 LIB = lib$(TITLE).so
 
-$(BIN): roman2.c roman2.h Makefile $(LIB)
-	$(CC) -DRR_LIBROMAN2=\"$(TITLE)\" $(CFLAGS) $(WARNINGS) $< -o $@ -ldl -l$(TITLE)
-	sudo mv $(BIN) /usr/bin
-	sudo cp roman2.h /usr/include
-
-$(LIB):libroman2.c roman2.h Makefile
-	$(CC) -DRR_LIBROMAN2=\"$(TITLE)\" $(CFLAGS) $(WARNINGS) $< -o $@ -fpic -shared 
+install: $(SRC) $(HDR) Makefile
+	sudo cp $(HDR) /usr/include
+	$(CC) -DRR_LIBROMAN2=\"$(TITLE)\" $(CFLAGS) $(WARNINGS) $< -o $(LIB) -fpic -shared 
 	sudo mv $(LIB) /usr/lib
+	$(CC) -DRR_MAIN -DRR_LIBROMAN2=\"$(TITLE)\" $(CFLAGS) $(WARNINGS) $< -o $(BIN) -ldl -l$(TITLE)
+	sudo mv $(BIN) /usr/bin
+
+uninstall:
+	sudo rm /usr/include/$(HDR)
+	sudo rm /usr/lib/$(LIB)
+	sudo rm /usr/bin/$(BIN)
 
 clean:
 	rm -f $(BIN) $(LIB)

@@ -1,13 +1,41 @@
+/*
+ * The Roman II Programming Language
+ *
+ * Copyright (c) 2021-2022 Gustav Louw. All rights reserved.
+ * 
+ * This work is licensed under the terms of the MIT license.  
+ * For a copy, see <https://opensource.org/licenses/MIT>.
+ *
+ *           _____                    _____
+ *          /\    \                  /\    \
+ *         /::\    \                /::\    \
+ *        /::::\    \              /::::\    \
+ *       /::::::\    \            /::::::\    \
+ *      /:::/\:::\    \          /:::/\:::\    \
+ *     /:::/__\:::\    \        /:::/__\:::\    \
+ *    /::::\   \:::\    \      /::::\   \:::\    \
+ *   /::::::\   \:::\    \    /::::::\   \:::\    \
+ *  /:::/\:::\   \:::\____\  /:::/\:::\   \:::\____\
+ * /:::/  \:::\   \:::|    |/:::/  \:::\   \:::|    |
+ * \::/   |::::\  /:::|____|\::/   |::::\  /:::|____|
+ *  \/____|:::::\/:::/    /  \/____|:::::\/:::/    /
+ *        |:::::::::/    /         |:::::::::/    /
+ *        |::|\::::/    /          |::|\::::/    /
+ *        |::| \::/____/           |::| \::/____/
+ *        |::|  ~|                 |::|  ~|
+ *        |::|   |                 |::|   |
+ *        \::|   |                 \::|   |
+ *         \:|   |                  \:|   |
+ *          \|___|                   \|___|
+ *
+ */
+
+
 #pragma once
 
-#include <stdbool.h>
-#include <sys/time.h>
 #include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
 #include <stdio.h>
-
-#define RR_LEN(a) (sizeof(a) / sizeof(*a))
+#include <stdbool.h>
 
 typedef struct RR_File RR_File;
 typedef struct RR_Function RR_Function;

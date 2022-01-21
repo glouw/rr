@@ -1,5 +1,6 @@
-#include <unistd.h>
 #include <roman2.h>
+#include <unistd.h>
+#include <string.h>
 
 RR_Value*
 STD_GetCWD(void)

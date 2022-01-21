@@ -1,4 +1,4 @@
-make;
+make install
 cd tests
 for test in *; do
     roman2 $test 1> /dev/null

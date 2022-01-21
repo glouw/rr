@@ -26,3 +26,20 @@ main()
 
 The Roman II runtime strives to be implemented in less than 5000 lines
 of the GNU99 dialect of C.
+
+## Installation
+
+```
+make install
+```
+
+## Usage
+
+```
+roman2 Main.rr
+```
+Flags passed to `roman2`:
+
+```
+-d: Output byte code and .data segment then terminate
+```
