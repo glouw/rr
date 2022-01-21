@@ -256,39 +256,6 @@ RR_String_Get(RR_String* self, int index);
 bool
 RR_String_Del(RR_String* self, int index);
 
-int
-RR_String_EscToByte(int ch);
-
-bool
-RR_String_IsUpper(int c);
-
-bool
-RR_String_IsLower(int c);
-
-bool
-RR_String_IsAlpha(int c);
-
-bool
-RR_String_IsDigit(int c);
-
-bool
-RR_String_IsNumber(int c);
-
-bool
-RR_String_IsIdentLeader(int c);
-
-bool
-RR_String_IsIdent(int c);
-
-bool
-RR_String_IsModule(int c);
-
-bool
-RR_String_IsOp(int c);
-
-bool
-RR_String_IsSpace(int c);
-
 RR_File*
 RR_File_Init(RR_String* path, RR_String* mode);
 

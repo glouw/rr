@@ -3,7 +3,8 @@
 #include <roman2.h>
 #include <stdio.h>
 
-void Test_Add(RR_Value* a, RR_Value* b)
+RR_Value*
+Test_Add(RR_Value* a, RR_Value* b)
 {
     puts("HELLO FROM C!\n");
     RR_Value_Print(a);
@@ -13,4 +14,5 @@ void Test_Add(RR_Value* a, RR_Value* b)
     *da *= 20;
     *db *= 20;
     printf("PRINTF %f %f\n", *da, *db);
+    return RR_Value_NewNull();
 }

@@ -34,6 +34,7 @@ typedef enum
     OPCODE_DEL,
     OPCODE_DIV,
     OPCODE_DLL,
+    OPCODE_EXT,
     OPCODE_END,
     OPCODE_EQL,
     OPCODE_FLS,
@@ -130,19 +131,19 @@ typedef struct
 }
 Frame;
 
-void
+static void
 CC_Expression(CC*);
 
-bool
+static bool
 CC_Factor(CC*);
 
-void
+static void
 CC_Block(CC*, int head, int tail, bool loop);
 
-int
+static int
 VM_Run(VM*, bool arbitrary);
 
-char*
+static char*
 Class_ToString(Class self)
 {
     switch(self)
@@ -161,7 +162,7 @@ Class_ToString(Class self)
     return "N/A";
 }
 
-int*
+static int*
 Int_Init(int value)
 {
     int* self = RR_Malloc(sizeof(*self));
@@ -169,13 +170,13 @@ Int_Init(int value)
     return self;
 }
 
-void
+static void
 Int_Kill(int* self)
 {
     RR_Free(self);
 }
 
-Frame*
+static Frame*
 Frame_Init(int pc, int sp)
 {
     Frame* self = RR_Malloc(sizeof(*self));
@@ -184,13 +185,13 @@ Frame_Init(int pc, int sp)
     return self;
 }
 
-void
+static void
 Frame_RR_Free(Frame* self)
 {
     RR_Free(self);
 }
 
-Meta*
+static Meta*
 Meta_Init(Class class, int stack, RR_String* path)
 {
     Meta* self = RR_Malloc(sizeof(*self));
@@ -200,21 +201,21 @@ Meta_Init(Class class, int stack, RR_String* path)
     return self;
 }
 
-void
+static void
 Meta_Kill(Meta* self)
 {
     RR_String_Kill(self->path);
     RR_Free(self);
 }
 
-void
+static void
 Module_Buffer(Module* self)
 {
     self->index = 0;
     self->size = fread(self->buffer, sizeof(*self->buffer), MODULE_BUFFER_SIZE, self->file);
 }
 
-Module*
+static Module*
 Module_Init(RR_String* name)
 {
     FILE* file = fopen(RR_String_Value(name), "r");
@@ -230,7 +231,7 @@ Module_Init(RR_String* name)
     return NULL;
 }
 
-void
+static void
 Module_Kill(Module* self)
 {
     RR_String_Kill(self->name);
@@ -238,25 +239,25 @@ Module_Kill(Module* self)
     RR_Free(self);
 }
 
-int
+static int
 Module_Size(Module* self)
 {
     return self->size;
 }
 
-int
+static int
 Module_Empty(Module* self)
 {
     return Module_Size(self) == 0;
 }
 
-int
+static int
 Module_At(Module* self)
 {
     return self->buffer[self->index];
 }
 
-int
+static int
 Module_Peak(Module* self)
 {
     if(self->index == self->size)
@@ -264,7 +265,7 @@ Module_Peak(Module* self)
     return Module_Empty(self) ? EOF : Module_At(self);
 }
 
-void
+static void
 Module_Advance(Module* self)
 {
     int at = Module_At(self);
@@ -273,7 +274,7 @@ Module_Advance(Module* self)
     self->index += 1;
 }
 
-void
+static void
 Quit(const char* const message, ...)
 {
     va_list args;
@@ -285,26 +286,87 @@ Quit(const char* const message, ...)
     exit(0xFF);
 }
 
-void
+static void
 CC_Quit(CC* self, const char* const message, ...)
 {
     Module* back = RR_Queue_Back(self->modules);
     va_list args;
     va_start(args, message);
-    fprintf(stderr, "error: file `%s`: line `%d`: ", back ? RR_String_Value(back->name): "?", back ? back->line : 0);
+    fprintf(stderr, "error: file `%s`: line `%d`: ", back ? RR_String_Value(back->name) : "?", back ? back->line : 0);
     vfprintf(stderr, message, args);
     fprintf(stderr, "\n");
     va_end(args);
     exit(0xFE);
 }
 
-void
+static bool
+CC_String_IsUpper(int c)
+{
+    return c >= 'A' && c <= 'Z';
+}
+
+static bool
+CC_String_IsLower(int c)
+{
+    return c >= 'a' && c <= 'z';
+}
+
+static bool
+CC_String_IsAlpha(int c)
+{
+    return CC_String_IsLower(c) || CC_String_IsUpper(c);
+}
+
+static bool
+CC_String_IsDigit(int c)
+{
+    return c >= '0' && c <= '9';
+}
+
+static bool
+CC_String_IsNumber(int c)
+{
+    return CC_String_IsDigit(c) || c == '.';
+}
+
+static bool
+CC_String_IsIdentLeader(int c)
+{
+    return CC_String_IsAlpha(c) || c == '_';
+}
+
+static bool
+CC_String_IsIdent(int c)
+{
+    return CC_String_IsIdentLeader(c) || CC_String_IsDigit(c);
+}
+
+static bool
+CC_String_IsModule(int c)
+{
+    return CC_String_IsIdent(c) || c == '.';
+}
+
+static bool
+CC_String_IsOp(int c)
+{
+    return c == '*' || c == '/' || c == '%' || c == '+' || c == '-' || c == '='
+        || c == '<' || c == '>' || c == '!' || c == '&' || c == '|' || c == '?';
+}
+
+static bool
+CC_String_IsSpace(int c)
+{
+    return c == '\n' || c == '\t' || c == '\r' || c == ' ';
+}
+
+static void
 CC_Advance(CC* self)
 {
     Module_Advance(RR_Queue_Back(self->modules));
 }
 
-int
+static int
 CC_Peak(CC* self)
 {
     int peak;
@@ -323,7 +385,7 @@ CC_Peak(CC* self)
     return peak;
 }
 
-void
+static void
 CC_Spin(CC* self)
 {
     bool comment = false;
@@ -334,21 +396,21 @@ CC_Spin(CC* self)
             comment = true;
         if(peak == '\n')
             comment = false;
-        if(RR_String_IsSpace(peak) || comment)
+        if(CC_String_IsSpace(peak) || comment)
             CC_Advance(self);
         else
             break;
     }
 }
 
-int
+static int
 CC_Next(CC* self)
 {
     CC_Spin(self);
     return CC_Peak(self);
 }
 
-int
+static int
 CC_Read(CC* self)
 {
     int peak = CC_Peak(self);
@@ -357,7 +419,7 @@ CC_Read(CC* self)
     return peak;
 }
 
-RR_String*
+static RR_String*
 CC_Stream(CC* self, bool clause(int))
 {
     RR_String* str = RR_String_Init("");
@@ -367,7 +429,7 @@ CC_Stream(CC* self, bool clause(int))
     return str;
 }
 
-void
+static void
 CC_Match(CC* self, char* expect)
 {
     CC_Spin(self);
@@ -383,31 +445,56 @@ CC_Match(CC* self, char* expect)
     }
 }
 
-RR_String*
+static int
+CC_String_EscToByte(int ch)
+{
+    switch(ch)
+    {
+    case '"':
+        return '\"';
+    case '\\':
+        return '\\';
+    case '/':
+        return '/';
+    case 'b':
+        return '\b';
+    case 'f':
+        return '\f';
+    case 'n':
+        return '\n';
+    case 'r':
+        return '\r';
+    case 't':
+        return '\t';
+    }
+    return -1;
+}
+
+static RR_String*
 CC_Mod(CC* self)
 {
-    return CC_Stream(self, RR_String_IsModule);
+    return CC_Stream(self, CC_String_IsModule);
 }
 
-RR_String*
+static RR_String*
 CC_Ident(CC* self)
 {
-    return CC_Stream(self, RR_String_IsIdent);
+    return CC_Stream(self, CC_String_IsIdent);
 }
 
-RR_String*
+static RR_String*
 CC_Operator(CC* self)
 {
-    return CC_Stream(self, RR_String_IsOp);
+    return CC_Stream(self, CC_String_IsOp);
 }
 
-RR_String*
+static RR_String*
 CC_Number(CC* self)
 {
-    return CC_Stream(self, RR_String_IsNumber);
+    return CC_Stream(self, CC_String_IsNumber);
 }
 
-RR_String*
+static RR_String*
 CC_StringStream(CC* self)
 {
     RR_String* str = RR_String_Init("");
@@ -420,7 +507,7 @@ CC_StringStream(CC* self)
         if(ch == '\\')
         {
             ch = CC_Read(self);
-            int byte = RR_String_EscToByte(ch);
+            int byte = CC_String_EscToByte(ch);
             if(byte == -1)
                 CC_Quit(self, "an unknown escape char `0x%02X` was encountered", ch);
             RR_String_PshB(str, ch);
@@ -430,7 +517,7 @@ CC_StringStream(CC* self)
     return str;
 }
 
-CC*
+static CC*
 CC_Init(void)
 {
     CC* self = RR_Malloc(sizeof(*self));
@@ -446,7 +533,7 @@ CC_Init(void)
     return self;
 }
 
-void
+static void
 CC_Kill(CC* self)
 {
     RR_Queue_Kill(self->modules);
@@ -457,7 +544,7 @@ CC_Kill(CC* self)
     RR_Free(self);
 }
 
-char*
+static char*
 CC_RealPath(CC* self, RR_String* file)
 {
     RR_String* path;
@@ -482,7 +569,7 @@ CC_RealPath(CC* self, RR_String* file)
     return real;
 }
 
-void
+static void
 CC_IncludeModule(CC* self, RR_String* file)
 {
     char* real = CC_RealPath(self, file);
@@ -496,7 +583,7 @@ CC_IncludeModule(CC* self, RR_String* file)
     }
 }
 
-RR_String*
+static RR_String*
 CC_Parents(RR_String* module)
 {
     RR_String* parents = RR_String_Init("");
@@ -509,7 +596,7 @@ CC_Parents(RR_String* module)
     return parents;
 }
 
-RR_String*
+static RR_String*
 CC_ModuleName(CC* self, char* postfix)
 {
     RR_String* module = CC_Mod(self);
@@ -523,7 +610,7 @@ CC_ModuleName(CC* self, char* postfix)
     return name;
 }
 
-void
+static void
 CC_Include(CC* self)
 {
     RR_String* name = CC_ModuleName(self, ".rr");
@@ -532,25 +619,25 @@ CC_Include(CC* self)
     RR_String_Kill(name);
 }
 
-bool
+static bool
 CC_IsGlobal(Class class)
 {
     return class == CLASS_VARIABLE_GLOBAL;
 }
 
-bool
+static bool
 CC_IsLocal(Class class)
 {
     return class == CLASS_VARIABLE_LOCAL;
 }
 
-bool
+static bool
 CC_IsVariable(Class class)
 {
     return CC_IsGlobal(class) || CC_IsLocal(class);
 }
 
-bool
+static bool
 CC_IsFunction(Class class)
 {
     return class == CLASS_FUNCTION
@@ -558,7 +645,7 @@ CC_IsFunction(Class class)
         || class == CLASS_FUNCTION_PROTOTYPE_NATIVE;
 }
 
-void
+static void
 CC_Define(CC* self, Class class, int stack, RR_String* ident, RR_String* path)
 {
     Meta* old = RR_Map_Get(self->identifiers, RR_String_Value(ident));
@@ -578,21 +665,21 @@ CC_Define(CC* self, Class class, int stack, RR_String* ident, RR_String* path)
     RR_Map_Set(self->identifiers, ident, new);
 }
 
-void
+static void
 CC_ConsumeExpression(CC* self)
 {
     CC_Expression(self);
     RR_Queue_PshB(self->assembly, RR_String_Init("\tpop"));
 }
 
-void
+static void
 CC_EmptyExpression(CC* self)
 {
     CC_ConsumeExpression(self);
     CC_Match(self, ";");
 }
 
-void
+static void
 CC_Assign(CC* self)
 {
     CC_Match(self, ":=");
@@ -600,21 +687,21 @@ CC_Assign(CC* self)
     CC_Match(self, ";");
 }
 
-void
+static void
 CC_Local(CC* self, RR_String* ident)
 {
     CC_Define(self, CLASS_VARIABLE_LOCAL, self->locals, ident, RR_String_Init(""));
     self->locals += 1;
 }
 
-void
+static void
 CC_AssignLocal(CC* self, RR_String* ident)
 {
     CC_Assign(self);
     CC_Local(self, ident);
 }
 
-RR_String*
+static RR_String*
 CC_Global(CC* self, RR_String* ident)
 {
     RR_String* label = RR_String_Format("!%s", RR_String_Value(ident));
@@ -626,7 +713,7 @@ CC_Global(CC* self, RR_String* ident)
     return label;
 }
 
-RR_Queue*
+static RR_Queue*
 CC_ParamRoll(CC* self)
 {
     RR_Queue* params = RR_Queue_Init((RR_Kill) RR_String_Kill, (RR_Copy) NULL);
@@ -642,7 +729,7 @@ CC_ParamRoll(CC* self)
     return params;
 }
 
-void
+static void
 CC_DefineParams(CC* self, RR_Queue* params)
 {
     self->locals = 0;
@@ -653,7 +740,7 @@ CC_DefineParams(CC* self, RR_Queue* params)
     }
 }
 
-int
+static int
 CC_PopScope(CC* self, RR_Queue* scope)
 {
     int popped = RR_Queue_Size(scope);
@@ -669,7 +756,7 @@ CC_PopScope(CC* self, RR_Queue* scope)
     return popped;
 }
 
-Meta*
+static Meta*
 CC_Meta(CC* self, RR_String* ident)
 {
     Meta* meta = RR_Map_Get(self->identifiers, RR_String_Value(ident));
@@ -678,7 +765,7 @@ CC_Meta(CC* self, RR_String* ident)
     return meta;
 }
 
-Meta*
+static Meta*
 CC_Expect(CC* self, RR_String* ident, bool clause(Class))
 {
     Meta* meta = CC_Meta(self, ident);
@@ -687,7 +774,7 @@ CC_Expect(CC* self, RR_String* ident, bool clause(Class))
     return meta;
 }
 
-void
+static void
 CC_Ref(CC* self, RR_String* ident)
 {
     Meta* meta = CC_Expect(self, ident, CC_IsVariable);
@@ -698,7 +785,7 @@ CC_Ref(CC* self, RR_String* ident)
         RR_Queue_PshB(self->assembly, RR_String_Format("\tloc %d", meta->stack));
 }
 
-void
+static void
 CC_Resolve(CC* self)
 {
     while(CC_Next(self) == '[')
@@ -718,7 +805,7 @@ CC_Resolve(CC* self)
     }
 }
 
-int
+static int
 CC_Args(CC* self)
 {
     CC_Match(self, "(");
@@ -734,7 +821,7 @@ CC_Args(CC* self)
     return args;
 }
 
-void
+static void
 CC_Call(CC* self, RR_String* ident, int args)
 {
     for(int i = 0; i < args; i++)
@@ -743,7 +830,7 @@ CC_Call(CC* self, RR_String* ident, int args)
     RR_Queue_PshB(self->assembly, RR_String_Init("\tlod"));
 }
 
-void
+static void
 CC_IndirectCalling(CC* self, RR_String* ident, int args)
 {
     CC_Ref(self, ident);
@@ -752,17 +839,16 @@ CC_IndirectCalling(CC* self, RR_String* ident, int args)
     RR_Queue_PshB(self->assembly, RR_String_Init("\tlod"));
 }
 
-void
+static void
 CC_NativeCalling(CC* self, RR_String* ident, Meta* meta)
 {
     RR_Queue_PshB(self->assembly, RR_String_Format("\tpsh \"%s\"", RR_String_Value(meta->path)));
     RR_Queue_PshB(self->assembly, RR_String_Format("\tpsh \"%s\"", RR_String_Value(ident)));
     RR_Queue_PshB(self->assembly, RR_String_Format("\tpsh %d", meta->stack));
     RR_Queue_PshB(self->assembly, RR_String_Init("\tdll"));
-    RR_Queue_PshB(self->assembly, RR_String_Init("\tpsh null"));
 }
 
-void
+static void
 CC_Map(CC* self)
 {
     RR_Queue_PshB(self->assembly, RR_String_Init("\tpsh {}"));
@@ -785,7 +871,7 @@ CC_Map(CC* self)
     CC_Match(self, "}");
 }
 
-void
+static void
 CC_Queue(CC* self)
 {
     RR_Queue_PshB(self->assembly, RR_String_Init("\tpsh []"));
@@ -801,7 +887,7 @@ CC_Queue(CC* self)
     CC_Match(self, "]");
 }
 
-void
+static void
 CC_Not(CC* self)
 {
     CC_Match(self, "!");
@@ -809,15 +895,15 @@ CC_Not(CC* self)
     RR_Queue_PshB(self->assembly, RR_String_Init("\tnot"));
 }
 
-void
-CC_Direct(CC* self)
+static void
+CC_Direct(CC* self, bool negative)
 {
     RR_String* number = CC_Number(self);
-    RR_Queue_PshB(self->assembly, RR_String_Format("\tpsh %s", RR_String_Value(number)));
+    RR_Queue_PshB(self->assembly, RR_String_Format("\tpsh %s%s", negative ? "-" : "", RR_String_Value(number)));
     RR_String_Kill(number);
 }
 
-void
+static void
 CC_DirectCalling(CC* self, RR_String* ident, int args)
 {
     if(RR_String_Equals(ident, "Len"))
@@ -850,6 +936,9 @@ CC_DirectCalling(CC* self, RR_String* ident, int args)
     if(RR_String_Equals(ident, "Del"))
         RR_Queue_PshB(self->assembly, RR_String_Init("\tdel"));
     else
+    if(RR_String_Equals(ident, "Exit"))
+        RR_Queue_PshB(self->assembly, RR_String_Init("\text"));
+    else
     if(RR_String_Equals(ident, "Type"))
         RR_Queue_PshB(self->assembly, RR_String_Init("\ttyp"));
     else
@@ -859,7 +948,7 @@ CC_DirectCalling(CC* self, RR_String* ident, int args)
         CC_Call(self, ident, args);
 }
 
-void
+static void
 CC_Calling(CC* self, RR_String* ident)
 {
     Meta* meta = CC_Meta(self, ident);
@@ -880,7 +969,7 @@ CC_Calling(CC* self, RR_String* ident)
         CC_Quit(self, "identifier `%s` is not callable", RR_String_Value(ident));
 }
 
-bool
+static bool
 CC_Referencing(CC* self, RR_String* ident)
 {
     Meta* meta = CC_Meta(self, ident);
@@ -894,7 +983,7 @@ CC_Referencing(CC* self, RR_String* ident)
     return false;
 }
 
-bool
+static bool
 CC_Identifier(CC* self)
 {
     bool storage = false;
@@ -917,7 +1006,7 @@ CC_Identifier(CC* self)
     return storage;
 }
 
-void
+static void
 CC_ReserveFunctions(CC* self)
 {
     struct { int args; char* name; } items[] = {
@@ -931,6 +1020,7 @@ CC_ReserveFunctions(CC* self)
         { 1, "Refs"  },
         { 1, "Len"   },
         { 2, "Del"   },
+        { 1, "Exit"  },
         { 1, "Type"  },
         { 1, "Print" },
         { 2, "Write" },
@@ -939,7 +1029,7 @@ CC_ReserveFunctions(CC* self)
         CC_Define(self, CLASS_FUNCTION, items[i].args, RR_String_Init(items[i].name), RR_String_Init(""));
 }
 
-void
+static void
 CC_Force(CC* self)
 {
     CC_Match(self, "(");
@@ -947,7 +1037,7 @@ CC_Force(CC* self)
     CC_Match(self, ")");
 }
 
-void
+static void
 CC_String(CC* self)
 {
     RR_String* string = CC_StringStream(self);
@@ -955,7 +1045,21 @@ CC_String(CC* self)
     RR_String_Kill(string);
 }
 
-bool
+static void
+CC_DirectNeg(CC* self)
+{
+    CC_Match(self, "-");
+    CC_Direct(self, true);
+}
+
+static void
+CC_DirectPos(CC* self)
+{
+    CC_Match(self, "+");
+    CC_Direct(self, false);
+}
+
+static bool
 CC_Factor(CC* self)
 {
     bool storage = false;
@@ -963,11 +1067,17 @@ CC_Factor(CC* self)
     if(next == '!')
         CC_Not(self);
     else
-    if(RR_String_IsDigit(next))
-        CC_Direct(self);
+    if(CC_String_IsDigit(next))
+        CC_Direct(self, false);
     else
-    if(RR_String_IsIdent(next) || self->prime)
+    if(CC_String_IsIdent(next) || self->prime)
         storage = CC_Identifier(self);
+    else
+    if(next == '-')
+        CC_DirectNeg(self);
+    else
+    if(next == '+')
+        CC_DirectPos(self);
     else
     if(next == '(')
         CC_Force(self);
@@ -986,7 +1096,7 @@ CC_Factor(CC* self)
     return storage;
 }
 
-bool
+static bool
 CC_Term(CC* self)
 {
     bool storage = CC_Factor(self);
@@ -1044,7 +1154,7 @@ CC_Term(CC* self)
     return storage;
 }
 
-void
+static void
 CC_Expression(CC* self)
 {
     bool storage = CC_Term(self);
@@ -1140,7 +1250,7 @@ CC_Expression(CC* self)
     }
 }
 
-int
+static int
 CC_Label(CC* self)
 {
     int label = self->labels;
@@ -1148,7 +1258,7 @@ CC_Label(CC* self)
     return label;
 }
 
-void
+static void
 CC_Branch(CC* self, int head, int tail, int end, bool loop)
 {
     int next = CC_Label(self);
@@ -1161,7 +1271,7 @@ CC_Branch(CC* self, int head, int tail, int end, bool loop)
     RR_Queue_PshB(self->assembly, RR_String_Format("@l%d:", next));
 }
 
-RR_String*
+static RR_String*
 CC_Branches(CC* self, int head, int tail, int loop)
 {
     int end = CC_Label(self);
@@ -1184,7 +1294,7 @@ CC_Branches(CC* self, int head, int tail, int loop)
     return backup;
 }
 
-void
+static void
 CC_While(CC* self)
 {
     int A = CC_Label(self);
@@ -1199,7 +1309,7 @@ CC_While(CC* self)
     RR_Queue_PshB(self->assembly, RR_String_Format("@l%d:", B));
 }
 
-void
+static void
 CC_For(CC* self)
 {
     int A = CC_Label(self);
@@ -1227,7 +1337,7 @@ CC_For(CC* self)
     CC_PopScope(self, init);
 }
 
-void
+static void
 CC_Ret(CC* self)
 {
     CC_Expression(self);
@@ -1236,7 +1346,7 @@ CC_Ret(CC* self)
     CC_Match(self, ";");
 }
 
-void
+static void
 CC_Block(CC* self, int head, int tail, bool loop)
 {
     RR_Queue* scope = RR_Queue_Init((RR_Kill) RR_String_Kill, (RR_Copy) NULL);
@@ -1244,7 +1354,7 @@ CC_Block(CC* self, int head, int tail, bool loop)
     RR_String* prime = NULL; 
     while(CC_Next(self) != '}')
     {
-        if(RR_String_IsIdentLeader(CC_Next(self)) || prime)
+        if(CC_String_IsIdentLeader(CC_Next(self)) || prime)
         {
             RR_String* ident = NULL;
             if(prime)
@@ -1310,7 +1420,7 @@ CC_Block(CC* self, int head, int tail, bool loop)
     CC_PopScope(self, scope);
 }
 
-void
+static void
 CC_FunctionPrototypeNative(CC* self, RR_Queue* params, RR_String* ident, RR_String* path)
 {
     CC_Define(self, CLASS_FUNCTION_PROTOTYPE_NATIVE, RR_Queue_Size(params), ident, path);
@@ -1318,7 +1428,7 @@ CC_FunctionPrototypeNative(CC* self, RR_Queue* params, RR_String* ident, RR_Stri
     CC_Match(self, ";");
 }
 
-void
+static void
 CC_FunctionPrototype(CC* self, RR_Queue* params, RR_String* ident)
 {
     CC_Define(self, CLASS_FUNCTION_PROTOTYPE, RR_Queue_Size(params), ident, RR_String_Init(""));
@@ -1326,7 +1436,7 @@ CC_FunctionPrototype(CC* self, RR_Queue* params, RR_String* ident)
     CC_Match(self, ";");
 }
 
-RR_String*
+static RR_String*
 CC_GetModuleLibs(RR_String* source)
 {
     RR_File* file = RR_File_Init(RR_String_Copy(source), RR_String_Init("r"));
@@ -1351,7 +1461,7 @@ CC_GetModuleLibs(RR_String* source)
     return RR_String_Init("");;
 }
 
-void
+static void
 CC_ImportModule(CC* self, RR_String* file)
 {
     char* real = CC_RealPath(self, file);
@@ -1384,7 +1494,7 @@ CC_ImportModule(CC* self, RR_String* file)
     RR_Free(real);
 }
 
-void
+static void
 CC_Import(CC* self)
 {
     RR_String* name = CC_ModuleName(self, ".c");
@@ -1392,7 +1502,7 @@ CC_Import(CC* self)
     RR_String_Kill(name);
 }
 
-void
+static void
 CC_Function(CC* self, RR_String* ident)
 {
     RR_Queue* params = CC_ParamRoll(self);
@@ -1411,7 +1521,7 @@ CC_Function(CC* self, RR_String* ident)
         CC_FunctionPrototype(self, params, ident);
 }
 
-void
+static void
 CC_Spool(CC* self, RR_Queue* start)
 {
     RR_Queue* spool = RR_Queue_Init((RR_Kill) RR_String_Kill, NULL);
@@ -1431,7 +1541,7 @@ CC_Spool(CC* self, RR_Queue* start)
     RR_Queue_Kill(spool);
 }
 
-void
+static void
 CC_Parse(CC* self)
 {
     RR_Queue* start = RR_Queue_Init((RR_Kill) RR_String_Kill, (RR_Copy) NULL);
@@ -1466,7 +1576,7 @@ CC_Parse(CC* self)
     RR_Queue_Kill(start);
 }
 
-RR_Map*
+static RR_Map*
 ASM_Label(RR_Queue* assembly, int* size)
 {
     RR_Map* labels = RR_Map_Init((RR_Kill) RR_Free, (RR_Copy) NULL);
@@ -1488,17 +1598,24 @@ ASM_Label(RR_Queue* assembly, int* size)
     return labels;
 }
 
-void
+static void
 ASM_Dump(RR_Queue* assembly)
 {
+    int instructions = 0;
+    int labels = 0;
     for(int i = 0; i < RR_Queue_Size(assembly); i++)
     {
         RR_String* assem = RR_Queue_Get(assembly, i);
+        if(RR_String_Value(assem)[0] == '\t')
+            instructions += 1;
+        else
+            labels += 1;
         puts(RR_String_Value(assem));
     }
+    printf("instructions %d : labels %d\n", instructions, labels);
 }
 
-void
+static void
 VMTypeExpect(VM* self, RR_Type a, RR_Type b)
 {
     (void) self;
@@ -1506,14 +1623,14 @@ VMTypeExpect(VM* self, RR_Type a, RR_Type b)
         Quit("`vm: encountered type `%s` but expected type `%s`", RR_Type_ToString(a), RR_Type_ToString(b));
 }
 
-void
+static void
 VM_BadOperator(VM* self, RR_Type a, const char* op)
 {
     (void) self;
     Quit("vm: type `%s` not supported with operator `%s`", RR_Type_ToString(a), op);
 }
 
-void
+static void
 VMTypeMatch(VM* self, RR_Type a, RR_Type b, const char* op)
 {
     (void) self;
@@ -1521,28 +1638,28 @@ VMTypeMatch(VM* self, RR_Type a, RR_Type b, const char* op)
         Quit("vm: type `%s` and type `%s` mismatch with operator `%s`", RR_Type_ToString(a), RR_Type_ToString(b), op);
 }
 
-void
+static void
 VM_OutOfBounds(VM* self, RR_Type a, int index)
 {
     (void) self;
     Quit("vm: type `%s` was accessed out of bounds with index `%d`", RR_Type_ToString(a), index);
 }
 
-void
+static void
 VMTypeBadIndex(VM* self, RR_Type a, RR_Type b)
 {
     (void) self;
     Quit("vm: type `%s` cannot be indexed with type `%s`", RR_Type_ToString(a), RR_Type_ToString(b));
 }
 
-void
+static void
 VMTypeBad(VM* self, RR_Type a)
 {
     (void) self;
     Quit("vm: type `%s` cannot be used for this operation", RR_Type_ToString(a));
 }
 
-void
+static void
 VM_ArgMatch(VM* self, int a, int b)
 {
     (void) self;
@@ -1550,14 +1667,14 @@ VM_ArgMatch(VM* self, int a, int b)
         Quit("vm: expected `%d` arguments but encountered `%d` arguments", a, b);
 }
 
-void
+static void
 VM_UnknownEscapeChar(VM* self, int esc)
 {
     (void) self;
     Quit("vm: an unknown escape character `0x%02X` was encountered\n", esc);
 }
 
-void
+static void
 VM_RefImpurity(VM* self, RR_Value* value)
 {
     (void) self;
@@ -1565,7 +1682,7 @@ VM_RefImpurity(VM* self, RR_Value* value)
     Quit("vm: the .data segment value `%s` contained `%d` references at the time of exit", RR_String_Value(print), RR_Value_Refs(value));
 }
 
-VM*
+static VM*
 VM_Init(int size)
 {
     VM* self = RR_Malloc(sizeof(*self));
@@ -1581,7 +1698,7 @@ VM_Init(int size)
     return self;
 }
 
-void
+static void
 VM_Kill(VM* self)
 {
     RR_Queue_Kill(self->data);
@@ -1592,19 +1709,19 @@ VM_Kill(VM* self)
     RR_Free(self);
 }
 
-void
+static void
 VM_Data(VM* self)
 {
-    fprintf(stderr, ".data:\n");
+    printf(".data:\n");
     for(int i = 0; i < RR_Queue_Size(self->data); i++)
     {
         RR_Value* value = RR_Queue_Get(self->data, i);
-        fprintf(stderr, "%4d : %2d : ", i, RR_Value_Refs(value));
+        printf("%4d : %2d : ", i, RR_Value_Refs(value));
         RR_Value_Print(value);
     }
 }
 
-void
+static void
 VM_AssertRefCounts(VM* self)
 {
     for(int i = 0; i < RR_Queue_Size(self->data); i++)
@@ -1615,13 +1732,13 @@ VM_AssertRefCounts(VM* self)
     }
 }
 
-void
+static void
 VM_Pop(VM* self)
 {
     RR_Queue_PopB(self->stack);
 }
 
-RR_String*
+static RR_String*
 VM_ConvertEscs(VM* self, char* chars)
 {
     int len = strlen(chars);
@@ -1633,7 +1750,7 @@ VM_ConvertEscs(VM* self, char* chars)
         {
             i += 1;
             int esc = chars[i];
-            ch = RR_String_EscToByte(esc);
+            ch = CC_String_EscToByte(esc);
             if(ch == -1)
                 VM_UnknownEscapeChar(self, esc);
         }
@@ -1642,7 +1759,7 @@ VM_ConvertEscs(VM* self, char* chars)
     return string;
 }
 
-void
+static void
 VM_Store(VM* self, RR_Map* labels, char* operand)
 {
     RR_Value* value;
@@ -1675,7 +1792,7 @@ VM_Store(VM* self, RR_Map* labels, char* operand)
     if(ch == 'n')
         value = RR_Value_NewNull();
     else
-    if(RR_String_IsNumber(ch))
+    if(CC_String_IsDigit(ch) || ch == '-')
         value = RR_Value_NewNumber(atof(operand));
     else
     {
@@ -1685,14 +1802,14 @@ VM_Store(VM* self, RR_Map* labels, char* operand)
     RR_Queue_PshB(self->data, value);
 }
 
-int
+static int
 VM_Datum(VM* self, RR_Map* labels, char* operand)
 {
     VM_Store(self, labels, operand);
     return ((RR_Queue_Size(self->data) - 1) << 8) | OPCODE_PSH;
 }
 
-int
+static int
 VM_Indirect(Opcode oc, RR_Map* labels, char* label)
 {
     int* address = RR_Map_Get(labels, label);
@@ -1701,13 +1818,13 @@ VM_Indirect(Opcode oc, RR_Map* labels, char* label)
     return *address << 8 | oc;
 }
 
-int
+static int
 VM_Direct(Opcode oc, char* number)
 {
     return (atoi(number) << 8) | oc;
 }
 
-VM*
+static VM*
 VM_Assemble(RR_Queue* assembly)
 {
     int size = 0;
@@ -1751,6 +1868,9 @@ VM_Assemble(RR_Queue* assembly)
             else
             if(RR_Equals(mnemonic, "eql"))
                 instruction = OPCODE_EQL;
+            else
+            if(RR_Equals(mnemonic, "ext"))
+                instruction = OPCODE_EXT;
             else
             if(RR_Equals(mnemonic, "fls"))
                 instruction = OPCODE_FLS;
@@ -1873,7 +1993,7 @@ VM_Assemble(RR_Queue* assembly)
     return self;
 }
 
-void
+static void
 VM_Cal(VM* self, int address)
 {
     int sp = RR_Queue_Size(self->stack) - self->spds;
@@ -1882,7 +2002,7 @@ VM_Cal(VM* self, int address)
     self->spds = 0;
 }
 
-void
+static void
 VM_Cpy(VM* self)
 {
     RR_Value* back = RR_Queue_Back(self->stack);
@@ -1891,7 +2011,7 @@ VM_Cpy(VM* self)
     RR_Queue_PshB(self->stack, value);
 }
 
-int
+static int
 VM_End(VM* self)
 {
     VMTypeExpect(self, RR_Value_ToType(self->ret), TYPE_NUMBER);
@@ -1900,7 +2020,7 @@ VM_End(VM* self)
     return ret;
 }
 
-void
+static void
 VM_Fls(VM* self)
 {
     Frame* frame = RR_Queue_Back(self->frame);
@@ -1914,7 +2034,7 @@ VM_Fls(VM* self)
     RR_Queue_PopB(self->frame);
 }
 
-void
+static void
 VM_Glb(VM* self, int address)
 {
     RR_Value* value = RR_Queue_Get(self->stack, address);
@@ -1922,7 +2042,7 @@ VM_Glb(VM* self, int address)
     RR_Queue_PshB(self->stack, value);
 }
 
-void
+static void
 VM_Loc(VM* self, int address)
 {
     Frame* frame = RR_Queue_Back(self->frame);
@@ -1931,13 +2051,13 @@ VM_Loc(VM* self, int address)
     RR_Queue_PshB(self->stack, value);
 }
 
-void
+static void
 VM_Jmp(VM* self, int address)
 {
     self->pc = address;
 }
 
-void
+static void
 VM_Ret(VM* self)
 {
     Frame* frame = RR_Queue_Back(self->frame);
@@ -1945,13 +2065,13 @@ VM_Ret(VM* self)
     RR_Queue_PopB(self->frame);
 }
 
-void
+static void
 VM_Lod(VM* self)
 {
     RR_Queue_PshB(self->stack, self->ret);
 }
 
-void
+static void
 VM_Sav(VM* self)
 {
     RR_Value* value = RR_Queue_Back(self->stack);
@@ -1959,7 +2079,7 @@ VM_Sav(VM* self)
     self->ret = value;
 }
 
-void
+static void
 VM_Psh(VM* self, int address)
 {
     RR_Value* value = RR_Queue_Get(self->data, address);
@@ -1967,7 +2087,7 @@ VM_Psh(VM* self, int address)
     RR_Queue_PshB(self->stack, copy);
 }
 
-void
+static void
 VM_Mov(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -1985,7 +2105,7 @@ VM_Mov(VM* self)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Add(VM* self)
 {
     char* operator = "+";
@@ -2024,7 +2144,7 @@ VM_Add(VM* self)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Sub(VM* self)
 {
     char* operator = "-";
@@ -2059,7 +2179,7 @@ VM_Sub(VM* self)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Mul(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2070,7 +2190,7 @@ VM_Mul(VM* self)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Div(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2081,7 +2201,7 @@ VM_Div(VM* self)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Dll(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 3);
@@ -2090,48 +2210,56 @@ VM_Dll(VM* self)
     VMTypeExpect(self, RR_Value_ToType(a), TYPE_STRING);
     VMTypeExpect(self, RR_Value_ToType(b), TYPE_STRING);
     VMTypeExpect(self, RR_Value_ToType(c), TYPE_NUMBER);
-    typedef void* (*Fun)();
-    Fun fun;
+    typedef RR_Value* (*Call)();
+    Call call;
     void* so = dlopen(RR_String_Value(RR_Value_ToString(a)), RTLD_NOW | RTLD_GLOBAL);
     if(so == NULL)
         Quit("vm: could not open shared object library `%s`\n", RR_String_Value(RR_Value_ToString(a)));
-    *(void**)(&fun) = dlsym(so, RR_String_Value(RR_Value_ToString(b)));
-    if(fun == NULL)
+    *(void**)(&call) = dlsym(so, RR_String_Value(RR_Value_ToString(b)));
+    if(call == NULL)
         Quit("vm: could not open shared object function `%s` from shared object library `%s`\n", RR_String_Value(RR_Value_ToString(b)), RR_String_Value(RR_Value_ToString(a)));
-    int start = RR_Queue_Size(self->stack) - 3;
+    int params = 3;
+    int start = RR_Queue_Size(self->stack) - params;
     int args = *RR_Value_ToNumber(c);
+    RR_Value* value = NULL;
     switch(args)
     {
     case 0:
-        fun(); // This is totally bonkers. Is there a way to pass an array through dlsym?
+        value = call(); // This is totally bonkers. Is there a way to pass an array through dlsym?
         break;
     case 1:
-        fun(RR_Queue_Get(self->stack, start - 1));
+        value = call(
+            RR_Queue_Get(self->stack, start - 1));
         break;
     case 2:
-        fun(RR_Queue_Get(self->stack, start - 2),
+        value = call(
+            RR_Queue_Get(self->stack, start - 2),
             RR_Queue_Get(self->stack, start - 1));
         break;
     case 3:
-        fun(RR_Queue_Get(self->stack, start - 3),
+        value = call(
+            RR_Queue_Get(self->stack, start - 3),
             RR_Queue_Get(self->stack, start - 2),
             RR_Queue_Get(self->stack, start - 1));
         break;
     case 4:
-        fun(RR_Queue_Get(self->stack, start - 4),
+        value = call(
+            RR_Queue_Get(self->stack, start - 4),
             RR_Queue_Get(self->stack, start - 3),
             RR_Queue_Get(self->stack, start - 2),
             RR_Queue_Get(self->stack, start - 1));
         break;
     case 5:
-        fun(RR_Queue_Get(self->stack, start - 5),
+        value = call(
+            RR_Queue_Get(self->stack, start - 5),
             RR_Queue_Get(self->stack, start - 4),
             RR_Queue_Get(self->stack, start - 3),
             RR_Queue_Get(self->stack, start - 2),
             RR_Queue_Get(self->stack, start - 1));
         break;
     case 6:
-        fun(RR_Queue_Get(self->stack, start - 6),
+        value = call(
+            RR_Queue_Get(self->stack, start - 6),
             RR_Queue_Get(self->stack, start - 5),
             RR_Queue_Get(self->stack, start - 4),
             RR_Queue_Get(self->stack, start - 3),
@@ -2139,7 +2267,8 @@ VM_Dll(VM* self)
             RR_Queue_Get(self->stack, start - 1));
         break;
     case 7:
-        fun(RR_Queue_Get(self->stack, start - 7),
+        value = call(
+            RR_Queue_Get(self->stack, start - 7),
             RR_Queue_Get(self->stack, start - 6),
             RR_Queue_Get(self->stack, start - 5),
             RR_Queue_Get(self->stack, start - 4),
@@ -2148,7 +2277,8 @@ VM_Dll(VM* self)
             RR_Queue_Get(self->stack, start - 1));
         break;
     case 8:
-        fun(RR_Queue_Get(self->stack, start - 8),
+        value = call(
+            RR_Queue_Get(self->stack, start - 8),
             RR_Queue_Get(self->stack, start - 7),
             RR_Queue_Get(self->stack, start - 6),
             RR_Queue_Get(self->stack, start - 5),
@@ -2158,7 +2288,8 @@ VM_Dll(VM* self)
             RR_Queue_Get(self->stack, start - 1));
         break;
     case 9:
-        fun(RR_Queue_Get(self->stack, start - 9),
+        value = call(
+            RR_Queue_Get(self->stack, start - 9),
             RR_Queue_Get(self->stack, start - 8),
             RR_Queue_Get(self->stack, start - 7),
             RR_Queue_Get(self->stack, start - 6),
@@ -2171,14 +2302,13 @@ VM_Dll(VM* self)
     default:
         Quit("only 9 arguments max are supported for native functions calls");
     }
-    VM_Pop(self);
-    VM_Pop(self);
-    VM_Pop(self);
-    for(int i = 0; i < args; i++)
+    for(int i = 0; i < args + params; i++)
         VM_Pop(self);
+    RR_Value_Print(value);
+    RR_Queue_PshB(self->stack, value);
 }
 
-void
+static void
 VM_Vrt(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2195,7 +2325,7 @@ VM_Vrt(VM* self)
     self->pc = pc;
 }
 
-void
+static void
 VM_RangedSort(VM* self, RR_Queue* queue, RR_Value* compare, int left, int right)
 {
     if(left >= right)
@@ -2225,7 +2355,7 @@ VM_RangedSort(VM* self, RR_Queue* queue, RR_Value* compare, int left, int right)
    VM_RangedSort(self, queue, compare, last + 1, right);
 }
 
-void
+static void
 VM_Sort(VM* self, RR_Queue* queue, RR_Value* compare)
 {
     VMTypeExpect(self, RR_Value_ToType(compare), TYPE_FUNCTION);
@@ -2233,7 +2363,7 @@ VM_Sort(VM* self, RR_Queue* queue, RR_Value* compare)
     VM_RangedSort(self, queue, compare, 0, RR_Queue_Size(queue) - 1);
 }
 
-void
+static void
 VM_Srt(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2246,7 +2376,7 @@ VM_Srt(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewNull());
 }
 
-void
+static void
 VM_Lst(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2258,7 +2388,7 @@ VM_Lst(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
 }
 
-void
+static void
 VM_Lte(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2270,7 +2400,7 @@ VM_Lte(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
 }
 
-void
+static void
 VM_Grt(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2282,7 +2412,7 @@ VM_Grt(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
 }
 
-void
+static void
 VM_Gte(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2294,7 +2424,7 @@ VM_Gte(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
 }
 
-void
+static void
 VM_And(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2305,7 +2435,7 @@ VM_And(VM* self)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Lor(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2316,7 +2446,7 @@ VM_Lor(VM* self)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Eql(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2327,7 +2457,7 @@ VM_Eql(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
 }
 
-void
+static void
 VM_Neq(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2338,13 +2468,13 @@ VM_Neq(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
 }
 
-void
+static void
 VM_Spd(VM* self)
 {
     self->spds += 1;
 }
 
-void
+static void
 VM_Not(VM* self)
 {
     RR_Value* value = RR_Queue_Back(self->stack);
@@ -2352,7 +2482,7 @@ VM_Not(VM* self)
     *RR_Value_ToBool(value) = !*RR_Value_ToBool(value);
 }
 
-void
+static void
 VM_Brf(VM* self, int address)
 {
     RR_Value* value = RR_Queue_Back(self->stack);
@@ -2362,7 +2492,7 @@ VM_Brf(VM* self, int address)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Prt(VM* self)
 {
     RR_Value* value = RR_Queue_Back(self->stack);
@@ -2373,7 +2503,7 @@ VM_Prt(VM* self)
     RR_String_Kill(print);
 }
 
-void
+static void
 VM_Len(VM* self)
 {
     RR_Value* value = RR_Queue_Back(self->stack);
@@ -2382,7 +2512,7 @@ VM_Len(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewNumber(len));
 }
 
-void
+static void
 VM_Psb(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2393,7 +2523,7 @@ VM_Psb(VM* self)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Psf(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2404,7 +2534,7 @@ VM_Psf(VM* self)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Ins(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 3);
@@ -2425,7 +2555,7 @@ VM_Ins(VM* self)
     VM_Pop(self);
 }
 
-void
+static void
 VM_Ref(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 1);
@@ -2434,7 +2564,7 @@ VM_Ref(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewNumber(refs));
 }
 
-RR_Value*
+static RR_Value*
 VM_IndexRR_Queue(VM* self, RR_Value* queue, RR_Value* index)
 {
     RR_Value* value = RR_Queue_Get(RR_Value_ToQueue(queue), *RR_Value_ToNumber(index));
@@ -2444,7 +2574,7 @@ VM_IndexRR_Queue(VM* self, RR_Value* queue, RR_Value* index)
     return value;
 }
 
-RR_Value*
+static RR_Value*
 VM_IndexRR_String(VM* self, RR_Value* queue, RR_Value* index)
 {
     RR_Char* character = RR_Char_Init(queue, *RR_Value_ToNumber(index));
@@ -2455,7 +2585,7 @@ VM_IndexRR_String(VM* self, RR_Value* queue, RR_Value* index)
     return value;
 }
 
-RR_Value*
+static RR_Value*
 VM_Index(VM* self, RR_Value* storage, RR_Value* index)
 {
     if(RR_Value_ToType(storage) == TYPE_QUEUE)
@@ -2467,7 +2597,7 @@ VM_Index(VM* self, RR_Value* storage, RR_Value* index)
     return NULL;
 }
 
-RR_Value*
+static RR_Value*
 VM_Lookup(VM* self, RR_Value* map, RR_Value* index)
 {
     VMTypeExpect(self, RR_Value_ToType(map), TYPE_MAP);
@@ -2477,7 +2607,7 @@ VM_Lookup(VM* self, RR_Value* map, RR_Value* index)
     return value;
 }
 
-void
+static void
 VM_Get(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2498,7 +2628,7 @@ VM_Get(VM* self)
         RR_Queue_PshB(self->stack, value);
 }
 
-void
+static void
 VM_Fmt(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2531,7 +2661,7 @@ VM_Fmt(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewString(formatted));
 }
 
-void
+static void
 VM_Typ(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 1);
@@ -2540,7 +2670,7 @@ VM_Typ(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewString(RR_String_Init(RR_Type_ToString(type))));
 }
 
-void
+static void
 VM_Del(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2577,7 +2707,7 @@ VM_Del(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewNull());
 }
 
-void
+static void
 VM_Mem(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2588,7 +2718,7 @@ VM_Mem(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
 }
 
-void
+static void
 VM_Opn(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2601,7 +2731,7 @@ VM_Opn(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewFile(file));
 }
 
-void
+static void
 VM_Red(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2625,7 +2755,7 @@ VM_Red(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewString(buffer));
 }
 
-void
+static void
 VM_Wrt(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 2);
@@ -2640,7 +2770,7 @@ VM_Wrt(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewNumber(bytes));
 }
 
-void
+static void
 VM_God(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 1);
@@ -2650,7 +2780,7 @@ VM_God(VM* self)
     RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
 }
 
-void
+static void
 VM_Key(VM* self)
 {
     RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 1);
@@ -2660,7 +2790,18 @@ VM_Key(VM* self)
     RR_Queue_PshB(self->stack, queue);
 }
 
-int
+static void
+VM_Ext(VM* self)
+{
+    RR_Value* a = RR_Queue_Get(self->stack, RR_Queue_Size(self->stack) - 1);
+    VMTypeExpect(self, RR_Value_ToType(a), TYPE_NUMBER);
+    double* number = RR_Value_ToNumber(a);
+    exit(*number);
+    VM_Pop(self);
+    RR_Queue_PshB(self->stack, RR_Value_NewNull());
+}
+
+static int
 VM_Run(VM* self, bool arbitrary)
 {
     while(true)
@@ -2681,6 +2822,7 @@ VM_Run(VM* self, bool arbitrary)
         case OPCODE_DLL: VM_Dll(self); break;
         case OPCODE_END: return VM_End(self);
         case OPCODE_EQL: VM_Eql(self); break;
+        case OPCODE_EXT: VM_Ext(self); break;
         case OPCODE_FLS: VM_Fls(self); break;
         case OPCODE_FMT: VM_Fmt(self); break;
         case OPCODE_GET: VM_Get(self); break;
@@ -2725,7 +2867,7 @@ VM_Run(VM* self, bool arbitrary)
     }
 }
 
-Args
+static Args
 Args_Parse(int argc, char* argv[])
 {
     Args self = {
@@ -2747,7 +2889,7 @@ Args_Parse(int argc, char* argv[])
     return self;
 }
 
-void
+static void
 Args_Help(void)
 {
     puts(

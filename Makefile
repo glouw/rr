@@ -1,5 +1,5 @@
 TITLE = roman2
-DEBUG = 1
+DEBUG = 0
 
 ifeq (1,$(DEBUG))
 CFLAGS = -g -fsanitize=address -fsanitize=undefined
