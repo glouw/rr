@@ -277,6 +277,12 @@ Free(void* pointer)
     free(pointer);
 }
 
+static void*
+Calloc(size_t nmemb, size_t size)
+{
+    return calloc(nmemb, size);
+}
+
 static void
 Delete(RR_Kill kill, void* value)
 {
@@ -961,7 +967,7 @@ RR_File_File(RR_File* self)
 RR_Function*
 RR_Function_Init(RR_String* name, size_t size, size_t address)
 {
-    RR_Function* self = malloc(sizeof(*self));
+    RR_Function* self = Malloc(sizeof(*self));
     self->name = name;
     self->size = size;
     self->address = address;
@@ -1522,7 +1528,7 @@ static void
 Map_Alloc(RR_Map* self, size_t index)
 {
     self->prime_index = index;
-    self->bucket = calloc(RR_Map_Buckets(self), sizeof(*self->bucket));
+    self->bucket = Calloc(RR_Map_Buckets(self), sizeof(*self->bucket));
 }
 
 static void
