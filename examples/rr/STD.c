@@ -5,9 +5,18 @@
 RR_Value*
 STD_GetCWD(void)
 {
-    RR_String* path = RR_String_Init("");
-    RR_String_Resize(path, 4096);
-    getcwd(RR_String_Begin(path), RR_String_Size(path));
-    strcat(RR_String_Begin(path), "/");
-    return RR_Value_NewString(path);
+    char buffer[4096] = { '\0' };
+    getcwd(buffer, sizeof(buffer));
+    strcat(buffer, "/");
+    return RR_Value_NewString(RR_String_Init(buffer));
+}
+
+RR_Value*
+STD_RealPath(RR_Value* path)
+{
+    char* real = realpath(RR_String_Value(RR_Value_ToString(path)), NULL);
+    if(real == NULL)
+        return RR_Value_NewNull();
+    else
+        return RR_Value_NewString(RR_String_Init(real));
 }

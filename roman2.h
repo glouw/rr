@@ -44,9 +44,6 @@ typedef struct RR_Char RR_Char;
 typedef struct RR_Map RR_Map;
 typedef struct RR_String RR_String;
 typedef struct RR_Value RR_Value;
-typedef struct RR_Block RR_Block;
-typedef struct RR_Node RR_Node;
-typedef union RR_Of RR_Of;
 
 typedef bool
 (*RR_Compare)(void*, void*);
@@ -70,24 +67,6 @@ typedef enum
     TYPE_NULL,
 }
 RR_Type;
-
-void*
-RR_Malloc(int size);
-
-void*
-RR_Realloc(void *ptr, size_t size);
-
-void
-RR_Free(void* pointer);
-
-double
-RR_Microseconds(void);
-
-void
-RR_Delete(RR_Kill kill, void* value);
-
-bool
-RR_Equals(char* a, char* b);
 
 RR_Type
 RR_Value_ToType(RR_Value* self);
@@ -116,14 +95,11 @@ RR_Value_ToBool(RR_Value* self);
 RR_Function*
 RR_Value_ToFunction(RR_Value* self);
 
-int
+size_t
 RR_Value_Len(RR_Value* self);
 
-int
+size_t
 RR_Value_Refs(RR_Value* self);
-
-RR_Of*
-RR_Value_Of(RR_Value* self);
 
 void
 RR_Value_Dec(RR_Value* self);
@@ -153,9 +129,6 @@ RR_Value*
 RR_Value_Copy(RR_Value* self);
 
 RR_Value*
-RR_Value_Init(RR_Of of, RR_Type type);
-
-RR_Value*
 RR_Value_NewQueue(void);
 
 RR_Value*
@@ -183,22 +156,13 @@ RR_Value*
 RR_Value_NewNull(void);
 
 RR_String*
-RR_Value_Sprint(RR_Value* self, bool newline, int indents);
+RR_Value_Sprint(RR_Value* self, bool newline, size_t indents);
 
 void
 RR_Value_Print(RR_Value* self);
 
-bool
-RR_Value_Subbing(RR_Value* a, RR_Value* b);
-
 void
 RR_Value_Sub(RR_Value* a, RR_Value* b);
-
-bool
-RR_Value_Pushing(RR_Value* a, RR_Value* b);
-
-void
-RR_String_Alloc(RR_String* self, int cap);
 
 char*
 RR_String_Value(RR_String* self);
@@ -209,16 +173,13 @@ RR_String_Init(char* string);
 void
 RR_String_Kill(RR_String* self);
 
-RR_String*
-RR_String_FromChar(char c);
-
 void
 RR_String_Swap(RR_String** self, RR_String** other);
 
 RR_String*
 RR_String_Copy(RR_String* self);
 
-int
+size_t
 RR_String_Size(RR_String* self);
 
 void
@@ -233,20 +194,20 @@ RR_String_Back(RR_String* self);
 char*
 RR_String_Begin(RR_String* self);
 
-int
+size_t
 RR_String_Empty(RR_String* self);
 
 void
 RR_String_PshB(RR_String* self, char ch);
 
 RR_String*
-RR_String_Indent(int indents);
+RR_String_Indent(size_t indents);
 
 void
 RR_String_PopB(RR_String* self);
 
 void
-RR_String_Resize(RR_String* self, int size);
+RR_String_Resize(RR_String* self, size_t size);
 
 bool
 RR_String_Equals(RR_String* a, char* b);
@@ -257,9 +218,6 @@ RR_String_Equal(RR_String* a, RR_String* b);
 void
 RR_String_Appends(RR_String* self, char* str);
 
-void
-RR_String_Append(RR_String* self, RR_String* other);
-
 RR_String*
 RR_String_Base(RR_String* path);
 
@@ -267,22 +225,13 @@ RR_String*
 RR_String_Moves(char** from);
 
 RR_String*
-RR_String_Skip(RR_String* self, char c);
-
-bool
-RR_String_IsBoolean(RR_String* ident);
-
-bool
-RR_String_IsNull(RR_String* ident);
-
-RR_String*
 RR_String_Format(char* format, ...);
 
 char*
-RR_String_Get(RR_String* self, int index);
+RR_String_Get(RR_String* self, size_t index);
 
 bool
-RR_String_Del(RR_String* self, int index);
+RR_String_Del(RR_String* self, size_t index);
 
 RR_File*
 RR_File_Init(RR_String* path, RR_String* mode);
@@ -296,14 +245,14 @@ RR_File_Kill(RR_File* self);
 RR_File*
 RR_File_Copy(RR_File* self);
 
-int
+size_t
 RR_File_Size(RR_File* self);
 
 FILE*
 RR_File_File(RR_File* self);
 
 RR_Function*
-RR_Function_Init(RR_String* name, int size, int address);
+RR_Function_Init(RR_String* name, size_t size, size_t address);
 
 void
 RR_Function_Kill(RR_Function* self);
@@ -311,26 +260,20 @@ RR_Function_Kill(RR_Function* self);
 RR_Function*
 RR_Function_Copy(RR_Function* self);
 
-int
+size_t
 RR_Function_Size(RR_Function* self);
 
-int
+size_t
 RR_Function_Address(RR_Function* self);
 
 bool
 RR_Function_Equal(RR_Function* a, RR_Function* b);
 
-int
+size_t
 RR_Queue_Size(RR_Queue* self);
 
 bool
 RR_Queue_Empty(RR_Queue* self);
-
-RR_Block**
-RR_QueueBlockF(RR_Queue* self);
-
-RR_Block**
-RR_QueueBlockB(RR_Queue* self);
 
 void*
 RR_Queue_Front(RR_Queue* self);
@@ -345,13 +288,10 @@ void
 RR_Queue_Kill(RR_Queue* self);
 
 void**
-RR_Queue_At(RR_Queue* self, int index);
+RR_Queue_At(RR_Queue* self, size_t index);
 
 void*
-RR_Queue_Get(RR_Queue* self, int index);
-
-void
-RR_Queue_Alloc(RR_Queue* self, int blocks);
+RR_Queue_Get(RR_Queue* self, size_t index);
 
 void
 RR_Queue_PshB(RR_Queue* self, void* value);
@@ -365,14 +305,8 @@ RR_Queue_PopB(RR_Queue* self);
 void
 RR_Queue_PopF(RR_Queue* self);
 
-void
-RR_Queue_PopFSoft(RR_Queue* self);
-
-void
-RR_Queue_PopBSoft(RR_Queue* self);
-
 bool
-RR_Queue_Del(RR_Queue* self, int index);
+RR_Queue_Del(RR_Queue* self, size_t index);
 
 RR_Queue*
 RR_Queue_Copy(RR_Queue* self);
@@ -387,33 +321,15 @@ bool
 RR_Queue_Equal(RR_Queue* self, RR_Queue* other, RR_Compare compare);
 
 void
-RR_Queue_Swap(RR_Queue* self, int a, int b);
+RR_Queue_Swap(RR_Queue* self, int64_t a, int64_t b);
 
 void
-RR_Queue_RangedSort(RR_Queue* self, bool (*compare)(void*, void*), int left, int right);
-
-void
-RR_Queue_Sort(RR_Queue* self, bool (*compare)(void*, void*));
+RR_Queue_Sort(RR_Queue* self, RR_Compare compare);
 
 RR_String*
-RR_Queue_Print(RR_Queue* self, int indents);
+RR_Queue_Print(RR_Queue* self, size_t indents);
 
-RR_Node*
-RR_Node_Init(RR_String* key, void* value);
-
-void
-RR_Node_Set(RR_Node* self, RR_Kill kill, RR_String* key, void* value);
-
-void
-RR_Node_Kill(RR_Node* self, RR_Kill kill);
-
-void
-RR_Node_Push(RR_Node** self, RR_Node* node);
-
-RR_Node*
-RR_Node_Copy(RR_Node* self, RR_Copy copy);
-
-int
+size_t
 RR_Map_Buckets(RR_Map* self);
 
 bool
@@ -422,7 +338,7 @@ RR_Map_Resizable(RR_Map* self);
 RR_Map*
 RR_Map_Init(RR_Kill kill, RR_Copy copy);
 
-int
+size_t
 RR_Map_Size(RR_Map* self);
 
 bool
@@ -434,23 +350,11 @@ RR_Map_Kill(RR_Map* self);
 unsigned
 RR_Map_Hash(RR_Map* self, char* key);
 
-RR_Node**
-RR_Map_Bucket(RR_Map* self, char* key);
-
-void
-RR_Map_Alloc(RR_Map* self, int index);
-
 void
 RR_Map_Rehash(RR_Map* self);
 
 bool
 RR_Map_Full(RR_Map* self);
-
-void
-RR_Map_Emplace(RR_Map* self, RR_String* key, RR_Node* node);
-
-RR_Node*
-RR_Map_At(RR_Map* self, char* key);
 
 bool
 RR_Map_Exists(RR_Map* self, char* key);
@@ -474,13 +378,13 @@ bool
 RR_Map_Equal(RR_Map* self, RR_Map* other, RR_Compare compare);
 
 RR_String*
-RR_Map_Print(RR_Map* self, int indents);
+RR_Map_Print(RR_Map* self, size_t indents);
 
 RR_Value*
 RR_Map_Key(RR_Map* self);
 
 RR_Char*
-RR_Char_Init(RR_Value* string, int index);
+RR_Char_Init(RR_Value* string, size_t index);
 
 char*
 RR_Char_Value(RR_Char* self);
@@ -490,9 +394,6 @@ RR_Char_Kill(RR_Char* self);
 
 char*
 RR_Type_ToString(RR_Type self);
-
-void
-RR_Type_Kill(RR_Type type, RR_Of* of);
 
 void
 RR_Type_Copy(RR_Value* copy, RR_Value* self);

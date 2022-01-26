@@ -1,0 +1,775 @@
+imp STD {
+    STD_GetCWD();
+    STD_RealPath(path);
+};
+
+EOF := -1;
+
+ADD := 0;
+AND := 1;
+BRF := 2;
+CAL := 3;
+CPY := 4;
+DEL := 5;
+DIV := 6;
+DLL := 7;
+END := 8;
+EQL := 9;
+FLS := 10;
+FMT := 11;
+GET := 12;
+GLB := 13;
+GOD := 14;
+GRT := 15;
+GTE := 16;
+INS := 17;
+JMP := 18;
+KEY := 19;
+LEN := 20;
+LOC := 21;
+LOD := 22;
+LOR := 23;
+LST := 24;
+LTE := 25;
+MEM := 26;
+MOV := 27;
+MUL := 28;
+NEQ := 29;
+NOT := 30;
+OPN := 31;
+POP := 32;
+PRT := 33;
+PSB := 34;
+PSF := 35;
+PSH := 36;
+RED := 37;
+REF := 38;
+RET := 39;
+SAV := 40;
+SPD := 41;
+SRT := 42;
+SUB := 43;
+TYP := 44;
+VRT := 45;
+WRT := 46;
+
+Args()
+{
+    self := {
+        "entry" : "",
+        "dump" : false,
+        "help" : false,
+    };
+    ret self;
+}
+
+Module_Size(self)
+{
+    ret Len(self["buffer"]);
+}
+
+Module_Empty(self)
+{
+    ret Module_Size(self) == 0;
+}
+
+Module_At(self)
+{
+    ret self["buffer"][self["index"]];
+}
+
+Module_Buffer(self)
+{
+    self["index"] = 0;
+    self["buffer"] = Read(self["file"], self["buffer_size"]);
+}
+
+Module(name)
+{
+    self := {
+        "buffer_size" : 32,
+        "file" : "",
+        "name" : name,
+        "index" : 0,
+        "line" : 1,
+        "buffer" : "",
+    };
+    file := Open(name, "r");
+    if(Good(file))
+    {
+        self["file"] = file;
+        Module_Buffer(self);
+    }
+    ret self;
+}
+
+Module_Peak(self)
+{
+    if(self["index"] == Module_Size(self))
+    {
+        Module_Buffer(self);
+    }
+    if(Module_Empty(self))
+    {
+        ret EOF;
+    }
+    else
+    {
+        ret Module_At(self); 
+    }
+}
+
+Module_Advance(self)
+{
+    at := Module_At(self);
+    if(at == "\n")
+    {
+        self["line"] += 1;
+    }
+    self["index"] += 1;
+}
+
+Quit(message)
+{
+    Print("error: " + message);
+    Exit(255);
+}
+
+CC_Quit(self, message)
+{
+    name := "N/A";
+    line := "N/A";
+    modules := self["modules"];
+    if(Len(modules) > 0)
+    {
+        back := modules[Len(modules) - 1];
+        name = back["name"];
+        line = back["line"];
+    }
+    Print("error: file {}: line {}: {}" % [ name, line, message ]);
+    Exit(254);
+}
+
+CC_Upper := {
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
+};
+
+CC_Lower := {
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
+};
+
+CC_Digit := {
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
+};
+
+CC_Op := {
+    "*", "/", "%", "+", "-", "=", "<", ">", "!", "&", "|", "?"
+};
+
+CC_Space := {
+    "\n", "\t", "\r", " "
+};
+
+CC_String_IsUpper(c)
+{
+    ret CC_Upper[c] != null;
+}
+
+CC_String_IsLower(c)
+{
+    ret CC_Lower[c] != null;
+}
+
+CC_String_IsDigit(c)
+{
+    ret CC_Digit[c] != null;
+}
+
+CC_String_IsAlpha(c)
+{
+    ret CC_String_IsLower(c) || CC_String_IsUpper(c);
+}
+
+CC_String_IsNumber(c)
+{
+    ret CC_Digit[c] || c == ".";
+}
+
+CC_String_IsIdentLeader(c)
+{
+    ret CC_String_IsAlpha(c) || c == "_";
+}
+
+CC_String_IsIdent(c)
+{
+    ret CC_String_IsIdentLeader(c) || CC_String_IsDigit(c);
+}
+
+CC_String_IsModule(c)
+{
+    ret CC_String_IsIdent(c) || c == ".";
+}
+
+CC_String_IsOp(c)
+{
+    ret CC_Op[c] != null;
+}
+
+CC_String_IsSpace(c)
+{
+    ret CC_Space[c] != null;
+}
+
+CC_Advance(self)
+{
+    modules := self["modules"];
+    Module_Advance(modules[Len(modules) - 1]);
+}
+
+CC_Peak(self)
+{
+    peak := EOF;
+    while(true)
+    {
+        modules := self["modules"]; 
+        peak = Module_Peak(modules[Len(modules) - 1]);
+        if(peak == EOF)
+        {
+            if(Len(modules) == 1)
+            {
+                ret EOF;
+            }
+            Del(modules, Len(modules) - 1);
+        }
+        else
+        {
+            break;
+        }
+    }
+    ret peak;
+}
+
+CC_Spin(self)
+{
+    comment := false;
+    while(true)
+    {
+        peak := CC_Peak(self);
+        if(peak == "#")
+        {
+            comment = true;
+        }
+        if(peak == "\n")
+        {
+            comment = false;
+        }
+        if(CC_String_IsSpace(peak) || comment == true)
+        {
+            CC_Advance(self);
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+
+CC_Next(self)
+{
+    CC_Spin(self);
+    ret CC_Peak(self);
+}
+
+CC_Read(self)
+{
+    peak := CC_Peak(self);
+    if(peak != EOF)
+    {
+        CC_Advance(self);
+    }
+    ret peak;
+}
+
+CC_Stream(self, clause)
+{
+    string := "";
+    CC_Spin(self);
+    while(clause(CC_Peak(self)))
+    {
+        string += CC_Read(self);
+    }
+    ret string;
+}
+
+CC_Match(self, expect)
+{
+    CC_Spin(self);
+    for(i := 0; i < Len(expect); i += 1)
+    {
+        peak := CC_Read(self);
+        if(peak != expect[i])
+        {
+            match := "";
+            if(peak == EOF)
+            {
+                match = "EOF";
+            }
+            else
+            {
+                match = peak;
+            }
+            CC_Quit(self, "matched character {} but expected character {}" % [match, expect[i]]);
+        }
+    }
+}
+
+CC_String_EscToByte(ch)
+{
+    if(ch == "\"")
+    {
+        ret "\"";
+    }
+    elif(ch == "\\")
+    {
+        ret "\\";
+    }
+    elif(ch == "/")
+    {
+        ret "/";
+    }
+    elif(ch == "b")
+    {
+        ret "\b";
+    }
+    elif(ch == "f")
+    {
+        ret "\f";
+    }
+    elif(ch == "n")
+    {
+        ret "\n";
+    }
+    elif(ch == "r")
+    {
+        ret "\r";
+    }
+    elif(ch == "t")
+    {
+        ret "\t";
+    }
+    else
+    {
+        Quit("unknown escape char");
+    }
+}
+
+CC_Mod(self)
+{
+    ret CC_Stream(self, CC_String_IsModule);
+}
+
+CC_Ident(self)
+{
+    ret CC_Stream(self, CC_String_IsIdent);
+}
+
+CC_Operator(self)
+{
+    ret CC_Stream(self, CC_String_IsOp);
+}
+
+CC_Number(self)
+{
+    ret CC_Stream(self, CC_String_IsNumber);
+}
+
+CC_StringStream(self)
+{
+    string := "";
+    CC_Spin(self);
+    CC_Match(self, "\"");
+    while(CC_Peak(self) != "\"")
+    {
+        ch := CC_Read(self);
+        string += ch;
+        if(ch == "\\")
+        {
+            ch = CC_Read(self);
+            byte := CC_String_EscToByte(ch);
+            string += ch;
+        }
+    }
+    CC_Match(self, "\"");
+    ret string;
+}
+
+CC()
+{
+    self := {
+        "modules" : [],
+        "assembly" : [],
+        "data" : [],
+        "identifiers" : {},
+        "included" : {},
+        "prime" : "",
+        "globals" : 0,
+        "locals" : 0,
+        "labels" : 0,
+    };
+    ret self;
+}
+
+String_Base(path)
+{
+    base := Copy(path);
+    while(Len(base) > 0)
+    {
+        if(base[Len(base) - 1] == "/")
+        {
+            break;
+        }
+        else
+        {
+            Del(base, Len(base) - 1);
+        }
+    }
+    ret base;
+}
+
+CC_RealPath(self, file)
+{
+    path := "";
+    modules := self["modules"];
+    if(Len(modules) == 0)
+    {
+        path = STD_GetCWD();
+        path += file;
+    }
+    else
+    {
+        back := modules[Len(modules) - 1];
+        path = String_Base(back["name"]);
+        path += file;
+    }
+    real := STD_RealPath(path);
+    if(real == null)
+    {
+        Quit("{} could not bre resolved as a real path" % [path]);
+    }
+}
+
+CC_IncludeModule(self, file)
+{
+    real := CC_RealPath(self, file);
+    source := real;
+    library := real;
+    Del(library, Len(library) - 1);
+    library += "so";
+    if(self["included"]["library"] == null)
+    {
+        self["included"] := real;
+        self["modules"] += Module(real);
+    }
+}
+
+CC_Parents(module)
+{
+    parents := "";
+    for(i := 0; i < Len(module); i += 1)
+    {
+        if(module[i] != ".")
+        {
+            break;
+        }
+        parents += "../";
+    }
+    ret parents;
+}
+
+String_Skip(self, c)
+{
+    i := 0;
+    while(i < Len(self))
+    {
+        if(self[i] != c)
+        {
+            break;
+        }
+        i += 1;
+    }
+    skip := "";
+    while(i < Len(self))
+    {
+        skip += self[i];
+        i += 1;
+    }
+    ret skip;
+}
+
+String_Replace(self, x, y)
+{
+    for(i := 0; i < Len(self); i += 1)
+    {
+        if(self[i] == x)
+        {
+            self[i] = y;
+        }
+    }
+}
+
+Module_Name(self, postfix)
+{
+    module := CC_Mod(self);
+    skipped := String_Skip(module, ".");
+    String_Replace(skipped, ".", "/");
+    skipped += postfix;
+    name := CC_Parents(module);
+    name += skipped;
+    ret name;
+}
+
+CC_Include(self)
+{
+    name := Module_Name(self, ".rr");
+    CC_Match(self, ";");
+    CC_IncludeModule(self, name);
+}
+
+CC_IsGlobal(class)
+{
+    ret class == "global";
+}
+
+CC_IsLocal(class)
+{
+    ret class == "local";
+}
+
+CC_IsVariable(class)
+{
+    ret CC_IsGlobal(class) || CC_IsLocal(class);
+}
+
+CC_IsFunction(class)
+{
+    ret class == "function" || class == "function_prototype" || class == "function_prototype_native";
+}
+
+Meta(class, stack, path)
+{
+    self := {
+        "class" : class,
+        "stack": stack,
+        "path" : path,
+    };
+    ret self;
+}
+
+CC_Define(self, class, stack, ident, path)
+{
+    old := self["identifiers"][ident];
+    new := Meta(class, stack, path);
+    if(old != null)
+    {
+        if(old["class"] == "function_prototype_native"
+        && new["class"] == "function")
+        {
+            if(new["stack"] != old["stack"])
+            {
+                CC_Quit(self, "function {} with {} argument(s) was defined as a function prototype with {} argument(s)"
+                    % [ident, new["stack"], old["stack"]]);
+            }
+        }
+    }
+}
+
+CC_Expression(self);
+
+CC_ConsumeExpression(self)
+{
+    CC_Expression(self);
+    self["assembly"] += "\tpop";
+}
+
+CC_EmptyExpression(self)
+{
+    CC_ConsumeExpression(self);
+    CC_Match(self, ";");
+}
+
+CC_Assign(self)
+{
+    CC_Match(self, ":=");
+    CC_Expression(self);
+    CC_Match(self, ";");
+}
+
+CC_Local(self, ident)
+{
+    CC_Define(self, "local", self["locals"], ident, "");
+    self["locals"] += 1;
+}
+
+CC_AssignLocal(self, ident)
+{
+    CC_Assign(self);
+    CC_Local(self, ident);
+}
+
+CC_Expression(self)
+{
+}
+
+CC_Global(self, ident)
+{
+    label := "!{}" % [ident];
+    self["assembly"] += "{}:" % [label];
+    CC_Assign(self);
+    CC_Define(self, "global", self["globals"], ident, "");
+    self["assembly"] += "\tret";
+    self["globals"] += 1;
+    ret label;
+}
+
+CC_ParamRoll(self)
+{
+    params := [];
+    CC_Match(self, "(");
+    while(CC_Next(self) != ")")
+    {
+        ident := CC_Ident(self);
+        params += ident;
+        if(CC_Next(self) == ",")
+        {
+            CC_Match(self, ",");
+        }
+    }
+    CC_Match(self, ",");
+    ret params;
+}
+
+CC_DefineParams(self, params)
+{
+    self["locals"] = 0;
+    size := Len(params["size"]);
+    for(i := 0; i < size; i += 1)
+    {
+        ident := Copy(params[i]);
+        CC_Local(self, ident);
+    }
+}
+
+CC_PopScope(self, scope)
+{
+    popped := Len(scope);
+    for(i := 0; i < popped; i += 1)
+    {
+        key := scope[i];
+        Del(self["identifiers"], key);
+        self["locals"] += 1;
+    }
+}
+
+CC_Meta(self, ident)
+{
+    meta := self["identifiers"][ident];
+    if(meta == null)
+    {
+        CC_Quit(self, "identifier {} not defined" % [ident]);
+    }
+    ret meta;
+}
+
+CC_Expect(self, ident, clause)
+{
+    meta := CC_Meta(self, ident);
+    if(!clause(meta["class"]))
+    {
+        CC_Quit(self, "identifier {} cannot be of class {}" % [ident, meta["class"]]);
+    }
+    ret meta;
+}
+
+CC_Ref(self, ident)
+{
+    meta := CC_Expect(self, ident, CC_IsVariable);
+    if(meta["class"] == "global")
+    {
+        self["assembly"] += "\tglb {}" % [meta["stack"]];
+    }
+    elif(meta["class"] == "local")
+    {
+        self["assembly"] += "\tloc {}" % [meta["stack"]];
+    }
+}
+
+CC_Resolve(self)
+{
+    while(CC_Next(self) != "[")
+    {
+        CC_Match(self, "[");
+        CC_Expression(self);
+        CC_Match(self, "]");
+        if(CC_Next(self) == ":")
+        {
+            CC_Match(self, ":=");
+            CC_Expression(self);
+            self["assembly"] += "\tcpy";
+            self["assembly"] += "\tins";
+        }
+        else
+        {
+            self["assembly"] += "\tget";
+        }
+    }
+}
+
+CC_Args(self)
+{
+    CC_Match(self, "(");
+    args := 0;
+    while(CC_Next(self) != ")")
+    {
+        CC_Expression(self);
+        if(CC_Next(self) == ",")
+        {
+            CC_Match(self, ",");
+        }
+        args += 1;
+    }
+    CC_Match(self, ")");
+    ret args;
+}
+
+VM()
+{
+    self := {
+        "data" : [],
+        "stack" : [],
+        "frame" : [],
+        "track": {},
+        "ret" : null,
+        "instructions" : [],
+        "size" : 0, 
+        "pc" : 0,
+        "spds" : 0,
+    };
+    ret self;
+}
+
+Frame(pc, sp)
+{
+    self := {
+        "pc" : pc,
+        "sp" : sp,
+    };
+    ret self;
+}
+
+Main()             
+{
+    vm := VM();
+    cc := CC();
+    module := Module("rr.rr");
+    ret 0;
+}

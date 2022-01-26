@@ -4,7 +4,7 @@ DEBUG = 0
 ifeq (1,$(DEBUG))
 CFLAGS = -g -fsanitize=address -fsanitize=undefined
 else
-CFLAGS = -O3 -march=native
+CFLAGS = -O3 -march=native -funroll-loops
 endif
 
 WARNINGS = -Wall -Wextra -Wpedantic -Wshadow
