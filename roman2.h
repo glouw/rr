@@ -45,6 +45,9 @@ typedef struct RR_Map RR_Map;
 typedef struct RR_String RR_String;
 typedef struct RR_Value RR_Value;
 
+typedef int64_t
+(*RR_Diff)(void*, void*);
+
 typedef bool
 (*RR_Compare)(void*, void*);
 
@@ -328,6 +331,9 @@ RR_Queue_Sort(RR_Queue* self, RR_Compare compare);
 
 RR_String*
 RR_Queue_Print(RR_Queue* self, size_t indents);
+
+void*
+RR_Queue_BSearch(RR_Queue* self, void* key, RR_Diff diff);
 
 size_t
 RR_Map_Buckets(RR_Map* self);

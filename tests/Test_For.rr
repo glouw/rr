@@ -7,14 +7,9 @@ Main()
         sum += a[i];
     }
 
-    # Stack gaurd to ensure nothing was clobbered.
-    j := 44;
-    if((j == 44) && (sum == 6))
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    j := 44; # Stack gaurd to ensure nothing was clobbered.
+
+    Assert(j == 44);
+    Assert(sum == 6);
+    ret 0;
 }

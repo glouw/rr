@@ -11,12 +11,6 @@ Main()
         }
     };
     Change(a["key"]["key"]);
-    if(a["key"]["key"] == 99)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a["key"]["key"] == 99);
+    ret 0;
 }

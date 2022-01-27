@@ -4,12 +4,6 @@ NullRet()
 
 Main()
 {
-    if(NullRet() == null)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(NullRet() == null);
+    ret 0;
 }

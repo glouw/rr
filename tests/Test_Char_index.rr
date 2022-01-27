@@ -1,12 +1,6 @@
 Main()
 {
     a := "a";
-    if(a[0] == "a")
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a[0] == "a");
+    ret 0;
 }

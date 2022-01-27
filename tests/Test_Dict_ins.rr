@@ -3,12 +3,6 @@ Main()
     a := {};
     b := 0;
     a["dict"] := b;
-    if(a["dict"] == b)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a["dict"] == b);
+    ret 0;
 }

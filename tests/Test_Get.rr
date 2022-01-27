@@ -3,12 +3,6 @@ Main()
     a := [
         5, [ 3, 4, 5, { "value" : 99 } ], 7
     ];
-    if(a[1][3]["value"] == 99)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a[1][3]["value"] == 99);
+    ret 0;
 }

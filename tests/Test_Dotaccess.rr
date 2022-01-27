@@ -16,13 +16,6 @@ Main()
         }
     };
     a.a["b"].d := 2;
-    if(a == b)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a == b);
     ret 0;
 }

@@ -6,13 +6,6 @@ Main()
     Del(a, 1);
     Del(a, Len(a) - 1);
     Del(b, "keyadfsafd");
-    Print(a);
-    if(a == [1, 3])
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a == [1, 3]);
+    ret 0;
 }

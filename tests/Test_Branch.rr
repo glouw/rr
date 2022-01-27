@@ -1,152 +1,132 @@
 Main()
 {
-    pass := 0;
-
     if(true)
     {
-        pass += 1;
     }
     elif(false)
     {
-        pass = 0;
+        Exit(99);
     }
     elif(false)
     {
-        pass = 0;
+        Exit(1);
     }
     else
     {
-        pass = 0;
+        Exit(2);
     }
 
     if(false)
     {
-        pass = 0;
+        Exit(3);
     }
     elif(true)
     {
-        pass += 1;
     }
     elif(false)
     {
-        pass = 0;
+        Exit(4);
     }
     else
     {
-        pass = 0;
+        Exit(5);
     }
 
     if(false)
     {
-        pass = 0;
+        Exit(6);
     }
     elif(false)
     {
-        pass = 0;
+        Exit(7);
     }
     elif(true)
     {
-        pass += 1;
     }
     else
     {
-        pass = 0;
+        Exit(8);
     }
 
     if(false)
     {
-        pass = 0;
+        Exit(9);
     }
     elif(false)
     {
-        pass = 0;
+        Exit(10);
     }
     elif(false)
     {
-        pass = 0;
+        Exit(11);
     }
     else
     {
-        pass += 1;
     }
 
     if(true)
     {
-        pass += 1;
     }
     elif(true)
     {
-        pass += 1;
+        Exit(12);
     }
     elif(true)
     {
-        pass += 1;
+        Exit(13);
     }
     else
     {
-        pass += 1;
+        Exit(14);
     }
 
     if(false)
     {
-        pass += 1;
+        Exit(15);
     }
     elif(true)
     {
-        pass += 1;
     }
     elif(true)
     {
-        pass += 1;
+        Exit(16);
     }
     else
     {
-        pass += 1;
+        Exit(17);
     }
 
     if(false)
     {
-        pass += 1;
+        Exit(18);
     }
     elif(false)
     {
-        pass += 1;
+        Exit(19);
     }
     elif(true)
     {
-        pass += 1;
     }
     else
     {
-        pass += 1;
+        Exit(20);
     }
 
     if(false)
     {
-        pass += 1;
+        Exit(21);
     }
     elif(false)
     {
-        pass += 1;
+        Exit(22);
     }
     elif(false)
     {
-        pass += 1;
+        Exit(23);
     }
     else
     {
-        pass += 1;
     }
 
-    # Just to see if this compiles.
-    if(true) {} if(true) {} elif(true) {} if(true) {} else {}
-
-    if(pass == 8)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    ret 0;
 }

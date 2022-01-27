@@ -1,0 +1,10 @@
+Main()
+{
+    t0 := Time();
+    Srand(Time());
+    a := Rand();
+    Print(a);
+    t1 := Time();
+    Print("time taken {} microseconds" % [t1 - t0]);
+    ret 0;
+}

@@ -2,12 +2,8 @@ Main()
 {
     a := 1;
     b := a += 1;
-    if((a ? b) && (a == 2) && (b == 2))
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a ? b);
+    Assert(a == 2);
+    Assert(b == 2);
+    ret 0;
 }

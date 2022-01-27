@@ -4,12 +4,6 @@ Main()
     b := Open("./Test_File.rr", "r");
     Print(a);
     Print(b);
-    if(a == b)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a == b);
+    ret 0;
 }

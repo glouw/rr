@@ -14,6 +14,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <dlfcn.h>
@@ -137,7 +138,9 @@ typedef enum
 {
     OPCODE_ADD,
     OPCODE_AND,
+    OPCODE_ASR,
     OPCODE_BRF,
+    OPCODE_BSR,
     OPCODE_CAL,
     OPCODE_CPY,
     OPCODE_DEL,
@@ -146,6 +149,7 @@ typedef enum
     OPCODE_EXT,
     OPCODE_END,
     OPCODE_EQL,
+    OPCODE_FIL,
     OPCODE_FLS,
     OPCODE_FMT,
     OPCODE_GET,
@@ -156,6 +160,7 @@ typedef enum
     OPCODE_INS,
     OPCODE_JMP,
     OPCODE_KEY,
+    OPCODE_LIN,
     OPCODE_LEN,
     OPCODE_LOC,
     OPCODE_LOD,
@@ -176,10 +181,14 @@ typedef enum
     OPCODE_RED,
     OPCODE_REF,
     OPCODE_RET,
+    OPCODE_RND,
     OPCODE_SAV,
     OPCODE_SPD,
+    OPCODE_SRD,
     OPCODE_SRT,
+    OPCODE_STR,
     OPCODE_SUB,
+    OPCODE_TIM,
     OPCODE_TYP,
     OPCODE_VRT,
     OPCODE_WRT,
@@ -298,7 +307,6 @@ Equals(char* a, char* b)
 
 static void
 Type_Kill(RR_Type type, Of* of);
-
 
 RR_Type
 RR_Value_ToType(RR_Value* self)
@@ -1391,6 +1399,27 @@ RR_Queue_Print(RR_Queue* self, size_t indents)
     }
 }
 
+void*
+RR_Queue_BSearch(RR_Queue* self, void* key, RR_Diff diff)
+{
+    int64_t low = 0;
+    int64_t high = self->size - 1;
+    while(low <= high)
+    {
+        int64_t mid = (low + high) / 2;
+        void* now = RR_Queue_Get(self, mid);
+        int64_t cmp = diff(key, now);
+        if(cmp == 0)
+            return now;
+        else
+        if(cmp < 0)
+            high = mid - 1;
+        else
+            low = mid + 1;
+    }
+    return NULL;
+}
+
 Node*
 Node_Init(RR_String* key, void* value)
 {
@@ -1504,7 +1533,7 @@ RR_Map_Kill(RR_Map* self)
 unsigned
 RR_Map_Hash(RR_Map* self, char* key)
 {
-    unsigned r1 = self->rand1;
+    unsigned r1 = self->rand1; // Need a way to srand from VM?
     unsigned r2 = self->rand2;
     unsigned hash = 0;
     while(*key)
@@ -1871,6 +1900,14 @@ CC_Block(CC*, size_t head, size_t tail, bool loop);
 static int64_t
 VM_Run(VM*, bool arbitrary);
 
+static double
+Microseconds(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * 1e6 + tv.tv_usec;
+}
+
 static char*
 Class_ToString(Class self)
 {
@@ -2013,7 +2050,7 @@ CC_Quit(CC* self, const char* const message, ...)
     vfprintf(stderr, message, args);
     fprintf(stderr, "\n");
     va_end(args);
-    exit(0xFE);
+    exit(0xFF);
 }
 
 static bool
@@ -2703,11 +2740,17 @@ CC_DirectCalling(CC* self, RR_String* ident, size_t args)
     if(RR_String_Equals(ident, "Len"))
         CC_Assem(self, RR_String_Init("\tlen"));
     else
+    if(RR_String_Equals(ident, "Assert"))
+        CC_Assem(self, RR_String_Init("\tasr"));
+    else
     if(RR_String_Equals(ident, "Good"))
         CC_Assem(self, RR_String_Init("\tgod"));
     else
     if(RR_String_Equals(ident, "Key"))
         CC_Assem(self, RR_String_Init("\tkey"));
+    else
+    if(RR_String_Equals(ident, "Search"))
+        CC_Assem(self, RR_String_Init("\tbsr"));
     else
     if(RR_String_Equals(ident, "Sort"))
         CC_Assem(self, RR_String_Init("\tsrt"));
@@ -2727,17 +2770,35 @@ CC_DirectCalling(CC* self, RR_String* ident, size_t args)
     if(RR_String_Equals(ident, "Refs"))
         CC_Assem(self, RR_String_Init("\tref"));
     else
+    if(RR_String_Equals(ident, "Line"))
+        CC_Assem(self, RR_String_Init("\tlin"));
+    else
+    if(RR_String_Equals(ident, "File"))
+        CC_Assem(self, RR_String_Init("\tfil"));
+    else
     if(RR_String_Equals(ident, "Del"))
         CC_Assem(self, RR_String_Init("\tdel"));
     else
     if(RR_String_Equals(ident, "Exit"))
         CC_Assem(self, RR_String_Init("\text"));
     else
+    if(RR_String_Equals(ident, "Time"))
+        CC_Assem(self, RR_String_Init("\ttim"));
+    else
     if(RR_String_Equals(ident, "Type"))
         CC_Assem(self, RR_String_Init("\ttyp"));
     else
     if(RR_String_Equals(ident, "Print"))
         CC_Assem(self, RR_String_Init("\tprt"));
+    else
+    if(RR_String_Equals(ident, "String"))
+        CC_Assem(self, RR_String_Init("\tstr"));
+    else
+    if(RR_String_Equals(ident, "Srand"))
+        CC_Assem(self, RR_String_Init("\tsrd"));
+    else
+    if(RR_String_Equals(ident, "Rand"))
+        CC_Assem(self, RR_String_Init("\trnd"));
     else
         CC_Call(self, ident, args);
 }
@@ -2804,20 +2865,28 @@ static void
 CC_ReserveFunctions(CC* self)
 {
     struct { size_t args; char* name; } items[] = {
-        { 2, "Sort"  },
-        { 1, "Good"  },
-        { 1, "Key"   },
-        { 1, "Copy"  },
-        { 2, "Open"  },
-        { 2, "Read"  },
-        { 1, "Close" },
-        { 1, "Refs"  },
-        { 1, "Len"   },
-        { 2, "Del"   },
-        { 1, "Exit"  },
-        { 1, "Type"  },
-        { 1, "Print" },
-        { 2, "Write" },
+        { 2, "Sort"   },
+        { 1, "Good"   },
+        { 1, "Assert" },
+        { 1, "Key"    },
+        { 1, "Copy"   },
+        { 2, "Open"   },
+        { 2, "Read"   },
+        { 1, "Close"  },
+        { 1, "Refs"   },
+        { 1, "Len"    },
+        { 2, "Del"    },
+        { 3, "Search" },
+        { 0, "File"   },
+        { 0, "Line"   },
+        { 1, "Exit"   },
+        { 1, "Type"   },
+        { 1, "Print"  },
+        { 1, "String" },
+        { 0, "Time"   },
+        { 1, "Srand"  },
+        { 0, "Rand"   },
+        { 2, "Write"  },
     };
     for(size_t i = 0; i < RR_LEN(items); i++)
         CC_Define(self, CLASS_FUNCTION, items[i].args, RR_String_Init(items[i].name), RR_String_Init(""));
@@ -2896,7 +2965,7 @@ CC_Term(CC* self)
         if(RR_String_Equals(operator, "*="))
         {
             if(!storage)
-                CC_Quit(self, "the left hand side of operator %s must be storage", operator);
+                CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
             CC_Expression(self);
             CC_Assem(self, RR_String_Init("\tmul"));
         }
@@ -2904,7 +2973,7 @@ CC_Term(CC* self)
         if(RR_String_Equals(operator, "/="))
         {
             if(!storage)
-                CC_Quit(self, "the left hand side of operator %s must be storage", operator);
+                CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
             CC_Expression(self);
             CC_Assem(self, RR_String_Init("\tdiv"));
         }
@@ -2957,7 +3026,7 @@ CC_Expression(CC* self)
         if(RR_String_Equals(operator, "="))
         {
             if(!storage)
-                CC_Quit(self, "the left hand side of operator %s must be storage", operator);
+                CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
             CC_Expression(self);
             CC_Assem(self, RR_String_Init("\tcpy"));
             CC_Assem(self, RR_String_Init("\tmov"));
@@ -2966,7 +3035,7 @@ CC_Expression(CC* self)
         if(RR_String_Equals(operator, "+="))
         {
             if(!storage)
-                CC_Quit(self, "the left hand side of operator %s must be storage", operator);
+                CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
             CC_Expression(self);
             CC_Assem(self, RR_String_Init("\tcpy"));
             CC_Assem(self, RR_String_Init("\tadd"));
@@ -2975,7 +3044,7 @@ CC_Expression(CC* self)
         if(RR_String_Equals(operator, "-="))
         {
             if(!storage)
-                CC_Quit(self, "the left hand side of operator %s must be storage", operator);
+                CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
             CC_Expression(self);
             CC_Assem(self, RR_String_Init("\tcpy"));
             CC_Assem(self, RR_String_Init("\tsub"));
@@ -3258,7 +3327,9 @@ CC_ImportModule(CC* self, RR_String* file)
     if(RR_Map_Exists(self->included, library->value) == false)
     {
         RR_String* libs = CC_GetModuleLibs(source);
-        RR_String* command = RR_String_Format("gcc -std=gnu99 -O3 -march=native -Wall -Wextra -Wpedantic %s -fpic -shared -o %s -l%s %s", source->value, library->value, RR_LIBROMAN2, libs->value);
+        RR_String* command = RR_String_Format(
+                "gcc -std=gnu99 -O3 -march=native -Wall -Wextra -Wpedantic %s -fpic -shared -o %s -l%s %s",
+                source->value, library->value, RR_LIBROMAN2, libs->value);
         int64_t ret = system(command->value);
         if(ret != 0)
             CC_Quit(self, "compilation errors encountered while compiling native library %s", source->value);
@@ -3422,7 +3493,7 @@ ASM_Label(RR_Queue* assembly, size_t* size)
             RR_String* line = RR_String_Copy(stub);
             char* label = strtok(line->value, ":");
             if(RR_Map_Exists(labels, label))
-                Quit("asm: label %s already defined", label);
+                Quit("assembler label %s already defined", label);
             RR_Map_Set(labels, RR_String_Init(label), Int_Init(*size));
             RR_String_Kill(line);
         }
@@ -3447,9 +3518,27 @@ ASM_Dump(RR_Queue* assembly)
     printf("instructions %lu : labels %lu\n", instructions, labels);
 }
 
+static int64_t
+Stack_Diff(void* a, void* b)
+{
+    Stack* aa = a;
+    Stack* bb = b;
+    return aa->address - bb->address;
+}
+
 static void
 VM_Quit(VM* self, const char* const message, ...)
 {
+    for(size_t i = 0; i < self->frame->size - 1; i++)
+    {
+        Frame* a = RR_Queue_Get(self->frame, i + 0);
+        Frame* b = RR_Queue_Get(self->frame, i + 1);
+        Stack key = { NULL, a->address };
+        Stack* found = RR_Queue_BSearch(self->addresses, &key, Stack_Diff);
+        fprintf(stderr, "%s(...): ", found->label->value);
+        Debug* sub = RR_Queue_Get(self->debug, b->pc);
+        fprintf(stderr, "%s: line %lu\n", sub->file, sub->line);
+    }
     va_list args;
     Debug* debug = RR_Queue_Get(self->debug, self->pc);
     va_start(args, message);
@@ -3457,78 +3546,65 @@ VM_Quit(VM* self, const char* const message, ...)
     vfprintf(stderr, message, args);
     fprintf(stderr, "\n");
     va_end(args);
-    for(size_t i = 0; i < self->frame->size - 1; i++)
-    {
-        Frame* a = RR_Queue_Get(self->frame, i + 0);
-        for(size_t j = 0; j < self->addresses->size; j++) // Could be a binary search.
-        {
-            Stack* stack = RR_Queue_Get(self->addresses, j);
-            if(a->address == stack->address)
-                fprintf(stderr, "%s(...): ", stack->label->value);
-        }
-        Frame* b = RR_Queue_Get(self->frame, i + 1);
-        Debug* sub = RR_Queue_Get(self->debug, b->pc);
-        fprintf(stderr, "%s: line %lu\n", sub->file, sub->line);
-    }
-    exit(0xFE);
+    exit(0xFF);
 }
 
 static void
 VM_TypeExpect(VM* self, RR_Type a, RR_Type b)
 {
     if(a != b)
-        VM_Quit(self, "vm: encountered type %s but expected type %s", RR_Type_ToString(a), RR_Type_ToString(b));
+        VM_Quit(self, "encountered type %s but expected type %s", RR_Type_ToString(a), RR_Type_ToString(b));
 }
 
 static void
 VM_BadOperator(VM* self, RR_Type a, const char* op)
 {
-    VM_Quit(self, "vm: type %s not supported with operator %s", RR_Type_ToString(a), op);
+    VM_Quit(self, "type %s not supported with operator %s", RR_Type_ToString(a), op);
 }
 
 static void
 VM_TypeMatch(VM* self, RR_Type a, RR_Type b, const char* op)
 {
     if(a != b)
-        VM_Quit(self, "vm: type %s and type %s mismatch with operator %s", RR_Type_ToString(a), RR_Type_ToString(b), op);
+        VM_Quit(self, "type %s and type %s mismatch with operator %s", RR_Type_ToString(a), RR_Type_ToString(b), op);
 }
 
 static void
 VM_OutOfBounds(VM* self, RR_Type a, size_t index)
 {
-    VM_Quit(self, "vm: type %s was accessed out of bounds with index %lu", RR_Type_ToString(a), index);
+    VM_Quit(self, "type %s was accessed out of bounds with index %lu", RR_Type_ToString(a), index);
 }
 
 static void
 VM_TypeBadIndex(VM* self, RR_Type a, RR_Type b)
 {
-    VM_Quit(self, "vm: type %s cannot be indexed with type %s", RR_Type_ToString(a), RR_Type_ToString(b));
+    VM_Quit(self, "type %s cannot be indexed with type %s", RR_Type_ToString(a), RR_Type_ToString(b));
 }
 
 static void
 VM_TypeBad(VM* self, RR_Type a)
 {
-    VM_Quit(self, "vm: type %s cannot be used for this operation", RR_Type_ToString(a));
+    VM_Quit(self, "type %s cannot be used for this operation", RR_Type_ToString(a));
 }
 
 static void
 VM_ArgMatch(VM* self, size_t a, size_t b)
 {
     if(a != b)
-        VM_Quit(self, "vm: expected %lu arguments but encountered %lu arguments", a, b);
+        VM_Quit(self, "expected %lu arguments but encountered %lu arguments", a, b);
 }
 
 static void
 VM_UnknownEscapeChar(VM* self, size_t esc)
 {
-    VM_Quit(self, "vm: an unknown escape character 0x%02X was encountered\n", esc);
+    VM_Quit(self, "an unknown escape character 0x%02X was encountered\n", esc);
 }
 
 static void
 VM_RefImpurity(VM* self, RR_Value* value)
 {
     RR_String* print = RR_Value_Sprint(value, true, 0);
-    VM_Quit(self, "vm: the .data segment value %s contained %lu references at the time of exit", print->value, value->refs);
+    VM_Quit(self, "the .data segment value %s contained %lu references at the time of exit", print->value, value->refs);
 }
 
 static VM*
@@ -3634,7 +3710,7 @@ VM_Store(VM* self, RR_Map* labels, char* operand)
         size_t size = atoi(strtok(NULL, " \n"));
         size_t* address = RR_Map_Get(labels, name->value);
         if(address == NULL)
-            Quit("asm: label %s not defined", name);
+            Quit("assembler label %s not defined", name);
         value = RR_Value_NewFunction(RR_Function_Init(name, size, *address));
     }
     else
@@ -3649,7 +3725,7 @@ VM_Store(VM* self, RR_Map* labels, char* operand)
     else
     {
         value = NULL;
-        Quit("asm: unknown psh operand %s encountered", operand);
+        Quit("assembler unknown psh operand %s encountered", operand);
     }
     RR_Queue_PshB(self->data, value);
 }
@@ -3666,7 +3742,7 @@ VM_Indirect(Opcode oc, RR_Map* labels, char* label)
 {
     size_t* address = RR_Map_Get(labels, label);
     if(address == NULL)
-        Quit("asm: label %s not defined", label);
+        Quit("assembler label %s not defined", label);
     return *address << 8 | oc;
 }
 
@@ -3698,8 +3774,14 @@ VM_Assemble(RR_Queue* assembly, RR_Queue* debug)
             if(Equals(mnemonic, "and"))
                 instruction = OPCODE_AND;
             else
+            if(Equals(mnemonic, "asr"))
+                instruction = OPCODE_ASR;
+            else
             if(Equals(mnemonic, "brf"))
                 instruction = VM_Indirect(OPCODE_BRF, labels, strtok(NULL, "\n"));
+            else
+            if(Equals(mnemonic, "bsr"))
+                instruction = OPCODE_BSR;
             else
             if(Equals(mnemonic, "cal"))
                 instruction = VM_Indirect(OPCODE_CAL, labels, strtok(NULL, "\n"));
@@ -3724,6 +3806,9 @@ VM_Assemble(RR_Queue* assembly, RR_Queue* debug)
             else
             if(Equals(mnemonic, "ext"))
                 instruction = OPCODE_EXT;
+            else
+            if(Equals(mnemonic, "fil"))
+                instruction = OPCODE_FIL;
             else
             if(Equals(mnemonic, "fls"))
                 instruction = OPCODE_FLS;
@@ -3757,6 +3842,9 @@ VM_Assemble(RR_Queue* assembly, RR_Queue* debug)
             else
             if(Equals(mnemonic, "len"))
                 instruction = OPCODE_LEN;
+            else
+            if(Equals(mnemonic, "lin"))
+                instruction = OPCODE_LIN;
             else
             if(Equals(mnemonic, "loc"))
                 instruction = VM_Direct(OPCODE_LOC, strtok(NULL, "\n"));
@@ -3815,11 +3903,20 @@ VM_Assemble(RR_Queue* assembly, RR_Queue* debug)
             if(Equals(mnemonic, "ret"))
                 instruction = OPCODE_RET;
             else
+            if(Equals(mnemonic, "rnd"))
+                instruction = OPCODE_RND;
+            else
             if(Equals(mnemonic, "sav"))
                 instruction = OPCODE_SAV;
             else
             if(Equals(mnemonic, "spd"))
                 instruction = OPCODE_SPD;
+            else
+            if(Equals(mnemonic, "srd"))
+                instruction = OPCODE_SRD;
+            else
+            if(Equals(mnemonic, "str"))
+                instruction = OPCODE_STR;
             else
             if(Equals(mnemonic, "srt"))
                 instruction = OPCODE_SRT;
@@ -3830,13 +3927,16 @@ VM_Assemble(RR_Queue* assembly, RR_Queue* debug)
             if(Equals(mnemonic, "typ"))
                 instruction = OPCODE_TYP;
             else
+            if(Equals(mnemonic, "tim"))
+                instruction = OPCODE_TIM;
+            else
             if(Equals(mnemonic, "vrt"))
                 instruction = OPCODE_VRT;
             else
             if(Equals(mnemonic, "wrt"))
                 instruction = OPCODE_WRT;
             else
-                Quit("asm: unknown mnemonic %s", mnemonic);
+                Quit("assembler unknown mnemonic %s", mnemonic);
             self->instructions[pc] = instruction;
             pc += 1;
             RR_String_Kill(line);
@@ -4019,9 +4119,16 @@ VM_Sub(VM* self)
         case TYPE_NUMBER:
             a->of.number -= b->of.number;
             break;
+        case TYPE_STRING:
+        {
+            double diff = strcmp(a->of.string->value, b->of.string->value);
+            Type_Kill(a->type, &a->of);
+            a->type = TYPE_NUMBER;
+            a->of.number = diff;
+            break;
+        }
         case TYPE_FUNCTION:
         case TYPE_MAP:
-        case TYPE_STRING:
         case TYPE_CHAR:
         case TYPE_BOOL:
         case TYPE_NULL:
@@ -4177,6 +4284,59 @@ VM_Vrt(VM* self)
     size_t sp = self->stack->size - spds;
     RR_Queue_PshB(self->frame, Frame_Init(self->pc, sp, address));
     self->pc = address;
+}
+
+static RR_Value*
+VM_BSearch(VM* self, RR_Queue* queue, RR_Value* key, RR_Value* diff)
+{
+    int64_t low = 0;
+    int64_t high = queue->size - 1;
+    while(low <= high)
+    {
+        int64_t mid = (low + high) / 2;
+        RR_Value* now = RR_Queue_Get(queue, mid);
+        RR_Value_Inc(key);
+        RR_Value_Inc(now);
+        RR_Value_Inc(diff);
+        RR_Queue_PshB(self->stack, key);
+        RR_Queue_PshB(self->stack, now);
+        RR_Queue_PshB(self->stack, diff);
+        RR_Queue_PshB(self->stack, RR_Value_NewNumber(2));
+        VM_Vrt(self);
+        VM_Run(self, true);
+        VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
+        int64_t cmp = self->ret->of.number;
+        RR_Value_Kill(self->ret);
+        if(cmp == 0)
+            return now;
+        else
+        if(cmp < 0)
+            high = mid - 1;
+        else
+            low = mid + 1;
+    }
+    return NULL;
+}
+
+static void
+VM_Bsr(VM* self)
+{
+    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 3);
+    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 2);
+    RR_Value* c = RR_Queue_Get(self->stack, self->stack->size - 1);
+    VM_TypeExpect(self, a->type, TYPE_QUEUE);
+    VM_TypeExpect(self, c->type, TYPE_FUNCTION);
+    RR_Value* found = VM_BSearch(self, a->of.queue, b, c);
+    VM_Pop(self);
+    VM_Pop(self);
+    VM_Pop(self);
+    if(found == NULL)
+        RR_Queue_PshB(self->stack, RR_Value_NewNull());
+    else
+    {
+        RR_Value_Inc(found);
+        RR_Queue_PshB(self->stack, found);
+    }
 }
 
 static void
@@ -4358,6 +4518,15 @@ VM_Prt(VM* self)
 }
 
 static void
+VM_Str(VM* self)
+{
+    RR_Value* value = RR_Queue_Back(self->stack);
+    RR_String* string = RR_Value_Sprint(value, false, 0);
+    VM_Pop(self);
+    RR_Queue_PshB(self->stack, RR_Value_NewString(string));
+}
+
+static void
 VM_Len(VM* self)
 {
     RR_Value* value = RR_Queue_Back(self->stack);
@@ -4412,7 +4581,7 @@ VM_Ins(VM* self)
 static void
 VM_Ref(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 1);
+    RR_Value* a = RR_Queue_Back(self->stack);
     size_t refs = a->refs;
     VM_Pop(self);
     RR_Queue_PshB(self->stack, RR_Value_NewNumber(refs));
@@ -4518,7 +4687,7 @@ VM_Fmt(VM* self)
 static void
 VM_Typ(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 1);
+    RR_Value* a = RR_Queue_Back(self->stack);
     RR_Type type = a->type;
     VM_Pop(self);
     RR_Queue_PshB(self->stack, RR_Value_NewString(RR_String_Init(RR_Type_ToString(type))));
@@ -4627,7 +4796,7 @@ VM_Wrt(VM* self)
 static void
 VM_God(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 1);
+    RR_Value* a = RR_Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_FILE);
     bool boolean = a->of.file->file != NULL;
     VM_Pop(self);
@@ -4637,7 +4806,7 @@ VM_God(VM* self)
 static void
 VM_Key(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 1);
+    RR_Value* a = RR_Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_MAP);
     RR_Value* queue = RR_Map_Key(a->of.map);
     VM_Pop(self);
@@ -4647,9 +4816,58 @@ VM_Key(VM* self)
 static void
 VM_Ext(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 1);
+    RR_Value* a = RR_Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     exit(a->of.number);
+    VM_Pop(self);
+    RR_Queue_PshB(self->stack, RR_Value_NewNull());
+}
+
+static void
+VM_Tim(VM* self)
+{
+    double us = Microseconds();
+    RR_Queue_PshB(self->stack, RR_Value_NewNumber(us));
+}
+
+static void
+VM_Srd(VM* self)
+{
+    RR_Value* a = RR_Queue_Back(self->stack);
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    srand(a->of.number);
+    VM_Pop(self);
+    RR_Queue_PshB(self->stack, RR_Value_NewNull());
+}
+
+static void
+VM_Rnd(VM* self)
+{
+    double number = rand();
+    RR_Queue_PshB(self->stack, RR_Value_NewNumber(number));
+}
+
+static void
+VM_Lin(VM* self)
+{
+    Debug* debug = RR_Queue_Get(self->debug, self->pc);
+    RR_Queue_PshB(self->stack, RR_Value_NewNumber(debug->line));
+}
+
+static void
+VM_Fil(VM* self)
+{
+    Debug* debug = RR_Queue_Get(self->debug, self->pc);
+    RR_Queue_PshB(self->stack, RR_Value_NewString(RR_String_Init(debug->file)));
+}
+
+static void
+VM_Asr(VM* self)
+{
+    RR_Value* a = RR_Queue_Back(self->stack);
+    VM_TypeExpect(self, a->type, TYPE_BOOL);
+    if(a->of.boolean == false)
+        VM_Quit(self, "assert");
     VM_Pop(self);
     RR_Queue_PshB(self->stack, RR_Value_NewNull());
 }
@@ -4667,6 +4885,8 @@ VM_Run(VM* self, bool arbitrary)
         {
         case OPCODE_ADD: VM_Add(self); break;
         case OPCODE_AND: VM_And(self); break;
+        case OPCODE_ASR: VM_Asr(self); break;
+        case OPCODE_BSR: VM_Bsr(self); break;
         case OPCODE_BRF: VM_Brf(self, address); break;
         case OPCODE_CAL: VM_Cal(self, address); break;
         case OPCODE_CPY: VM_Cpy(self); break;
@@ -4676,6 +4896,7 @@ VM_Run(VM* self, bool arbitrary)
         case OPCODE_END: return VM_End(self);
         case OPCODE_EQL: VM_Eql(self); break;
         case OPCODE_EXT: VM_Ext(self); break;
+        case OPCODE_FIL: VM_Fil(self); break;
         case OPCODE_FLS: VM_Fls(self); break;
         case OPCODE_FMT: VM_Fmt(self); break;
         case OPCODE_GET: VM_Get(self); break;
@@ -4686,6 +4907,7 @@ VM_Run(VM* self, bool arbitrary)
         case OPCODE_INS: VM_Ins(self); break;
         case OPCODE_JMP: VM_Jmp(self, address); break;
         case OPCODE_KEY: VM_Key(self); break;
+        case OPCODE_LIN: VM_Lin(self); break;
         case OPCODE_LEN: VM_Len(self); break;
         case OPCODE_LOC: VM_Loc(self, address); break;
         case OPCODE_LOD: VM_Lod(self); break;
@@ -4706,10 +4928,14 @@ VM_Run(VM* self, bool arbitrary)
         case OPCODE_RED: VM_Red(self); break;
         case OPCODE_REF: VM_Ref(self); break;
         case OPCODE_RET: VM_Ret(self); break;
+        case OPCODE_RND: VM_Rnd(self); break;
         case OPCODE_SAV: VM_Sav(self); break;
         case OPCODE_SPD: VM_Spd(self); break;
+        case OPCODE_SRD: VM_Srd(self); break;
+        case OPCODE_STR: VM_Str(self); break;
         case OPCODE_SRT: VM_Srt(self); break;
         case OPCODE_SUB: VM_Sub(self); break;
+        case OPCODE_TIM: VM_Tim(self); break;
         case OPCODE_TYP: VM_Typ(self); break;
         case OPCODE_VRT: VM_Vrt(self); break;
         case OPCODE_WRT: VM_Wrt(self); break;

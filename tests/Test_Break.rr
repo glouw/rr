@@ -20,12 +20,6 @@ Main()
         }
         a += 1;
     }
-    if(a == A)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a == A);
+    ret 0;
 }

@@ -1,0 +1,19 @@
+Fun()
+{
+
+    Assert(4 == Line());
+
+}
+
+Main()
+{
+    Assert(10 == Line());
+
+
+    Assert(13 == Line());
+
+
+
+    Assert(17 == Line());
+    ret 0;
+}

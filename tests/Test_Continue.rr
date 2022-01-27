@@ -18,12 +18,9 @@ Main()
         continue;
         b += 1;
     }
-    if((d == 0) && (c == A) && (b == 0) && (a == B))
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(d == 0);
+    Assert(c == A);
+    Assert(b == 0);
+    Assert(a == B);
+    ret 0;
 }

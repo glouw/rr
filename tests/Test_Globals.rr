@@ -15,17 +15,9 @@ E := Add(D["value"], C);
 
 Main()
 {
-    pass := 0;
-    if(A == 123) { pass += 1; }
-    if(B == 124) { pass += 1; }
-    if(C == 248) { pass += 1; }
-    if(E == 348) { pass += 1; }
-    if(pass == 4)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(A == 123);
+    Assert(B == 124);
+    Assert(C == 248);
+    Assert(E == 348);
+    ret 0;
 }

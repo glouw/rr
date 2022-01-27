@@ -2,12 +2,8 @@ Main()
 {
     a := 1;
     b := Copy(a);
-    if(a ? b)
-    {
-        ret 1;
-    }
-    else
-    {
-        ret 0;
-    }
+    c := a;
+    Assert(!(a ? b));
+    Assert(a ? c);
+    ret 0;
 }

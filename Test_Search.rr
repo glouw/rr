@@ -1,0 +1,28 @@
+Diff(a, b)
+{
+    ret a.key - b.key;
+}
+
+Compare(a, b)
+{
+    ret a.key < b.key;
+}
+
+Main()
+{
+    key := "b";
+    want := 99;
+    a := [
+        { "key": key, "value" : want },
+        { "key": "a", "value" : 2 },
+        { "key": "d", "value" : 3 },
+        { "key": "c", "value" : 4 },
+        { "key": "z", "value" : 5 },
+        { "key": "f", "value" : 6 },
+    ];
+    Print(a);
+    Sort(a, Compare);
+    b := Search(a, { "key" : key }, Diff);
+    Assert(b.value == want, "key search failed");
+    ret 0;
+}

@@ -6,12 +6,8 @@ Main()
         {"goose": "louw"},
         [ 0, 1, 2, 3, 4, "foo", { "asdf" : 1 }]
     ];
-    if(Print(a) == 208)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    # Traliing newline is not included in the print count.
+    Assert(Len(String(a)) == 208);
+    Assert(Print(a) == 208);
+    ret 0;
 }
