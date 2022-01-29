@@ -72,7 +72,7 @@ Find(arr, l, r)
         {
             break;
         }
-        m := l + (r - l) / 2;
+        m := Mid(l, r);
         if(l == r)
         {
             ret arr[m];
