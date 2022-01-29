@@ -17,12 +17,6 @@ Main()
     c := b;
     d := c;
     r := Fun(a, b, c, d);
-    if(r == 9)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(r == 9);
+    ret 0;
 }

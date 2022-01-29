@@ -1,15 +1,9 @@
 Main()
 {
-    if((null == null)
-    && ("st" != null)
-    && (1 != null)
-    && (null != "st")
-    && (null != 1))
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(null == null);
+    Assert("st" != null);
+    Assert(1 != null);
+    Assert(null != "st");
+    Assert(null != 1);
+    ret 0;
 }

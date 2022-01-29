@@ -1,0 +1,11 @@
+# General purpose functions useful for leetcode style questions
+
+IsEven(n)
+{ 
+    ret (n % 2) == 0;
+}
+
+IsOdd(n)
+{
+    ret !IsEven(n);
+}

@@ -1,11 +1,5 @@
 Main()
 {
-    if("A" + "_" + "B" == "A_B")
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert("A" + "_" + "B" == "A_B");
+    ret 0;
 }

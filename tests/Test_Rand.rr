@@ -1,10 +1,9 @@
 Main()
 {
-    t0 := Time();
-    Srand(Time());
+    Srand(1);
     a := Rand();
-    Print(a);
-    t1 := Time();
-    Print("time taken {} microseconds" % [t1 - t0]);
+    Srand(2);
+    b := Rand();
+    Assert(a != b);
     ret 0;
 }

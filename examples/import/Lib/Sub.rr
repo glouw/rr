@@ -1,4 +1,0 @@
-Lib_Sub(a, b)
-{
-    ret a - b;
-}

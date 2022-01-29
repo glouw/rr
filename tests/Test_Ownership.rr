@@ -1,7 +1,6 @@
 Fun(a, b)
 {
     Del(a, "a");
-    Print(b);
 }
 
 Main()
@@ -12,6 +11,6 @@ Main()
         }
     };
     Fun(a, a["a"]);
-    Print(a);
+    Assert(a == {});
     ret 0;
 }

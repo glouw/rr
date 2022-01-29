@@ -20,9 +20,8 @@ Main()
         { "key": "z", "value" : 5 },
         { "key": "f", "value" : 6 },
     ];
-    Print(a);
     Sort(a, Compare);
     b := Search(a, { "key" : key }, Diff);
-    Assert(b.value == want, "key search failed");
+    Assert(b.value == want);
     ret 0;
 }

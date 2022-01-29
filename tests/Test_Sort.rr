@@ -10,12 +10,6 @@ Main()
     Sort(a, Compare);
     Print(a);
     Print(b);
-    if(a == b)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a == b);
+    ret 0;
 }

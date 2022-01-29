@@ -2,12 +2,6 @@ Main()
 {
     dict := { "B", "A", "C", "E", "D" };
     want := [ "A", "B", "C", "D", "E" ];
-    if(want == Key(dict))
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(want == Keys(dict));
+    ret 0;
 }

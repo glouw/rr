@@ -1,0 +1,22 @@
+# Handy for checking data cache misses with `valgrind --tool=cachegrind`
+
+Sum(array)
+{
+    sum := 0;
+    for(i := 0; i < Len(array); i += 1)
+    {
+        sum += array[i];
+    }
+    ret sum;
+}
+
+Main()
+{
+    array := [];
+    for(i := 0; i < 10000; i += 1)
+    {
+        array += i;
+    }
+    Print(Sum(array));
+    ret 0;
+}

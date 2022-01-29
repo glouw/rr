@@ -1,4 +1,0 @@
-Lib_Add(a, b)
-{
-    ret a + b;
-}

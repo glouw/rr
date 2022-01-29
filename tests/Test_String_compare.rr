@@ -1,24 +1,8 @@
 Main()
 {
-    if(!("a" < "b"))
-    {
-        Print("<");
-        ret 1;
-    }
-    if(!("b" > "a"))
-    {
-        Print(">");
-        ret 1;
-    }
-    if(!("a" >= "a"))
-    {
-        Print(">=");
-        ret 1;
-    }
-    if(!("a" <= "a"))
-    {
-        Print("<=");
-        ret 1;
-    }
+    Assert("a" < "b");
+    Assert("b" > "a");
+    Assert("a" >= "a");
+    Assert("a" <= "a");
     ret 0;
 }

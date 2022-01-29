@@ -1,4 +1,3 @@
-TITLE = roman2
 DEBUG = 1
 
 ifeq (1,$(DEBUG))
@@ -9,23 +8,15 @@ endif
 
 WFLAGS = -Wall -Wextra -Wpedantic -Wshadow
 CC = gcc -std=gnu99 -pedantic
+LIBS = -lm
 
+TITLE = roman2
 BIN = $(TITLE)
 SRC = $(TITLE).c
-HDR = $(TITLE).h
-LIB = lib$(TITLE).so
 
-install: $(SRC) $(HDR) Makefile
-	sudo cp $(HDR) /usr/include
-	$(CC) -DRR_LIBROMAN2=\"$(TITLE)\" $(CFLAGS) $(WFLAGS) $< -o $(LIB) -fpic -shared 
-	sudo mv $(LIB) /usr/lib
-	$(CC) -DRR_MAIN -DRR_LIBROMAN2=\"$(TITLE)\" $(CFLAGS) $(WFLAGS) $< -o $(BIN) -ldl -l$(TITLE)
+install: $(SRC) Makefile
+	$(CC) $(CFLAGS) $(WFLAGS) $< -o $(BIN) $(LIBS)
 	sudo mv $(BIN) /usr/bin
 
 uninstall:
-	sudo rm /usr/include/$(HDR)
-	sudo rm /usr/lib/$(LIB)
 	sudo rm /usr/bin/$(BIN)
-
-clean:
-	rm -f $(BIN) $(LIB)

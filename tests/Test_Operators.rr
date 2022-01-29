@@ -1,24 +1,22 @@
 Main()
 {
-    pass := 0;
-    if(0 == 0)         { pass += 1; }
-    if(0 != 1)         { pass += 1; }
-    if(1 > 0)          { pass += 1; }
-    if(0 < 1)          { pass += 1; }
-    if(0 <= 1)         { pass += 1; }
-    if(1 >= 0)         { pass += 1; }
-    if(0 <= 0)         { pass += 1; }
-    if(0 >= 0)         { pass += 1; }
-    if(!false)         { pass += 1; }
-    if(true)           { pass += 1; }
-    if(1 - 1 == 0)     { pass += 1; }
-    if(1 + 1 == 2)     { pass += 1; }
-    if(1 / 2 == 0.5)   { pass += 1; }
-    if(1 * 2 == 2.0)   { pass += 1; }
-    if(true && true)   { pass += 1; }
-    if(true || false)  { pass += 1; }
-    if(true && !false) { pass += 1; }
-    if(!false && true) { pass += 1; }
-
-    if(pass == 18) { ret 0; } else { ret 1; }
+    Assert(0 == 0);
+    Assert(0 != 1);
+    Assert(1 > 0);
+    Assert(0 < 1);
+    Assert(0 <= 1);
+    Assert(1 >= 0);
+    Assert(0 <= 0);
+    Assert(0 >= 0);
+    Assert(!false);
+    Assert(true);
+    Assert(1 - 1 == 0);
+    Assert(1 + 1 == 2);
+    Assert(1 / 2 == 0.5);
+    Assert(1 * 2 == 2.0);
+    Assert(true && true);
+    Assert(true || false);
+    Assert(true && !false);
+    Assert(!false && true);
+    ret 0;
 }

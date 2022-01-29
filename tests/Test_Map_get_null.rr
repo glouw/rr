@@ -1,12 +1,6 @@
 Main()
 {
     a := {};
-    if(a["key"] == null)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a["key"] == null);
+    ret 0;
 }

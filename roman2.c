@@ -8,42 +8,76 @@
  *
  */
 
-#include <roman2.h>
-
 #include <string.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
 #include <stdint.h>
-#include <dlfcn.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
 
 #define QUEUE_BLOCK_SIZE (8)
 #define MAP_UNPRIMED (-1)
 #define STR_CAP_SIZE (16)
 #define MODULE_BUFFER_SIZE (512)
-#define RR_LEN(a) (sizeof(a) / sizeof(*a))
+#define LEN(a) (sizeof(a) / sizeof(*a))
+#define FORMAT_WIDTH (0)
+#define FORMAT_PRECI (2)
 
-struct RR_String
+typedef int64_t
+(*Diff)(void*, void*);
+
+typedef bool
+(*Compare)(void*, void*);
+
+typedef void
+(*Kill)(void*);
+
+typedef void*
+(*Copy)(void*);
+
+typedef struct Value Value;
+
+typedef enum
+{
+    TYPE_FILE,
+    TYPE_FUNCTION,
+    TYPE_QUEUE,
+    TYPE_CHAR,
+    TYPE_MAP,
+    TYPE_STRING,
+    TYPE_NUMBER,
+    TYPE_BOOL,
+    TYPE_NULL,
+}
+Type;
+
+typedef struct
 {
     char* value;
     size_t size;
     size_t cap;
-};
+}
+String;
 
-struct RR_Char
+typedef struct
 {
-    RR_Value* string;
+    Value* string;
     char* value;
-};
+}
+Char;
 
-struct RR_Function
+typedef struct
 {
-    RR_String* name;
+    String* name;
     size_t size;
     size_t address;
-};
+}
+Function;
 
 typedef struct
 {
@@ -53,58 +87,61 @@ typedef struct
 }
 Block;
 
-struct RR_Queue
+typedef struct
 {
     Block** block;
-    RR_Kill kill;
-    RR_Copy copy;
+    Kill kill;
+    Copy copy;
     size_t size;
     size_t blocks;
-};
+}
+Queue;
 
 typedef struct Node
 {
     struct Node* next;
-    RR_String* key;
+    String* key;
     void* value;
 }
 Node;
 
-struct RR_File
+typedef struct
 {
-    RR_String* path;
-    RR_String* mode;
+    String* path;
+    String* mode;
     FILE* file;
-};
+}
+File;
 
-struct RR_Map
+typedef struct
 {
     Node** bucket;
-    RR_Kill kill;
-    RR_Copy copy;
+    Kill kill;
+    Copy copy;
     size_t size;
     int64_t prime_index;
     float load_factor;
-    unsigned rand1;
-    unsigned rand2;
-};
+    uint64_t rand1;
+    uint64_t rand2;
+}
+Map;
 
 typedef union
 {
-    RR_File* file;
-    RR_Function* function;
-    RR_Queue* queue;
-    RR_Map* map;
-    RR_String* string;
-    RR_Char* character;
+    File* file;
+    Function* function;
+    Queue* queue;
+    Map* map;
+    String* string;
+    Char* character;
     double number;
     bool boolean;
 }
 Of;
 
-struct RR_Value
+struct Value
 {
-    RR_Type type;
+    Type type;
     Of of;
     size_t refs;
 };
@@ -130,7 +167,6 @@ typedef enum
     CLASS_VARIABLE_LOCAL,
     CLASS_FUNCTION,
     CLASS_FUNCTION_PROTOTYPE,
-    CLASS_FUNCTION_PROTOTYPE_NATIVE,
 }
 Class;
 
@@ -145,13 +181,13 @@ typedef enum
     OPCODE_CPY,
     OPCODE_DEL,
     OPCODE_DIV,
-    OPCODE_DLL,
     OPCODE_EXT,
     OPCODE_END,
     OPCODE_EQL,
     OPCODE_FIL,
+    OPCODE_FLR,
     OPCODE_FLS,
-    OPCODE_FMT,
+    OPCODE_MOD,
     OPCODE_GET,
     OPCODE_GLB,
     OPCODE_GOD,
@@ -197,14 +233,14 @@ Opcode;
 
 typedef struct
 {
-    RR_Queue* modules;
-    RR_Queue* assembly;
-    RR_Queue* data;
-    RR_Queue* debug;
-    RR_Map* identifiers;
-    RR_Map* files;
-    RR_Map* included;
-    RR_String* prime;
+    Queue* modules;
+    Queue* assembly;
+    Queue* data;
+    Queue* debug;
+    Map* identifiers;
+    Map* files;
+    Map* included;
+    String* prime;
     size_t globals;
     size_t locals;
     size_t labels;
@@ -214,7 +250,7 @@ CC;
 typedef struct
 {
     FILE* file;
-    RR_String* name;
+    String* name;
     size_t index;
     size_t size;
     size_t line;
@@ -226,19 +262,19 @@ typedef struct
 {
     Class class;
     size_t stack;
-    RR_String* path;
+    String* path;
 }
 Meta;
 
 typedef struct
 {
-    RR_Queue* data;
-    RR_Queue* stack;
-    RR_Queue* frame;
-    RR_Queue* debug; // NOTE: Owned by CC.
-    RR_Queue* addresses;
-    RR_Map* track;
-    RR_Value* ret;
+    Queue* data;
+    Queue* stack;
+    Queue* frame;
+    Queue* debug; // NOTE: Owned by CC.
+    Queue* addresses;
+    Map* track;
+    Value* ret;
     uint64_t* instructions;
     size_t size;
     size_t pc;
@@ -256,7 +292,7 @@ Frame;
 
 typedef struct
 {
-    RR_String* label;
+    String* label;
     size_t address;
 }
 Stack;
@@ -267,6 +303,33 @@ typedef struct
     size_t line;
 }
 Debug;
+
+static String*
+Value_Sprint(Value* self, bool newline, size_t indents, size_t width, size_t precision);
+
+static Value*
+Value_NewQueue(void);
+
+static bool
+Value_LessThan(Value* a, Value* b);
+
+static Value*
+Value_NewString(String* string);
+
+static void
+Value_Kill(Value* self);
+
+static void
+CC_Expression(CC*);
+
+static bool
+CC_Factor(CC*);
+
+static void
+CC_Block(CC*, size_t head, size_t tail, bool loop);
+
+static int64_t
+VM_Run(VM*, bool arbitrary);
 
 static void*
 Malloc(size_t size)
@@ -293,7 +356,7 @@ Calloc(size_t nmemb, size_t size)
 }
 
 static void
-Delete(RR_Kill kill, void* value)
+Delete(Kill kill, void* value)
 {
     if(kill)
         kill(value);
@@ -305,401 +368,25 @@ Equals(char* a, char* b)
     return a[0] != b[0] ? false : (strcmp(a, b) == 0);
 }
 
-static void
-Type_Kill(RR_Type type, Of* of);
-
-RR_Type
-RR_Value_ToType(RR_Value* self)
+static double
+Microseconds(void)
 {
-    return self->type;
-}
-
-RR_File*
-RR_Value_ToFile(RR_Value* self)
-{
-    return self->type == TYPE_FILE
-         ? self->of.file
-         : NULL;
-}
-
-RR_Queue*
-RR_Value_ToQueue(RR_Value* self)
-{
-    return self->type == TYPE_QUEUE
-         ? self->of.queue
-         : NULL;
-}
-
-RR_Map*
-RR_Value_ToMap(RR_Value* self)
-{
-    return self->type == TYPE_MAP
-         ? self->of.map
-         : NULL;
-}
-
-RR_String*
-RR_Value_ToString(RR_Value* self)
-{
-    return self->type == TYPE_STRING
-         ? self->of.string
-         : NULL;
-}
-
-RR_Char*
-RR_Value_ToChar(RR_Value* self)
-{
-    return self->type == TYPE_CHAR
-         ? self->of.character
-         : NULL;
-}
-
-double*
-RR_Value_ToNumber(RR_Value* self)
-{
-    return self->type == TYPE_NUMBER
-         ? &self->of.number
-         : NULL;
-}
-
-bool*
-RR_Value_ToBool(RR_Value* self)
-{
-    return self->type == TYPE_BOOL
-         ? &self->of.boolean
-         : NULL;
-}
-
-RR_Function*
-RR_Value_ToFunction(RR_Value* self)
-{
-    return self->type == TYPE_FUNCTION
-         ? self->of.function
-         : NULL;
-}
-
-size_t
-RR_Value_Len(RR_Value* self)
-{
-    switch(self->type)
-    {
-    case TYPE_FILE:
-        return RR_File_Size(self->of.file);
-    case TYPE_FUNCTION:
-        return self->of.function->size;
-    case TYPE_QUEUE:
-        return self->of.queue->size;
-    case TYPE_MAP:
-        return self->of.map->size;
-    case TYPE_STRING:
-        return self->of.string->size;
-    case TYPE_CHAR:
-    case TYPE_NUMBER:
-    case TYPE_BOOL:
-    case TYPE_NULL:
-        break;
-    }
-    return 0;
-}
-
-size_t
-RR_Value_Refs(RR_Value* self)
-{
-    return self->refs;
-}
-
-void
-RR_Value_Dec(RR_Value* self)
-{
-    self->refs -= 1;
-}
-
-void
-RR_Value_Inc(RR_Value* self)
-{
-    self->refs += 1;
-}
-
-void
-RR_Value_Kill(RR_Value* self)
-{
-    if(self->refs == 0)
-    {
-        Type_Kill(self->type, &self->of);
-        Free(self);
-    }
-    else
-        RR_Value_Dec(self);
-}
-
-#define COMPARE_TABLE(CMP)                        \
-    case TYPE_STRING:                             \
-        return strcmp(a->of.string->value,        \
-                      b->of.string->value) CMP 0; \
-    case TYPE_NUMBER:                             \
-        return a->of.number                       \
-           CMP b->of.number;                      \
-    case TYPE_FILE:                               \
-        return RR_File_Size(a->of.file)           \
-           CMP RR_File_Size(b->of.file);          \
-    case TYPE_QUEUE:                              \
-        return a->of.queue->size                  \
-           CMP b->of.queue->size;                 \
-    case TYPE_CHAR:                               \
-        return *a->of.character->value            \
-           CMP *b->of.character->value;           \
-    case TYPE_MAP:                                \
-        return a->of.map->size                    \
-           CMP b->of.map->size;                   \
-    case TYPE_BOOL:                               \
-        return a->of.boolean                      \
-           CMP b->of.boolean;                     \
-    case TYPE_FUNCTION:                           \
-        return a->of.function->size               \
-           CMP b->of.function->size;              \
-    case TYPE_NULL:                               \
-        break;
-
-bool
-RR_Value_LessThan(RR_Value* a, RR_Value* b)
-{
-    if(a->type == b->type)
-        switch(a->type) { COMPARE_TABLE(<); }
-    return false;
-}
-
-bool
-RR_Value_GreaterThanEqualTo(RR_Value* a, RR_Value* b)
-{
-    if(a->type == b->type)
-        switch(a->type) { COMPARE_TABLE(>=); }
-    return false;
-}
-
-bool
-RR_Value_GreaterThan(RR_Value* a, RR_Value* b)
-{
-    if(a->type == b->type)
-        switch(a->type) { COMPARE_TABLE(>); }
-    return false;
-}
-
-bool
-RR_Value_LessThanEqualTo(RR_Value* a, RR_Value* b)
-{
-    if(a->type == b->type)
-        switch(a->type) { COMPARE_TABLE(<=); }
-    return false;
-}
-
-bool
-RR_Value_Equal(RR_Value* a, RR_Value* b)
-{
-    if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
-        return *a->of.character->value == b->of.string->value[0];
-    else
-    if(b->type == TYPE_CHAR && a->type == TYPE_STRING)
-        return *b->of.character->value == a->of.string->value[0];
-    else
-    if(a->type == b->type)
-        switch(a->type)
-        {
-        case TYPE_FILE:
-            return RR_File_Equal(a->of.file, b->of.file);
-        case TYPE_FUNCTION:
-            return RR_Function_Equal(a->of.function, b->of.function);
-        case TYPE_QUEUE:
-            return RR_Queue_Equal(a->of.queue, b->of.queue, (RR_Compare) RR_Value_Equal);
-        case TYPE_MAP:
-            return RR_Map_Equal(a->of.map, b->of.map, (RR_Compare) RR_Value_Equal);
-        case TYPE_STRING:
-            return RR_String_Equal(a->of.string, b->of.string);
-        case TYPE_NUMBER:
-            return a->of.number == b->of.number;
-        case TYPE_BOOL:
-            return a->of.boolean == b->of.boolean;
-        case TYPE_CHAR:
-            return *a->of.character->value == *b->of.character->value;
-        case TYPE_NULL:
-            return b->type == TYPE_NULL;
-        }
-    return false;
-}
-
-RR_Value*
-RR_Value_Copy(RR_Value* self)
-{
-    RR_Value* copy = Malloc(sizeof(*copy));
-    copy->refs = 0;
-    RR_Type_Copy(copy, self);
-    return copy;
-}
-
-static RR_Value*
-Value_Init(Of of, RR_Type type)
-{
-    RR_Value* self = Malloc(sizeof(*self));
-    self->type = type;
-    self->refs = 0;
-    self->of = of;
-    return self;
-}
-
-RR_Value*
-RR_Value_NewQueue(void)
-{
-    Of of;
-    of.queue = RR_Queue_Init((RR_Kill) RR_Value_Kill, (RR_Copy) RR_Value_Copy);
-    return Value_Init(of, TYPE_QUEUE);
-}
-
-RR_Value*
-RR_Value_NewMap(void)
-{
-    Of of;
-    of.map = RR_Map_Init((RR_Kill) RR_Value_Kill, (RR_Copy) RR_Value_Copy);
-    return Value_Init(of, TYPE_MAP);
-}
-
-RR_Value*
-RR_Value_NewFunction(RR_Function* function)
-{
-    Of of;
-    of.function = function;
-    return Value_Init(of, TYPE_FUNCTION);
-}
-
-RR_Value*
-RR_Value_NewChar(RR_Char* character)
-{
-    Of of;
-    of.character = character;
-    return Value_Init(of, TYPE_CHAR);
-}
-
-RR_Value*
-RR_Value_NewString(RR_String* string)
-{
-    Of of;
-    of.string = string;
-    return Value_Init(of, TYPE_STRING);
-}
-
-RR_Value*
-RR_Value_NewNumber(double number)
-{
-    Of of;
-    of.number = number;
-    return Value_Init(of, TYPE_NUMBER);
-}
-
-RR_Value*
-RR_Value_NewBool(bool boolean)
-{
-    Of of;
-    of.boolean = boolean;
-    return Value_Init(of, TYPE_BOOL);
-}
-
-RR_Value*
-RR_Value_NewFile(RR_File* file)
-{
-    Of of;
-    of.file = file;
-    return Value_Init(of, TYPE_FILE);
-}
-
-RR_Value*
-RR_Value_NewNull(void)
-{
-    Of of;
-    return Value_Init(of, TYPE_NULL);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * 1e6 + tv.tv_usec;
 }
 
 static void
-String_Append(RR_String* self, RR_String* other)
-{
-    RR_String_Appends(self, other->value);
-    RR_String_Kill(other);
-}
-
-RR_String*
-RR_Value_Sprint(RR_Value* self, bool newline, size_t indents)
-{
-    RR_String* print = RR_String_Init("");
-    switch(self->type)
-    {
-    case TYPE_FILE:
-        String_Append(print, RR_String_Format("{ \"%s\", \"%s\", %p }", self->of.file->path->value, self->of.file->mode->value, self->of.file->file));
-        break;
-    case TYPE_FUNCTION:
-        String_Append(print, RR_String_Format("{ %s, %lu, %lu }", self->of.function->name->value, self->of.function->size, self->of.function->address));
-        break;
-    case TYPE_QUEUE:
-        String_Append(print, RR_Queue_Print(self->of.queue, indents));
-        break;
-    case TYPE_MAP:
-        String_Append(print, RR_Map_Print(self->of.map, indents));
-        break;
-    case TYPE_STRING:
-        String_Append(print, RR_String_Format(indents == 0 ? "%s" : "\"%s\"", self->of.string->value));
-        break;
-    case TYPE_NUMBER:
-        String_Append(print, RR_String_Format("%f", self->of.number));
-        break;
-    case TYPE_BOOL:
-        String_Append(print, RR_String_Format("%s", self->of.boolean ? "true" : "false"));
-        break;
-    case TYPE_CHAR:
-        String_Append(print, RR_String_Format(indents == 0 ? "%c" : "\"%c\"", *self->of.character->value));
-        break;
-    case TYPE_NULL:
-        RR_String_Appends(print, "null");
-        break;
-    }
-    if(newline)
-        RR_String_Appends(print, "\n");
-    return print; 
-}
-
-void
-RR_Value_Print(RR_Value* self)
-{
-    RR_String* out = RR_Value_Sprint(self, false, 0);
-    puts(out->value);
-    RR_String_Kill(out);
-}
-
-void
-RR_Value_Sub(RR_Value* a, RR_Value* b)
-{
-    char* x = a->of.character->value;
-    char* y = b->of.string->value;
-    while(*x && *y)
-    {
-        *x = *y;
-        x += 1;
-        y += 1;
-    }
-}
-
-static void
-String_Alloc(RR_String* self, size_t cap)
+String_Alloc(String* self, size_t cap)
 {
     self->cap = cap;
     self->value = Realloc(self->value, (1 + cap) * sizeof(*self->value));
 }
 
-char*
-RR_String_Value(RR_String* self)
+static String*
+String_Init(char* string)
 {
-    return self->value;
-}
-
-RR_String*
-RR_String_Init(char* string)
-{
-    RR_String* self = Malloc(sizeof(*self));
+    String* self = Malloc(sizeof(*self));
     self->value = NULL;
     self->size = strlen(string);
     String_Alloc(self, self->size < STR_CAP_SIZE ? STR_CAP_SIZE : self->size);
@@ -707,74 +394,56 @@ RR_String_Init(char* string)
     return self;
 }
 
-void
-RR_String_Kill(RR_String* self)
+static void
+String_Kill(String* self)
 {
     Delete(Free, self->value);
     Free(self);
 }
 
-static RR_String*
+static String*
 String_FromChar(char c)
 {
     char string[] = { c, '\0' };
-    return RR_String_Init(string);
+    return String_Init(string);
 }
 
-void
-RR_String_Swap(RR_String** self, RR_String** other)
+static void
+String_Swap(String** self, String** other)
 {
-    RR_String* temp = *self;
+    String* temp = *self;
     *self = *other;
     *other = temp;
 }
 
-RR_String*
-RR_String_Copy(RR_String* self)
+static String*
+String_Copy(String* self)
 {
-    return RR_String_Init(self->value);
+    return String_Init(self->value);
 }
 
-size_t
-RR_String_Size(RR_String* self)
-{
-    return self->size;
-}
-
-void
-RR_String_Replace(RR_String* self, char x, char y)
+static void
+String_Replace(String* self, char x, char y)
 {
     for(size_t i = 0; i < self->size; i++)
         if(self->value[i] == x)
             self->value[i] = y;
 }
 
-char*
-RR_String_End(RR_String* self)
+static char*
+String_End(String* self)
 {
     return &self->value[self->size - 1];
 }
 
-char
-RR_String_Back(RR_String* self)
+static char
+String_Back(String* self)
 {
-    return *RR_String_End(self);
+    return *String_End(self);
 }
 
-char*
-RR_String_Begin(RR_String* self)
-{
-    return &self->value[0];
-}
-
-size_t
-RR_String_Empty(RR_String* self)
-{
-    return self->size == 0;
-}
-
-void
-RR_String_PshB(RR_String* self, char ch)
+static void
+String_PshB(String* self, char ch)
 {
     if(self->size == self->cap)
         String_Alloc(self, (self->cap == 0) ? 1 : (2 * self->cap));
@@ -783,29 +452,29 @@ RR_String_PshB(RR_String* self, char ch)
     self->size += 1;
 }
 
-RR_String*
-RR_String_Indent(size_t indents)
+static String*
+String_Indent(size_t indents)
 {
     size_t width = 4;
-    RR_String* ident = RR_String_Init("");
+    String* ident = String_Init("");
     while(indents > 0)
     {
         for(size_t i = 0; i < width; i++)
-            RR_String_PshB(ident, ' ');
+            String_PshB(ident, ' ');
         indents -= 1;
     }
     return ident;
 }
 
-void
-RR_String_PopB(RR_String* self)
+static void
+String_PopB(String* self)
 {
     self->size -= 1;
     self->value[self->size] = '\0';
 }
 
-void
-RR_String_Resize(RR_String* self, size_t size)
+static void
+String_Resize(String* self, size_t size)
 {
     if(size > self->cap)
         String_Alloc(self, size);
@@ -813,44 +482,51 @@ RR_String_Resize(RR_String* self, size_t size)
     self->value[size] = '\0';
 }
 
-bool
-RR_String_Equals(RR_String* a, char* b)
+static bool
+String_Equals(String* a, char* b)
 {
     return Equals(a->value, b);
 }
 
-bool
-RR_String_Equal(RR_String* a, RR_String* b)
+static bool
+String_Equal(String* a, String* b)
 {
     return Equals(a->value, b->value);
 }
 
-void
-RR_String_Appends(RR_String* self, char* str)
+static void
+String_Appends(String* self, char* str)
 {
     while(*str)
     {
-        RR_String_PshB(self, *str);
+        String_PshB(self, *str);
         str += 1;
     }
 }
 
-RR_String*
-RR_String_Base(RR_String* path)
+static void
+String_Append(String* self, String* other)
 {
-    RR_String* base = RR_String_Copy(path);
+    String_Appends(self, other->value);
+    String_Kill(other);
+}
+
+static String*
+String_Base(String* path)
+{
+    String* base = String_Copy(path);
     while(base->size != 0)
-        if(RR_String_Back(base) == '/')
+        if(String_Back(base) == '/')
             break;
         else
-            RR_String_PopB(base);
+            String_PopB(base);
     return base;
 }
 
-RR_String*
-RR_String_Moves(char** from)
+static String*
+String_Moves(char** from)
 {
-    RR_String* self = Malloc(sizeof(*self));
+    String* self = Malloc(sizeof(*self));
     self->value = *from;
     self->size = strlen(self->value);
     self->cap = self->size;
@@ -859,29 +535,29 @@ RR_String_Moves(char** from)
 }
 
 static inline bool
-String_IsBoolean(RR_String* ident)
+String_IsBoolean(String* ident)
 {
-    return RR_String_Equals(ident, "true") || RR_String_Equals(ident, "false");
+    return String_Equals(ident, "true") || String_Equals(ident, "false");
 }
 
 static inline bool
-String_IsNull(RR_String* ident)
+String_IsNull(String* ident)
 {
-    return RR_String_Equals(ident, "null");
+    return String_Equals(ident, "null");
 }
 
-RR_String*
-RR_String_Format(char* format, ...)
+static String*
+String_Format(char* format, ...)
 {
     va_list args;
     va_start(args, format);
-    RR_String* line = RR_String_Init("");
+    String* line = String_Init("");
     size_t size = vsnprintf(line->value, line->size, format, args);
     va_end(args);
     if(size >= line->size)
     {
         va_start(args, format);
-        RR_String_Resize(line, size);
+        String_Resize(line, size);
         vsprintf(line->value, format, args);
         va_end(args);
     }
@@ -890,69 +566,69 @@ RR_String_Format(char* format, ...)
     return line;
 }
 
-char*
-RR_String_Get(RR_String* self, size_t index)
+static char*
+String_Get(String* self, size_t index)
 {
     if(index >= self->size)
         return NULL;
     return &self->value[index];
 }
 
-bool
-RR_String_Del(RR_String* self, size_t index)
+static bool
+String_Del(String* self, size_t index)
 {
-    if(RR_String_Get(self, index))
+    if(String_Get(self, index))
     {
         for(size_t i = index; i < self->size - 1; i++)
             self->value[i] = self->value[i + 1];
-        RR_String_PopB(self);
+        String_PopB(self);
         return true;
     }
     return false;
 }
 
-RR_File*
-RR_File_Init(RR_String* path, RR_String* mode)
+static File*
+File_Init(String* path, String* mode)
 {
-    RR_File* self = Malloc(sizeof(*self));
+    File* self = Malloc(sizeof(*self));
     self->path = path;
     self->mode = mode;
     self->file = fopen(self->path->value, self->mode->value);
     return self;
 }
 
-bool
-RR_File_Equal(RR_File* a, RR_File* b)
+static bool
+File_Equal(File* a, File* b)
 {
     struct stat stat1;
     struct stat stat2;
-    if(fstat(fileno(RR_File_File(a)), &stat1) < 0
-    || fstat(fileno(RR_File_File(b)), &stat2) < 0)
+    if(fstat(fileno(a->file), &stat1) < 0
+    || fstat(fileno(b->file), &stat2) < 0)
         return false;
-    return RR_String_Equal(a->path, b->path) 
-        && RR_String_Equal(a->mode, b->mode)
+    return String_Equal(a->path, b->path) 
+        && String_Equal(a->mode, b->mode)
         && stat1.st_dev == stat2.st_dev
         && stat1.st_ino == stat2.st_ino;
 }
 
-void
-RR_File_Kill(RR_File* self)
+static void
+File_Kill(File* self)
 {
-    RR_String_Kill(self->path);
-    RR_String_Kill(self->mode);
+    String_Kill(self->path);
+    String_Kill(self->mode);
     if(self->file)
         fclose(self->file);
     Free(self);
 }
 
-RR_File*
-RR_File_Copy(RR_File* self)
+static File*
+File_Copy(File* self)
 {
-    return RR_File_Init(RR_String_Copy(self->path), RR_String_Copy(self->mode));
+    return File_Init(String_Copy(self->path), String_Copy(self->mode));
 }
 
-size_t
-RR_File_Size(RR_File* self)
+static size_t
+File_Size(File* self)
 {
     if(self->file)
     {
@@ -966,54 +642,36 @@ RR_File_Size(RR_File* self)
         return 0;
 }
 
-FILE*
-RR_File_File(RR_File* self)
+static Function*
+Function_Init(String* name, size_t size, size_t address)
 {
-    return self->file;
-}
-
-RR_Function*
-RR_Function_Init(RR_String* name, size_t size, size_t address)
-{
-    RR_Function* self = Malloc(sizeof(*self));
+    Function* self = Malloc(sizeof(*self));
     self->name = name;
     self->size = size;
     self->address = address;
     return self;
 }
 
-void
-RR_Function_Kill(RR_Function* self)
+static void
+Function_Kill(Function* self)
 {
-    RR_String_Kill(self->name);
+    String_Kill(self->name);
     Free(self);
 }
 
-RR_Function*
-RR_Function_Copy(RR_Function* self)
+static Function*
+Function_Copy(Function* self)
 {
-    return RR_Function_Init(RR_String_Copy(self->name), self->size, self->address);
+    return Function_Init(String_Copy(self->name), self->size, self->address);
 }
 
-size_t
-RR_Function_Size(RR_Function* self)
+static bool
+Function_Equal(Function* a, Function* b)
 {
-    return self->size;
+    return String_Equal(a->name, b->name) && a->address == b->address && a->size == b->size;
 }
 
-size_t
-RR_Function_Address(RR_Function* self)
-{
-    return self->address;
-}
-
-bool
-RR_Function_Equal(RR_Function* a, RR_Function* b)
-{
-    return RR_String_Equal(a->name, b->name) && a->address == b->address && a->size == b->size;
-}
-
-Block*
+static Block*
 Block_Init(End end)
 {
     Block* self = Malloc(sizeof(*self));
@@ -1022,32 +680,20 @@ Block_Init(End end)
     return self;
 }
 
-size_t
-RR_Queue_Size(RR_Queue* self)
-{
-    return self->size;
-}
-
-bool
-RR_Queue_Empty(RR_Queue* self)
-{
-    return self->size == 0;
-}
-
 static inline Block**
-Queue_BlockF(RR_Queue* self)
+Queue_BlockF(Queue* self)
 {
     return &self->block[0];
 }
 
 static inline Block**
-Queue_BlockB(RR_Queue* self)
+Queue_BlockB(Queue* self)
 {
     return &self->block[self->blocks - 1];
 }
 
-void*
-RR_Queue_Front(RR_Queue* self)
+static void*
+Queue_Front(Queue* self)
 {
     if(self->size == 0)
         return NULL;
@@ -1055,8 +701,8 @@ RR_Queue_Front(RR_Queue* self)
     return block->value[block->a];
 }
 
-void*
-RR_Queue_Back(RR_Queue* self)
+static void*
+Queue_Back(Queue* self)
 {
     if(self->size == 0)
         return NULL;
@@ -1064,10 +710,10 @@ RR_Queue_Back(RR_Queue* self)
     return block->value[block->b - 1];
 }
 
-RR_Queue*
-RR_Queue_Init(RR_Kill kill, RR_Copy copy)
+static Queue*
+Queue_Init(Kill kill, Copy copy)
 {
-    RR_Queue* self = Malloc(sizeof(*self));
+    Queue* self = Malloc(sizeof(*self));
     self->block = NULL;
     self->kill = kill;
     self->copy = copy;
@@ -1076,8 +722,8 @@ RR_Queue_Init(RR_Kill kill, RR_Copy copy)
     return self;
 }
 
-void
-RR_Queue_Kill(RR_Queue* self)
+static void
+Queue_Kill(Queue* self)
 {
     for(size_t step = 0; step < self->blocks; step++)
     {
@@ -1093,8 +739,8 @@ RR_Queue_Kill(RR_Queue* self)
     Free(self);
 }
 
-void**
-RR_Queue_At(RR_Queue* self, size_t index)
+static void**
+Queue_At(Queue* self, size_t index)
 {
     if(index < self->size)
     {
@@ -1107,30 +753,30 @@ RR_Queue_At(RR_Queue* self, size_t index)
     return NULL;
 }
 
-void*
-RR_Queue_Get(RR_Queue* self, size_t index)
+static void*
+Queue_Get(Queue* self, size_t index)
 {
     if(index == 0)
-        return RR_Queue_Front(self);
+        return Queue_Front(self);
     else
     if(index == self->size - 1)
-        return RR_Queue_Back(self);
+        return Queue_Back(self);
     else
     {
-        void** at = RR_Queue_At(self, index);
+        void** at = Queue_At(self, index);
         return at ? *at : NULL;
     }
 }
 
 static void
-Queue_Alloc(RR_Queue* self, size_t blocks)
+Queue_Alloc(Queue* self, size_t blocks)
 {
     self->blocks = blocks;
     self->block = Realloc(self->block, blocks * sizeof(*self->block));
 }
 
-void
-RR_Queue_Push(RR_Queue* self, void* value, End end)
+static void
+Queue_Push(Queue* self, void* value, End end)
 {
     if(end == BACK)
     {
@@ -1147,8 +793,8 @@ RR_Queue_Push(RR_Queue* self, void* value, End end)
     self->size += 1;
 }
 
-void
-RR_Queue_PshB(RR_Queue* self, void* value)
+static void
+Queue_PshB(Queue* self, void* value)
 {
     if(self->blocks == 0)
     {
@@ -1164,11 +810,11 @@ RR_Queue_PshB(RR_Queue* self, void* value)
             *Queue_BlockB(self) = Block_Init(BACK);
         }
     }
-    RR_Queue_Push(self, value, BACK);
+    Queue_Push(self, value, BACK);
 }
 
-void
-RR_Queue_PshF(RR_Queue* self, void* value)
+static void
+Queue_PshF(Queue* self, void* value)
 {
     if(self->blocks == 0)
     {
@@ -1186,11 +832,11 @@ RR_Queue_PshF(RR_Queue* self, void* value)
             *Queue_BlockF(self) = Block_Init(FRONT);
         }
     }
-    RR_Queue_Push(self, value, FRONT);
+    Queue_Push(self, value, FRONT);
 }
 
-void
-RR_Queue_Pop(RR_Queue* self, End end)
+static void
+Queue_Pop(Queue* self, End end)
 {
     if(self->size != 0)
     {
@@ -1222,47 +868,47 @@ RR_Queue_Pop(RR_Queue* self, End end)
     }
 }
 
-void
-RR_Queue_PopB(RR_Queue* self)
+static void
+Queue_PopB(Queue* self)
 {
-    RR_Queue_Pop(self, BACK);
-}
-
-void
-RR_Queue_PopF(RR_Queue* self)
-{
-    RR_Queue_Pop(self, FRONT);
+    Queue_Pop(self, BACK);
 }
 
 static void
-Queue_PopFSoft(RR_Queue* self)
+Queue_PopF(Queue* self)
 {
-    RR_Kill kill = self->kill;
+    Queue_Pop(self, FRONT);
+}
+
+static void
+Queue_PopFSoft(Queue* self)
+{
+    Kill kill = self->kill;
     self->kill = NULL;
-    RR_Queue_PopF(self);
+    Queue_PopF(self);
     self->kill = kill;
 }
 
 static void
-Queue_PopBSoft(RR_Queue* self)
+Queue_PopBSoft(Queue* self)
 {
-    RR_Kill kill = self->kill;
+    Kill kill = self->kill;
     self->kill = NULL;
-    RR_Queue_PopB(self);
+    Queue_PopB(self);
     self->kill = kill;
 }
 
-bool
-RR_Queue_Del(RR_Queue* self, size_t index)
+static bool
+Queue_Del(Queue* self, size_t index)
 {
     if(index == 0)
-        RR_Queue_PopF(self);
+        Queue_PopF(self);
     else
     if(index == self->size - 1)
-        RR_Queue_PopB(self);
+        Queue_PopB(self);
     else
     {
-        void** at = RR_Queue_At(self, index);
+        void** at = Queue_At(self, index);
         if(at)
         {
             Delete(self->kill, *at);
@@ -1270,7 +916,7 @@ RR_Queue_Del(RR_Queue* self, size_t index)
             {
                 while(index > 0)
                 {
-                    *RR_Queue_At(self, index) = *RR_Queue_At(self, index - 1);
+                    *Queue_At(self, index) = *Queue_At(self, index - 1);
                     index -= 1;
                 }
                 Queue_PopFSoft(self);
@@ -1279,7 +925,7 @@ RR_Queue_Del(RR_Queue* self, size_t index)
             {
                 while(index < self->size - 1)
                 {
-                    *RR_Queue_At(self, index) = *RR_Queue_At(self, index + 1);
+                    *Queue_At(self, index) = *Queue_At(self, index + 1);
                     index += 1;
                 }
                 Queue_PopBSoft(self);
@@ -1291,123 +937,123 @@ RR_Queue_Del(RR_Queue* self, size_t index)
     return true;
 }
 
-RR_Queue*
-RR_Queue_Copy(RR_Queue* self)
+static Queue*
+Queue_Copy(Queue* self)
 {
-    RR_Queue* copy = RR_Queue_Init(self->kill, self->copy);
+    Queue* copy = Queue_Init(self->kill, self->copy);
     for(size_t i = 0; i < self->size; i++)
     {
-        void* temp = RR_Queue_Get(self, i);
+        void* temp = Queue_Get(self, i);
         void* value = copy->copy ? copy->copy(temp) : temp;
-        RR_Queue_PshB(copy, value);
+        Queue_PshB(copy, value);
     }
     return copy;
 }
 
-void
-RR_Queue_Prepend(RR_Queue* self, RR_Queue* other)
+static void
+Queue_Prepend(Queue* self, Queue* other)
 {
     size_t i = other->size;
     while(i != 0)
     {
         i -= 1;
-        void* temp = RR_Queue_Get(other, i);
+        void* temp = Queue_Get(other, i);
         void* value = self->copy ? self->copy(temp) : temp;
-        RR_Queue_PshF(self, value);
+        Queue_PshF(self, value);
     }
 }
 
-void
-RR_Queue_Append(RR_Queue* self, RR_Queue* other)
+static void
+Queue_Append(Queue* self, Queue* other)
 {
     for(size_t i = 0; i < other->size; i++)
     {
-        void* temp = RR_Queue_Get(other, i);
+        void* temp = Queue_Get(other, i);
         void* value = self->copy ? self->copy(temp) : temp;
-        RR_Queue_PshB(self, value);
+        Queue_PshB(self, value);
     }
 }
 
-bool
-RR_Queue_Equal(RR_Queue* self, RR_Queue* other, RR_Compare compare)
+static bool
+Queue_Equal(Queue* self, Queue* other, Compare compare)
 {
     if(self->size != other->size)
         return false;
     else
         for(size_t i = 0; i < self->size; i++)
-            if(!compare(RR_Queue_Get(self, i), RR_Queue_Get(other, i)))
+            if(!compare(Queue_Get(self, i), Queue_Get(other, i)))
                 return false;
     return true;
 }
 
-void
-RR_Queue_Swap(RR_Queue* self, int64_t a, int64_t b)
+static void
+Queue_Swap(Queue* self, int64_t a, int64_t b)
 {
-    void** x = RR_Queue_At(self, a);
-    void** y = RR_Queue_At(self, b);
+    void** x = Queue_At(self, a);
+    void** y = Queue_At(self, b);
     void* temp = *x;
     *x = *y;
     *y = temp;
 }
 
 static void
-RR_Queue_RangedSort(RR_Queue* self, RR_Compare compare, int64_t left, int64_t right)
+Queue_RangedSort(Queue* self, Compare compare, int64_t left, int64_t right)
 {
     if(left >= right)
         return;
-    RR_Queue_Swap(self, left, (left + right) / 2);
+    Queue_Swap(self, left, (left + right) / 2);
     int64_t last = left;
     for(int64_t i = left + 1; i <= right; i++)
     {
-        void* a = RR_Queue_Get(self, i);
-        void* b = RR_Queue_Get(self, left);
+        void* a = Queue_Get(self, i);
+        void* b = Queue_Get(self, left);
         if(compare(a, b))
-             RR_Queue_Swap(self, ++last, i);
+             Queue_Swap(self, ++last, i);
     }
-   RR_Queue_Swap(self, left, last);
-   RR_Queue_RangedSort(self, compare, left, last - 1);
-   RR_Queue_RangedSort(self, compare, last + 1, right);
+   Queue_Swap(self, left, last);
+   Queue_RangedSort(self, compare, left, last - 1);
+   Queue_RangedSort(self, compare, last + 1, right);
 }
 
-void
-RR_Queue_Sort(RR_Queue* self, RR_Compare compare)
+static void
+Queue_Sort(Queue* self, Compare compare)
 {
-    RR_Queue_RangedSort(self, compare, 0, self->size - 1);
+    Queue_RangedSort(self, compare, 0, self->size - 1);
 }
 
-RR_String*
-RR_Queue_Print(RR_Queue* self, size_t indents)
+static String*
+Queue_Print(Queue* self, size_t indents)
 {
     if(self->size == 0)
-        return RR_String_Init("[]");
+        return String_Init("[]");
     else
     {
-        RR_String* print = RR_String_Init("[\n");
+        String* print = String_Init("[\n");
         size_t size = self->size;
         for(size_t i = 0; i < size; i++)
         {
-            String_Append(print, RR_String_Indent(indents + 1));
-            String_Append(print, RR_String_Format("[%lu] = ", i));
-            String_Append(print, RR_Value_Sprint(RR_Queue_Get(self, i), false, indents + 1));
+            String_Append(print, String_Indent(indents + 1));
+            String_Append(print, String_Format("[%lu] = ", i));
+            String_Append(print, Value_Sprint(Queue_Get(self, i), false, indents + 1, FORMAT_WIDTH, FORMAT_PRECI));
             if(i < size - 1)
-                RR_String_Appends(print, ",");
-            RR_String_Appends(print, "\n");
+                String_Appends(print, ",");
+            String_Appends(print, "\n");
         }
-        String_Append(print, RR_String_Indent(indents));
-        RR_String_Appends(print, "]");
+        String_Append(print, String_Indent(indents));
+        String_Appends(print, "]");
         return print;
     }
 }
 
-void*
-RR_Queue_BSearch(RR_Queue* self, void* key, RR_Diff diff)
+static void*
+Queue_BSearch(Queue* self, void* key, Diff diff)
 {
     int64_t low = 0;
     int64_t high = self->size - 1;
     while(low <= high)
     {
         int64_t mid = (low + high) / 2;
-        void* now = RR_Queue_Get(self, mid);
+        void* now = Queue_Get(self, mid);
         int64_t cmp = diff(key, now);
         if(cmp == 0)
             return now;
@@ -1420,8 +1066,8 @@ RR_Queue_BSearch(RR_Queue* self, void* key, RR_Diff diff)
     return NULL;
 }
 
-Node*
-Node_Init(RR_String* key, void* value)
+static Node*
+Node_Init(String* key, void* value)
 {
     Node* self = Malloc(sizeof(*self));
     self->next = NULL;
@@ -1430,33 +1076,33 @@ Node_Init(RR_String* key, void* value)
     return self;
 }
 
-void
-Node_Set(Node* self, RR_Kill kill, RR_String* key, void* value)
+static void
+Node_Set(Node* self, Kill kill, String* key, void* value)
 {
-    Delete((RR_Kill) RR_String_Kill, self->key);
+    Delete((Kill) String_Kill, self->key);
     Delete(kill, self->value);
     self->key = key;
     self->value = value;
 }
 
-void
-Node_Kill(Node* self, RR_Kill kill)
+static void
+Node_Kill(Node* self, Kill kill)
 {
     Node_Set(self, kill, NULL, NULL);
     Free(self);
 }
 
-void
+static void
 Node_Push(Node** self, Node* node)
 {
     node->next = *self;
     *self = node;
 }
 
-Node*
-Node_Copy(Node* self, RR_Copy copy)
+static Node*
+Node_Copy(Node* self, Copy copy)
 {
-    return Node_Init(RR_String_Copy(self->key), copy ? copy(self->value) : self->value);
+    return Node_Init(String_Copy(self->key), copy ? copy(self->value) : self->value);
 }
 
 static const size_t
@@ -1472,24 +1118,24 @@ Map_Primes[] = {
     45481, 49201, 53201, 57557, 62233, 67307, 72817, 78779, 85229, 92203,
 };
 
-size_t
-RR_Map_Buckets(RR_Map* self)
+static size_t
+Map_Buckets(Map* self)
 {
     if(self->prime_index == MAP_UNPRIMED)
         return 0; 
     return Map_Primes[self->prime_index];
 }
 
-bool
-RR_Map_Resizable(RR_Map* self)
+static bool
+Map_Resizable(Map* self)
 {
-    return self->prime_index < (int64_t) RR_LEN(Map_Primes) - 1;
+    return self->prime_index < (int64_t) LEN(Map_Primes) - 1;
 }
 
-RR_Map*
-RR_Map_Init(RR_Kill kill, RR_Copy copy)
+static Map*
+Map_Init(Kill kill, Copy copy)
 {
-    RR_Map* self = Malloc(sizeof(*self));
+    Map* self = Malloc(sizeof(*self));
     self->kill = kill;
     self->copy = copy;
     self->bucket = NULL;
@@ -1501,22 +1147,10 @@ RR_Map_Init(RR_Kill kill, RR_Copy copy)
     return self;
 }
 
-size_t
-RR_Map_Size(RR_Map* self)
+static void
+Map_Kill(Map* self)
 {
-    return self->size;
-}
-
-bool
-RR_Map_Empty(RR_Map* self)
-{
-    return self->size == 0;
-}
-
-void
-RR_Map_Kill(RR_Map* self)
-{
-    for(size_t i = 0; i < RR_Map_Buckets(self); i++)
+    for(size_t i = 0; i < Map_Buckets(self); i++)
     {
         Node* bucket = self->bucket[i];
         while(bucket)
@@ -1530,12 +1164,12 @@ RR_Map_Kill(RR_Map* self)
     Free(self);
 }
 
-unsigned
-RR_Map_Hash(RR_Map* self, char* key)
+static uint64_t
+Map_Hash(Map* self, char* key)
 {
-    unsigned r1 = self->rand1; // Need a way to srand from VM?
-    unsigned r2 = self->rand2;
-    unsigned hash = 0;
+    uint64_t r1 = self->rand1;
+    uint64_t r2 = self->rand2;
+    uint64_t hash = 0;
     while(*key)
     {
         hash *= r1;
@@ -1543,38 +1177,38 @@ RR_Map_Hash(RR_Map* self, char* key)
         r1 *= r2;
         key += 1;
     }
-    return hash % RR_Map_Buckets(self);
+    return hash % Map_Buckets(self);
 }
 
-Node**
-RR_Map_Bucket(RR_Map* self, char* key)
+static Node**
+Map_Bucket(Map* self, char* key)
 {
-    unsigned index = RR_Map_Hash(self, key);
+    uint64_t index = Map_Hash(self, key);
     return &self->bucket[index];
 }
 
 static void
-Map_Alloc(RR_Map* self, size_t index)
+Map_Alloc(Map* self, size_t index)
 {
     self->prime_index = index;
-    self->bucket = Calloc(RR_Map_Buckets(self), sizeof(*self->bucket));
+    self->bucket = Calloc(Map_Buckets(self), sizeof(*self->bucket));
 }
 
 static void
-RR_Map_Emplace(RR_Map* self, RR_String* key, Node* node);
+Map_Emplace(Map* self, String* key, Node* node);
 
-void
-RR_Map_Rehash(RR_Map* self)
+static void
+Map_Rehash(Map* self)
 {
-    RR_Map* other = RR_Map_Init(self->kill, self->copy);
+    Map* other = Map_Init(self->kill, self->copy);
     Map_Alloc(other, self->prime_index + 1);
-    for(size_t i = 0; i < RR_Map_Buckets(self); i++)
+    for(size_t i = 0; i < Map_Buckets(self); i++)
     {
         Node* bucket = self->bucket[i];
         while(bucket)
         {
             Node* next = bucket->next;
-            RR_Map_Emplace(other, bucket->key, bucket);
+            Map_Emplace(other, bucket->key, bucket);
             bucket = next;
         }
     }
@@ -1583,33 +1217,33 @@ RR_Map_Rehash(RR_Map* self)
     Free(other);
 }
 
-bool
-RR_Map_Full(RR_Map* self)
+static bool
+Map_Full(Map* self)
 {
-    return self->size / (float) RR_Map_Buckets(self) > self->load_factor;
+    return self->size / (float) Map_Buckets(self) > self->load_factor;
 }
 
 static void
-RR_Map_Emplace(RR_Map* self, RR_String* key, Node* node)
+Map_Emplace(Map* self, String* key, Node* node)
 {
     if(self->prime_index == MAP_UNPRIMED)
         Map_Alloc(self, 0);
     else
-    if(RR_Map_Resizable(self) && RR_Map_Full(self))
-        RR_Map_Rehash(self);
-    Node_Push(RR_Map_Bucket(self, key->value), node);
+    if(Map_Resizable(self) && Map_Full(self))
+        Map_Rehash(self);
+    Node_Push(Map_Bucket(self, key->value), node);
     self->size += 1;
 }
 
-Node*
-RR_Map_At(RR_Map* self, char* key)
+static Node*
+Map_At(Map* self, char* key)
 {
     if(self->size != 0) 
     {
-        Node* chain = *RR_Map_Bucket(self, key);
+        Node* chain = *Map_Bucket(self, key);
         while(chain)
         {
-            if(RR_String_Equals(chain->key, key))
+            if(String_Equals(chain->key, key))
                 return chain;
             chain = chain->next;
         }
@@ -1617,23 +1251,23 @@ RR_Map_At(RR_Map* self, char* key)
     return NULL;
 }
 
-bool
-RR_Map_Exists(RR_Map* self, char* key)
+static bool
+Map_Exists(Map* self, char* key)
 {
-    return RR_Map_At(self, key) != NULL;
+    return Map_At(self, key) != NULL;
 }
 
-void
-RR_Map_Del(RR_Map* self, char* key)
+static void
+Map_Del(Map* self, char* key)
 {
     if(self->size != 0) 
     {
-        Node** head = RR_Map_Bucket(self, key);
+        Node** head = Map_Bucket(self, key);
         Node* chain = *head;
         Node* prev = NULL;
         while(chain)
         {
-            if(RR_String_Equals(chain->key, key))
+            if(String_Equals(chain->key, key))
             {
                 if(prev)
                     prev->next = chain->next;
@@ -1649,69 +1283,68 @@ RR_Map_Del(RR_Map* self, char* key)
     }
 }
 
-void
-RR_Map_Set(RR_Map* self, RR_String* key, void* value)
+static void
+Map_Set(Map* self, String* key, void* value)
 {
-    Node* found = RR_Map_At(self, key->value);
+    Node* found = Map_At(self, key->value);
     if(found)
         Node_Set(found, self->kill, key, value);
     else
     {
         Node* node = Node_Init(key, value);
-        RR_Map_Emplace(self, key, node);
+        Map_Emplace(self, key, node);
     }
 }
 
-void*
-RR_Map_Get(RR_Map* self, char* key)
+static void*
+Map_Get(Map* self, char* key)
 {
-    Node* found = RR_Map_At(self, key);
+    Node* found = Map_At(self, key);
     return found ? found->value : NULL;
 }
 
-RR_Map*
-RR_Map_Copy(RR_Map* self)
+static Map*
+Map_Copy(Map* self)
 {
-    RR_Map* copy = RR_Map_Init(self->kill, self->copy);
-    for(size_t i = 0; i < RR_Map_Buckets(self); i++)
+    Map* copy = Map_Init(self->kill, self->copy);
+    for(size_t i = 0; i < Map_Buckets(self); i++)
     {
         Node* chain = self->bucket[i];
         while(chain)
         {
             Node* node = Node_Copy(chain, copy->copy);
-            RR_Map_Emplace(copy, node->key, node);
+            Map_Emplace(copy, node->key, node);
             chain = chain->next;
         }
     }
     return copy;
 }
 
-void
-RR_Map_Append(RR_Map* self, RR_Map* other)
+static void
+Map_Append(Map* self, Map* other)
 {
-    for(size_t i = 0; i < RR_Map_Buckets(other); i++)
+    for(size_t i = 0; i < Map_Buckets(other); i++)
     {
         Node* chain = other->bucket[i];
         while(chain)
         {
-            RR_Map_Set(self, RR_String_Copy(chain->key), self->copy ? self->copy(chain->value) : chain->value);
+            Map_Set(self, String_Copy(chain->key), self->copy ? self->copy(chain->value) : chain->value);
             chain = chain->next;
         }
     }
 }
 
-
-bool
-RR_Map_Equal(RR_Map* self, RR_Map* other, RR_Compare compare)
+static bool
+Map_Equal(Map* self, Map* other, Compare compare)
 {
     if(self->size == other->size)
     {
-        for(size_t i = 0; i < RR_Map_Buckets(self); i++)
+        for(size_t i = 0; i < Map_Buckets(self); i++)
         {
             Node* chain = self->bucket[i];
             while(chain)
             {
-                void* got = RR_Map_Get(other, chain->key->value);
+                void* got = Map_Get(other, chain->key->value);
                 if(got == NULL)
                     return false;
                 if(!compare(chain->value, got))
@@ -1723,59 +1356,59 @@ RR_Map_Equal(RR_Map* self, RR_Map* other, RR_Compare compare)
     return true;
 }
 
-RR_String*
-RR_Map_Print(RR_Map* self, size_t indents)
+static String*
+Map_Print(Map* self, size_t indents)
 {
     if(self->size == 0)
-        return RR_String_Init("{}");
+        return String_Init("{}");
     else
     {
-        RR_String* print = RR_String_Init("{\n");
-        for(size_t i = 0; i < RR_Map_Buckets(self); i++)
+        String* print = String_Init("{\n");
+        for(size_t i = 0; i < Map_Buckets(self); i++)
         {
             Node* bucket = self->bucket[i];
             while(bucket)
             {
-                String_Append(print, RR_String_Indent(indents + 1));
-                String_Append(print, RR_String_Format("\"%s\" : ", bucket->key->value));
-                String_Append(print, RR_Value_Sprint(bucket->value, false, indents + 1));
+                String_Append(print, String_Indent(indents + 1));
+                String_Append(print, String_Format("\"%s\" : ", bucket->key->value));
+                String_Append(print, Value_Sprint(bucket->value, false, indents + 1, FORMAT_WIDTH, FORMAT_PRECI));
                 if(i < self->size - 1)
-                    RR_String_Appends(print, ",");
-                RR_String_Appends(print, "\n");
+                    String_Appends(print, ",");
+                String_Appends(print, "\n");
                 bucket = bucket->next;
             }
         }
-        String_Append(print, RR_String_Indent(indents));
-        RR_String_Appends(print, "}");
+        String_Append(print, String_Indent(indents));
+        String_Appends(print, "}");
         return print;
     }
 }
 
-RR_Value*
-RR_Map_Key(RR_Map* self)
+static Value*
+Map_Key(Map* self)
 {
-    RR_Value* queue = RR_Value_NewQueue();
-    for(size_t i = 0; i < RR_Map_Buckets(self); i++)
+    Value* queue = Value_NewQueue();
+    for(size_t i = 0; i < Map_Buckets(self); i++)
     {
         Node* chain = self->bucket[i];
         while(chain)
         {
-            RR_Value* string = RR_Value_NewString(RR_String_Copy(chain->key));
-            RR_Queue_PshB(queue->of.queue, string);
+            Value* string = Value_NewString(String_Copy(chain->key));
+            Queue_PshB(queue->of.queue, string);
             chain = chain->next;
         }
     }
-    RR_Queue_Sort(queue->of.queue, (RR_Compare) RR_Value_LessThan);
+    Queue_Sort(queue->of.queue, (Compare) Value_LessThan);
     return queue;
 }
 
-RR_Char*
-RR_Char_Init(RR_Value* string, size_t index)
+static Char*
+Char_Init(Value* string, size_t index)
 {
-    char* value = RR_String_Get(string->of.string, index);
+    char* value = String_Get(string->of.string, index);
     if(value)
     {
-        RR_Char* self = Malloc(sizeof(*self));
+        Char* self = Malloc(sizeof(*self));
         self->string = string;
         self->value = value;
         return self;
@@ -1783,21 +1416,15 @@ RR_Char_Init(RR_Value* string, size_t index)
     return NULL;
 }
 
-char*
-RR_Char_Value(RR_Char* self)
+static void
+Char_Kill(Char* self)
 {
-    return self->value;
-}
-
-void
-RR_Char_Kill(RR_Char* self)
-{
-    RR_Value_Kill(self->string);
+    Value_Kill(self->string);
     Free(self);
 }
 
-char*
-RR_Type_ToString(RR_Type self)
+static char*
+Type_ToString(Type self)
 {
     switch(self)
     {
@@ -1824,27 +1451,27 @@ RR_Type_ToString(RR_Type self)
 }
 
 static void
-Type_Kill(RR_Type type, Of* of)
+Type_Kill(Type type, Of* of)
 {
     switch(type)
     {
     case TYPE_FILE:
-        RR_File_Kill(of->file);
+        File_Kill(of->file);
         break;
     case TYPE_FUNCTION:
-        RR_Function_Kill(of->function);
+        Function_Kill(of->function);
         break;
     case TYPE_QUEUE:
-        RR_Queue_Kill(of->queue);
+        Queue_Kill(of->queue);
         break;
     case TYPE_MAP:
-        RR_Map_Kill(of->map);
+        Map_Kill(of->map);
         break;
     case TYPE_STRING:
-        RR_String_Kill(of->string);
+        String_Kill(of->string);
         break;
     case TYPE_CHAR:
-        RR_Char_Kill(of->character);
+        Char_Kill(of->character);
         break;
     case TYPE_NUMBER:
     case TYPE_BOOL:
@@ -1853,26 +1480,40 @@ Type_Kill(RR_Type type, Of* of)
     }
 }
 
-void
-RR_Type_Copy(RR_Value* copy, RR_Value* self)
+static size_t*
+Int_Init(size_t value)
+{
+    size_t* self = Malloc(sizeof(*self));
+    *self = value;
+    return self;
+}
+
+static void
+Int_Kill(size_t* self)
+{
+    Free(self);
+}
+
+static void
+Type_Copy(Value* copy, Value* self)
 {
     copy->type = self->type;
     switch(self->type)
     {
     case TYPE_FILE:
-        copy->of.file = RR_File_Copy(self->of.file);
+        copy->of.file = File_Copy(self->of.file);
         break;
     case TYPE_FUNCTION:
-        copy->of.function = RR_Function_Copy(self->of.function);
+        copy->of.function = Function_Copy(self->of.function);
         break;
     case TYPE_QUEUE:
-        copy->of.queue = RR_Queue_Copy(self->of.queue);
+        copy->of.queue = Queue_Copy(self->of.queue);
         break;
     case TYPE_MAP:
-        copy->of.map = RR_Map_Copy(self->of.map);
+        copy->of.map = Map_Copy(self->of.map);
         break;
     case TYPE_STRING:
-        copy->of.string = RR_String_Copy(self->of.string);
+        copy->of.string = String_Copy(self->of.string);
         break;
     case TYPE_CHAR:
         copy->type = TYPE_STRING; // Chars promote to strings on copy.
@@ -1886,26 +1527,296 @@ RR_Type_Copy(RR_Value* copy, RR_Value* self)
     }
 }
 
-#ifdef RR_MAIN
+static size_t
+Value_Len(Value* self)
+{
+    switch(self->type)
+    {
+    case TYPE_FILE:
+        return File_Size(self->of.file);
+    case TYPE_FUNCTION:
+        return self->of.function->size;
+    case TYPE_QUEUE:
+        return self->of.queue->size;
+    case TYPE_MAP:
+        return self->of.map->size;
+    case TYPE_STRING:
+        return self->of.string->size;
+    case TYPE_CHAR:
+    case TYPE_NUMBER:
+    case TYPE_BOOL:
+    case TYPE_NULL:
+        break;
+    }
+    return 0;
+}
 
 static void
-CC_Expression(CC*);
+Value_Dec(Value* self)
+{
+    self->refs -= 1;
+}
+
+static void
+Value_Inc(Value* self)
+{
+    self->refs += 1;
+}
+
+static void
+Value_Kill(Value* self)
+{
+    if(self->refs == 0)
+    {
+        Type_Kill(self->type, &self->of);
+        Free(self);
+    }
+    else
+        Value_Dec(self);
+}
+
+#define COMPARE_TABLE(CMP)                        \
+    case TYPE_STRING:                             \
+        return strcmp(a->of.string->value,        \
+                      b->of.string->value) CMP 0; \
+    case TYPE_NUMBER:                             \
+        return a->of.number                       \
+           CMP b->of.number;                      \
+    case TYPE_FILE:                               \
+        return File_Size(a->of.file)           \
+           CMP File_Size(b->of.file);          \
+    case TYPE_QUEUE:                              \
+        return a->of.queue->size                  \
+           CMP b->of.queue->size;                 \
+    case TYPE_CHAR:                               \
+        return *a->of.character->value            \
+           CMP *b->of.character->value;           \
+    case TYPE_MAP:                                \
+        return a->of.map->size                    \
+           CMP b->of.map->size;                   \
+    case TYPE_BOOL:                               \
+        return a->of.boolean                      \
+           CMP b->of.boolean;                     \
+    case TYPE_FUNCTION:                           \
+        return a->of.function->size               \
+           CMP b->of.function->size;              \
+    case TYPE_NULL:                               \
+        break;
 
 static bool
-CC_Factor(CC*);
+Value_LessThan(Value* a, Value* b)
+{
+    if(a->type == b->type)
+        switch(a->type) { COMPARE_TABLE(<); }
+    return false;
+}
+
+static bool
+Value_GreaterThanEqualTo(Value* a, Value* b)
+{
+    if(a->type == b->type)
+        switch(a->type) { COMPARE_TABLE(>=); }
+    return false;
+}
+
+static bool
+Value_GreaterThan(Value* a, Value* b)
+{
+    if(a->type == b->type)
+        switch(a->type) { COMPARE_TABLE(>); }
+    return false;
+}
+
+static bool
+Value_LessThanEqualTo(Value* a, Value* b)
+{
+    if(a->type == b->type)
+        switch(a->type) { COMPARE_TABLE(<=); }
+    return false;
+}
+
+static bool
+Value_Equal(Value* a, Value* b)
+{
+    if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
+        return *a->of.character->value == b->of.string->value[0];
+    else
+    if(b->type == TYPE_CHAR && a->type == TYPE_STRING)
+        return *b->of.character->value == a->of.string->value[0];
+    else
+    if(a->type == b->type)
+        switch(a->type)
+        {
+        case TYPE_FILE:
+            return File_Equal(a->of.file, b->of.file);
+        case TYPE_FUNCTION:
+            return Function_Equal(a->of.function, b->of.function);
+        case TYPE_QUEUE:
+            return Queue_Equal(a->of.queue, b->of.queue, (Compare) Value_Equal);
+        case TYPE_MAP:
+            return Map_Equal(a->of.map, b->of.map, (Compare) Value_Equal);
+        case TYPE_STRING:
+            return String_Equal(a->of.string, b->of.string);
+        case TYPE_NUMBER:
+            return a->of.number == b->of.number;
+        case TYPE_BOOL:
+            return a->of.boolean == b->of.boolean;
+        case TYPE_CHAR:
+            return *a->of.character->value == *b->of.character->value;
+        case TYPE_NULL:
+            return b->type == TYPE_NULL;
+        }
+    return false;
+}
+
+static Value*
+Value_Copy(Value* self)
+{
+    Value* copy = Malloc(sizeof(*copy));
+    copy->refs = 0;
+    Type_Copy(copy, self);
+    return copy;
+}
+
+static Value*
+Value_Init(Of of, Type type)
+{
+    Value* self = Malloc(sizeof(*self));
+    self->type = type;
+    self->refs = 0;
+    self->of = of;
+    return self;
+}
+
+static Value*
+Value_NewQueue(void)
+{
+    Of of;
+    of.queue = Queue_Init((Kill) Value_Kill, (Copy) Value_Copy);
+    return Value_Init(of, TYPE_QUEUE);
+}
+
+static Value*
+Value_NewMap(void)
+{
+    Of of;
+    of.map = Map_Init((Kill) Value_Kill, (Copy) Value_Copy);
+    return Value_Init(of, TYPE_MAP);
+}
+
+static Value*
+Value_NewFunction(Function* function)
+{
+    Of of;
+    of.function = function;
+    return Value_Init(of, TYPE_FUNCTION);
+}
+
+static Value*
+Value_NewChar(Char* character)
+{
+    Of of;
+    of.character = character;
+    return Value_Init(of, TYPE_CHAR);
+}
+
+static Value*
+Value_NewString(String* string)
+{
+    Of of;
+    of.string = string;
+    return Value_Init(of, TYPE_STRING);
+}
+
+static Value*
+Value_NewNumber(double number)
+{
+    Of of;
+    of.number = number;
+    return Value_Init(of, TYPE_NUMBER);
+}
+
+static Value*
+Value_NewBool(bool boolean)
+{
+    Of of;
+    of.boolean = boolean;
+    return Value_Init(of, TYPE_BOOL);
+}
+
+static Value*
+Value_NewFile(File* file)
+{
+    Of of;
+    of.file = file;
+    return Value_Init(of, TYPE_FILE);
+}
+
+static Value*
+Value_NewNull(void)
+{
+    Of of;
+    return Value_Init(of, TYPE_NULL);
+}
+
+static String*
+Value_Sprint(Value* self, bool newline, size_t indents, size_t width, size_t precision)
+{
+    String* print = String_Init("");
+    switch(self->type)
+    {
+    case TYPE_FILE:
+        String_Append(print, String_Format("{ \"%s\", \"%s\", %p }", self->of.file->path->value, self->of.file->mode->value, self->of.file->file));
+        break;
+    case TYPE_FUNCTION:
+        String_Append(print, String_Format("{ %s, %lu, %lu }", self->of.function->name->value, self->of.function->size, self->of.function->address));
+        break;
+    case TYPE_QUEUE:
+        String_Append(print, Queue_Print(self->of.queue, indents));
+        break;
+    case TYPE_MAP:
+        String_Append(print, Map_Print(self->of.map, indents));
+        break;
+    case TYPE_STRING:
+        String_Append(print, String_Format(indents == 0 ? "%*s" : "\"%*s\"", width, self->of.string->value));
+        break;
+    case TYPE_NUMBER:
+        String_Append(print, String_Format("%*.*f", width, precision, self->of.number));
+        break;
+    case TYPE_BOOL:
+        String_Append(print, String_Format("%s", self->of.boolean ? "true" : "false"));
+        break;
+    case TYPE_CHAR:
+        String_Append(print, String_Format(indents == 0 ? "%c" : "\"%c\"", *self->of.character->value));
+        break;
+    case TYPE_NULL:
+        String_Appends(print, "null");
+        break;
+    }
+    if(newline)
+        String_Appends(print, "\n");
+    return print; 
+}
 
 static void
-CC_Block(CC*, size_t head, size_t tail, bool loop);
-
-static int64_t
-VM_Run(VM*, bool arbitrary);
-
-static double
-Microseconds(void)
+Value_Print(Value* self)
 {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1e6 + tv.tv_usec;
+    String* out = Value_Sprint(self, false, 0, FORMAT_WIDTH, FORMAT_PRECI);
+    puts(out->value);
+    String_Kill(out);
+}
+
+static void
+Value_Sub(Value* a, Value* b)
+{
+    char* x = a->of.character->value;
+    char* y = b->of.string->value;
+    while(*x && *y)
+    {
+        *x = *y;
+        x += 1;
+        y += 1;
+    }
 }
 
 static char*
@@ -1921,24 +1832,8 @@ Class_ToString(Class self)
         return "function";
     case CLASS_FUNCTION_PROTOTYPE:
         return "function prototype";
-    case CLASS_FUNCTION_PROTOTYPE_NATIVE:
-        return "native function prototype";
     }
     return "N/A";
-}
-
-static size_t*
-Int_Init(size_t value)
-{
-    size_t* self = Malloc(sizeof(*self));
-    *self = value;
-    return self;
-}
-
-static void
-Int_Kill(size_t* self)
-{
-    Free(self);
 }
 
 static Frame*
@@ -1958,7 +1853,7 @@ Frame_Free(Frame* self)
 }
 
 static Meta*
-Meta_Init(Class class, size_t stack, RR_String* path)
+Meta_Init(Class class, size_t stack, String* path)
 {
     Meta* self = Malloc(sizeof(*self));
     self->class = class;
@@ -1970,7 +1865,7 @@ Meta_Init(Class class, size_t stack, RR_String* path)
 static void
 Meta_Kill(Meta* self)
 {
-    RR_String_Kill(self->path);
+    String_Kill(self->path);
     Free(self);
 }
 
@@ -1982,7 +1877,7 @@ Module_Buffer(Module* self)
 }
 
 static Module*
-Module_Init(RR_String* name)
+Module_Init(String* name)
 {
     FILE* file = fopen(name->value, "r");
     if(file)
@@ -1990,7 +1885,7 @@ Module_Init(RR_String* name)
         Module* self = Malloc(sizeof(*self));
         self->file = file;
         self->line = 1;
-        self->name = RR_String_Copy(name);
+        self->name = String_Copy(name);
         Module_Buffer(self);
         return self;
     }
@@ -2000,7 +1895,7 @@ Module_Init(RR_String* name)
 static void
 Module_Kill(Module* self)
 {
-    RR_String_Kill(self->name);
+    String_Kill(self->name);
     fclose(self->file);
     Free(self);
 }
@@ -2043,7 +1938,7 @@ Quit(const char* const message, ...)
 static void
 CC_Quit(CC* self, const char* const message, ...)
 {
-    Module* back = RR_Queue_Back(self->modules);
+    Module* back = Queue_Back(self->modules);
     va_list args;
     va_start(args, message);
     fprintf(stderr, "error: file %s: line %lu: ", back ? back->name->value : "?", back ? back->line : 0);
@@ -2117,7 +2012,7 @@ CC_String_IsSpace(int64_t c)
 static void
 CC_Advance(CC* self)
 {
-    Module_Advance(RR_Queue_Back(self->modules));
+    Module_Advance(Queue_Back(self->modules));
 }
 
 static int64_t
@@ -2126,12 +2021,12 @@ CC_Peak(CC* self)
     int64_t peak;
     while(true)
     {
-        peak = Module_Peak(RR_Queue_Back(self->modules));
+        peak = Module_Peak(Queue_Back(self->modules));
         if(peak == EOF)
         {
             if(self->modules->size == 1)
                 return EOF;
-            RR_Queue_PopB(self->modules);
+            Queue_PopB(self->modules);
         }
         else
             break;
@@ -2173,13 +2068,13 @@ CC_Read(CC* self)
     return peak;
 }
 
-static RR_String*
+static String*
 CC_Stream(CC* self, bool clause(int64_t ))
 {
-    RR_String* str = RR_String_Init("");
+    String* str = String_Init("");
     CC_Spin(self);
     while(clause(CC_Peak(self)))
-        RR_String_PshB(str, CC_Read(self));
+        String_PshB(str, CC_Read(self));
     return str;
 }
 
@@ -2193,7 +2088,7 @@ CC_Match(CC* self, char* expect)
         if(peak != *expect)
         {
             char formatted[] = { peak, '\0' };
-            CC_Quit(self, "matched character %s but expected character %c", (peak == EOF) ? "EOF" : formatted, *expect);
+            CC_Quit(self, "matched character `%s` but expected character `%c`", (peak == EOF) ? "EOF" : formatted, *expect);
         }
         expect += 1;
     }
@@ -2224,47 +2119,47 @@ CC_String_EscToByte(int64_t ch)
     return -1;
 }
 
-static RR_String*
+static String*
 CC_Mod(CC* self)
 {
     return CC_Stream(self, CC_String_IsModule);
 }
 
-static RR_String*
+static String*
 CC_Ident(CC* self)
 {
     return CC_Stream(self, CC_String_IsIdent);
 }
 
-static RR_String*
+static String*
 CC_Operator(CC* self)
 {
     return CC_Stream(self, CC_String_IsOp);
 }
 
-static RR_String*
+static String*
 CC_Number(CC* self)
 {
     return CC_Stream(self, CC_String_IsNumber);
 }
 
-static RR_String*
+static String*
 CC_StringStream(CC* self)
 {
-    RR_String* str = RR_String_Init("");
+    String* str = String_Init("");
     CC_Spin(self);
     CC_Match(self, "\"");
     while(CC_Peak(self) != '"')
     {
         int64_t ch = CC_Read(self);
-        RR_String_PshB(str, ch);
+        String_PshB(str, ch);
         if(ch == '\\')
         {
             ch = CC_Read(self);
             int64_t byte = CC_String_EscToByte(ch);
             if(byte == -1)
                 CC_Quit(self, "an unknown escape char 0x%02X was encountered", ch);
-            RR_String_PshB(str, ch);
+            String_PshB(str, ch);
         }
     }
     CC_Match(self, "\"");
@@ -2290,13 +2185,13 @@ static CC*
 CC_Init(void)
 {
     CC* self = Malloc(sizeof(*self));
-    self->modules = RR_Queue_Init((RR_Kill) Module_Kill, (RR_Copy) NULL);
-    self->assembly = RR_Queue_Init((RR_Kill) RR_String_Kill, (RR_Copy) NULL);
-    self->data = RR_Queue_Init((RR_Kill) RR_String_Kill, (RR_Copy) NULL);
-    self->debug = RR_Queue_Init((RR_Kill) Debug_Kill, (RR_Copy) NULL);
-    self->files = RR_Map_Init((RR_Kill) NULL, (RR_Copy) NULL);
-    self->included = RR_Map_Init((RR_Kill) NULL, (RR_Copy) NULL);
-    self->identifiers = RR_Map_Init((RR_Kill) Meta_Kill, (RR_Copy) NULL);
+    self->modules = Queue_Init((Kill) Module_Kill, (Copy) NULL);
+    self->assembly = Queue_Init((Kill) String_Kill, (Copy) NULL);
+    self->data = Queue_Init((Kill) String_Kill, (Copy) NULL);
+    self->debug = Queue_Init((Kill) Debug_Kill, (Copy) NULL);
+    self->files = Map_Init((Kill) NULL, (Copy) NULL);
+    self->included = Map_Init((Kill) NULL, (Copy) NULL);
+    self->identifiers = Map_Init((Kill) Meta_Kill, (Copy) NULL);
     self->globals = 0;
     self->locals = 0;
     self->labels = 0;
@@ -2307,70 +2202,70 @@ CC_Init(void)
 static void
 CC_Kill(CC* self)
 {
-    RR_Queue_Kill(self->modules);
-    RR_Queue_Kill(self->assembly);
-    RR_Queue_Kill(self->data);
-    RR_Queue_Kill(self->debug);
-    RR_Map_Kill(self->included);
-    RR_Map_Kill(self->files);
-    RR_Map_Kill(self->identifiers);
+    Queue_Kill(self->modules);
+    Queue_Kill(self->assembly);
+    Queue_Kill(self->data);
+    Queue_Kill(self->debug);
+    Map_Kill(self->included);
+    Map_Kill(self->files);
+    Map_Kill(self->identifiers);
     Free(self);
 }
 
 static char*
-CC_RealPath(CC* self, RR_String* file)
+CC_RealPath(CC* self, String* file)
 {
-    RR_String* path;
+    String* path;
     if(self->modules->size == 0)
     {
-        path = RR_String_Init("");
-        RR_String_Resize(path, 4096);
+        path = String_Init("");
+        String_Resize(path, 4096);
         getcwd(path->value, path->size);
         strcat(path->value, "/");
         strcat(path->value, file->value);
     }
     else
     {
-        Module* back = RR_Queue_Back(self->modules);
-        path = RR_String_Base(back->name);
-        RR_String_Appends(path, file->value);
+        Module* back = Queue_Back(self->modules);
+        path = String_Base(back->name);
+        String_Appends(path, file->value);
     }
     char* real = realpath(path->value, NULL);
     if(real == NULL)
         CC_Quit(self, "%s could not be resolved as a real path", path->value);
-    RR_String_Kill(path);
+    String_Kill(path);
     return real;
 }
 
 static void
-CC_IncludeModule(CC* self, RR_String* file)
+CC_IncludeModule(CC* self, String* file)
 {
     char* real = CC_RealPath(self, file);
-    if(RR_Map_Exists(self->included, real))
+    if(Map_Exists(self->included, real))
         Free(real);
     else
     {
-        RR_String* resolved = RR_String_Moves(&real);
-        RR_Map_Set(self->included, resolved, NULL);
-        RR_Queue_PshB(self->modules, Module_Init(resolved));
+        String* resolved = String_Moves(&real);
+        Map_Set(self->included, resolved, NULL);
+        Queue_PshB(self->modules, Module_Init(resolved));
     }
 }
 
-static RR_String*
-CC_Parents(RR_String* module)
+static String*
+CC_Parents(String* module)
 {
-    RR_String* parents = RR_String_Init("");
+    String* parents = String_Init("");
     for(char* value = module->value; *value; value++)
     {
         if(*value != '.')
             break;
-        RR_String_Appends(parents, "../");
+        String_Appends(parents, "../");
     }
     return parents;
 }
 
-static RR_String*
-String_Skip(RR_String* self, char c)
+static String*
+String_Skip(String* self, char c)
 {
     char* value = self->value;
     while(*value)
@@ -2379,30 +2274,30 @@ String_Skip(RR_String* self, char c)
             break;
         value += 1;
     }
-    return RR_String_Init(value);
+    return String_Init(value);
 }
 
-static RR_String*
+static String*
 Module_Name(CC* self, char* postfix)
 {
-    RR_String* module = CC_Mod(self);
-    RR_String* skipped = String_Skip(module, '.');
-    RR_String_Replace(skipped, '.', '/');
-    RR_String_Appends(skipped, postfix);
-    RR_String* name = CC_Parents(module);
-    RR_String_Appends(name, skipped->value);
-    RR_String_Kill(skipped);
-    RR_String_Kill(module);
+    String* module = CC_Mod(self);
+    String* skipped = String_Skip(module, '.');
+    String_Replace(skipped, '.', '/');
+    String_Appends(skipped, postfix);
+    String* name = CC_Parents(module);
+    String_Appends(name, skipped->value);
+    String_Kill(skipped);
+    String_Kill(module);
     return name;
 }
 
 static void
 CC_Include(CC* self)
 {
-    RR_String* name = Module_Name(self, ".rr");
+    String* name = Module_Name(self, ".rr");
     CC_Match(self, ";");
     CC_IncludeModule(self, name);
-    RR_String_Kill(name);
+    String_Kill(name);
 }
 
 static bool
@@ -2427,14 +2322,13 @@ static bool
 CC_IsFunction(Class class)
 {
     return class == CLASS_FUNCTION
-        || class == CLASS_FUNCTION_PROTOTYPE
-        || class == CLASS_FUNCTION_PROTOTYPE_NATIVE;
+        || class == CLASS_FUNCTION_PROTOTYPE;
 }
 
 static void
-CC_Define(CC* self, Class class, size_t stack, RR_String* ident, RR_String* path)
+CC_Define(CC* self, Class class, size_t stack, String* ident, String* path)
 {
-    Meta* old = RR_Map_Get(self->identifiers, ident->value);
+    Meta* old = Map_Get(self->identifiers, ident->value);
     Meta* new = Meta_Init(class, stack, path);
     if(old)
     {
@@ -2448,38 +2342,58 @@ CC_Define(CC* self, Class class, size_t stack, RR_String* ident, RR_String* path
         else
             CC_Quit(self, "%s %s was already defined as a %s", Class_ToString(new->class), ident->value, Class_ToString(old->class));
     }
-    RR_Map_Set(self->identifiers, ident, new);
+    Map_Set(self->identifiers, ident, new);
+}
+
+static Debug*
+CC_Debug(CC* self)
+{
+    Module* back = Queue_Back(self->modules);
+    Debug* debug;
+    Node* at = Map_At(self->files, back->name->value);
+    if(at)
+    {
+        String* string = at->key;
+        debug = Debug_Init(string->value, back->line);
+    }
+    else
+    {
+        String* name = String_Copy(back->name);
+        Map_Set(self->files, name, NULL);
+        debug = Debug_Init(name->value, back->line);
+    }
+    return debug;
 }
 
 static void
-CC_Assem(CC* self, RR_String* assem)
+CC_Assem(CC* self, String* assem, End end)
 {
-    RR_Queue_PshB(self->assembly, assem);
+    void (*push)(Queue*, void*) = (end == BACK) ? Queue_PshB : Queue_PshF;
+    push(self->assembly, assem);
     if(assem->value[0] == '\t')
     {
-        Module* back = RR_Queue_Back(self->modules);
-        Debug* debug;
-        Node* at = RR_Map_At(self->files, back->name->value);
-        if(at)
-        {
-            RR_String* string = at->key;
-            debug = Debug_Init(string->value, back->line);
-        }
-        else
-        {
-            RR_String* name = RR_String_Copy(back->name);
-            RR_Map_Set(self->files, name, NULL);
-            debug = Debug_Init(name->value, back->line);
-        }
-        RR_Queue_PshB(self->debug, debug);
+        Debug* debug = CC_Debug(self);
+        push(self->debug, debug);
     }
+}
+
+static void
+CC_AssemB(CC* self, String* assem)
+{
+    CC_Assem(self, assem, BACK);
+}
+
+static void
+CC_AssemF(CC* self, String* assem)
+{
+    CC_Assem(self, assem, FRONT);
 }
 
 static void
 CC_ConsumeExpression(CC* self)
 {
     CC_Expression(self);
-    CC_Assem(self, RR_String_Init("\tpop"));
+    CC_AssemB(self, String_Init("\tpop"));
 }
 
 static void
@@ -2498,40 +2412,40 @@ CC_Assign(CC* self)
 }
 
 static void
-CC_Local(CC* self, RR_String* ident)
+CC_Local(CC* self, String* ident)
 {
-    CC_Define(self, CLASS_VARIABLE_LOCAL, self->locals, ident, RR_String_Init(""));
+    CC_Define(self, CLASS_VARIABLE_LOCAL, self->locals, ident, String_Init(""));
     self->locals += 1;
 }
 
 static void
-CC_AssignLocal(CC* self, RR_String* ident)
+CC_AssignLocal(CC* self, String* ident)
 {
     CC_Assign(self);
     CC_Local(self, ident);
 }
 
-static RR_String*
-CC_Global(CC* self, RR_String* ident)
+static String*
+CC_Global(CC* self, String* ident)
 {
-    RR_String* label = RR_String_Format("!%s", ident->value);
-    CC_Assem(self, RR_String_Format("%s:", label->value));
+    String* label = String_Format("!%s", ident->value);
+    CC_AssemB(self, String_Format("%s:", label->value));
     CC_Assign(self);
-    CC_Define(self, CLASS_VARIABLE_GLOBAL, self->globals, ident, RR_String_Init(""));
-    CC_Assem(self, RR_String_Init("\tret"));
+    CC_Define(self, CLASS_VARIABLE_GLOBAL, self->globals, ident, String_Init(""));
+    CC_AssemB(self, String_Init("\tret"));
     self->globals += 1;
     return label;
 }
 
-static RR_Queue*
+static Queue*
 CC_ParamRoll(CC* self)
 {
-    RR_Queue* params = RR_Queue_Init((RR_Kill) RR_String_Kill, (RR_Copy) NULL);
+    Queue* params = Queue_Init((Kill) String_Kill, (Copy) NULL);
     CC_Match(self, "(");
     while(CC_Next(self) != ')')
     {
-        RR_String* ident = CC_Ident(self);
-        RR_Queue_PshB(params, ident);
+        String* ident = CC_Ident(self);
+        Queue_PshB(params, ident);
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
     }
@@ -2540,43 +2454,43 @@ CC_ParamRoll(CC* self)
 }
 
 static void
-CC_DefineParams(CC* self, RR_Queue* params)
+CC_DefineParams(CC* self, Queue* params)
 {
     self->locals = 0;
     for(size_t i = 0; i < params->size; i++)
     {
-        RR_String* ident = RR_String_Copy(RR_Queue_Get(params, i));
+        String* ident = String_Copy(Queue_Get(params, i));
         CC_Local(self, ident);
     }
 }
 
 static size_t
-CC_PopScope(CC* self, RR_Queue* scope)
+CC_PopScope(CC* self, Queue* scope)
 {
     size_t popped = scope->size;
     for(size_t i = 0; i < popped; i++)
     {
-        RR_String* key = RR_Queue_Get(scope, i);
-        RR_Map_Del(self->identifiers, key->value);
+        String* key = Queue_Get(scope, i);
+        Map_Del(self->identifiers, key->value);
         self->locals -= 1;
     }
     for(size_t i = 0; i < popped; i++)
-        CC_Assem(self, RR_String_Init("\tpop"));
-    RR_Queue_Kill(scope);
+        CC_AssemB(self, String_Init("\tpop"));
+    Queue_Kill(scope);
     return popped;
 }
 
 static Meta*
-CC_Meta(CC* self, RR_String* ident)
+CC_Meta(CC* self, String* ident)
 {
-    Meta* meta = RR_Map_Get(self->identifiers, ident->value);
+    Meta* meta = Map_Get(self->identifiers, ident->value);
     if(meta == NULL)
         CC_Quit(self, "identifier %s not defined", ident->value);
     return meta;
 }
 
 static Meta*
-CC_Expect(CC* self, RR_String* ident, bool clause(Class))
+CC_Expect(CC* self, String* ident, bool clause(Class))
 {
     Meta* meta = CC_Meta(self, ident);
     if(!clause(meta->class))
@@ -2585,22 +2499,22 @@ CC_Expect(CC* self, RR_String* ident, bool clause(Class))
 }
 
 static void
-CC_Ref(CC* self, RR_String* ident)
+CC_Ref(CC* self, String* ident)
 {
     Meta* meta = CC_Expect(self, ident, CC_IsVariable);
     if(meta->class == CLASS_VARIABLE_GLOBAL)
-        CC_Assem(self, RR_String_Format("\tglb %lu", meta->stack));
+        CC_AssemB(self, String_Format("\tglb %lu", meta->stack));
     else
     if(meta->class == CLASS_VARIABLE_LOCAL)
-        CC_Assem(self, RR_String_Format("\tloc %lu", meta->stack));
+        CC_AssemB(self, String_Format("\tloc %lu", meta->stack));
 }
 
 static void
 CC_String(CC* self)
 {
-    RR_String* string = CC_StringStream(self);
-    CC_Assem(self, RR_String_Format("\tpsh \"%s\"", string->value));
-    RR_String_Kill(string);
+    String* string = CC_StringStream(self);
+    CC_AssemB(self, String_Format("\tpsh \"%s\"", string->value));
+    String_Kill(string);
 }
 
 static void
@@ -2619,19 +2533,19 @@ CC_Resolve(CC* self)
         if(CC_Next(self) == '.')
         {
             CC_Match(self, ".");
-            RR_String* ident = CC_Ident(self);
-            CC_Assem(self, RR_String_Format("\tpsh \"%s\"", ident->value));
-            RR_String_Kill(ident);
+            String* ident = CC_Ident(self);
+            CC_AssemB(self, String_Format("\tpsh \"%s\"", ident->value));
+            String_Kill(ident);
         }
         if(CC_Next(self) == ':')
         {
             CC_Match(self, ":=");
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tcpy"));
-            CC_Assem(self, RR_String_Init("\tins"));
+            CC_AssemB(self, String_Init("\tcpy"));
+            CC_AssemB(self, String_Init("\tins"));
         }
         else
-            CC_Assem(self, RR_String_Init("\tget"));
+            CC_AssemB(self, String_Init("\tget"));
     }
 }
 
@@ -2652,50 +2566,41 @@ CC_Args(CC* self)
 }
 
 static void
-CC_Call(CC* self, RR_String* ident, size_t args)
+CC_Call(CC* self, String* ident, size_t args)
 {
     for(size_t i = 0; i < args; i++)
-        CC_Assem(self, RR_String_Init("\tspd"));
-    CC_Assem(self, RR_String_Format("\tcal %s", ident->value));
-    CC_Assem(self, RR_String_Init("\tlod"));
+        CC_AssemB(self, String_Init("\tspd"));
+    CC_AssemB(self, String_Format("\tcal %s", ident->value));
+    CC_AssemB(self, String_Init("\tlod"));
 }
 
 static void
-CC_IndirectCalling(CC* self, RR_String* ident, size_t args)
+CC_IndirectCalling(CC* self, String* ident, size_t args)
 {
     CC_Ref(self, ident);
-    CC_Assem(self, RR_String_Format("\tpsh %lu", args));
-    CC_Assem(self, RR_String_Init("\tvrt"));
-    CC_Assem(self, RR_String_Init("\tlod"));
-}
-
-static void
-CC_NativeCalling(CC* self, RR_String* ident, Meta* meta)
-{
-    CC_Assem(self, RR_String_Format("\tpsh \"%s\"", meta->path->value));
-    CC_Assem(self, RR_String_Format("\tpsh \"%s\"", ident->value));
-    CC_Assem(self, RR_String_Format("\tpsh %lu", meta->stack));
-    CC_Assem(self, RR_String_Init("\tdll"));
+    CC_AssemB(self, String_Format("\tpsh %lu", args));
+    CC_AssemB(self, String_Init("\tvrt"));
+    CC_AssemB(self, String_Init("\tlod"));
 }
 
 static void
 CC_Map(CC* self)
 {
-    CC_Assem(self, RR_String_Init("\tpsh {}"));
+    CC_AssemB(self, String_Init("\tpsh {}"));
     CC_Match(self, "{");
     while(CC_Next(self) != '}')
     {
         CC_Expression(self);
-        CC_Assem(self, RR_String_Init("\tcpy"));
+        CC_AssemB(self, String_Init("\tcpy"));
         if(CC_Next(self) == ':')
         {
             CC_Match(self, ":");
             CC_Expression(self);
         }
         else
-            CC_Assem(self, RR_String_Init("\tpsh true")); // No values default to true for quick to build string sets.
-        CC_Assem(self, RR_String_Init("\tcpy"));
-        CC_Assem(self, RR_String_Init("\tins"));
+            CC_AssemB(self, String_Init("\tpsh true")); // No values default to true for quick to build string sets.
+        CC_AssemB(self, String_Init("\tcpy"));
+        CC_AssemB(self, String_Init("\tins"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
     }
@@ -2705,13 +2610,13 @@ CC_Map(CC* self)
 static void
 CC_Queue(CC* self)
 {
-    CC_Assem(self, RR_String_Init("\tpsh []"));
+    CC_AssemB(self, String_Init("\tpsh []"));
     CC_Match(self, "[");
     while(CC_Next(self) != ']')
     {
         CC_Expression(self);
-        CC_Assem(self, RR_String_Init("\tcpy"));
-        CC_Assem(self, RR_String_Init("\tpsb"));
+        CC_AssemB(self, String_Init("\tcpy"));
+        CC_AssemB(self, String_Init("\tpsb"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
     }
@@ -2723,88 +2628,91 @@ CC_Not(CC* self)
 {
     CC_Match(self, "!");
     CC_Factor(self);
-    CC_Assem(self, RR_String_Init("\tnot"));
+    CC_AssemB(self, String_Init("\tnot"));
 }
 
 static void
 CC_Direct(CC* self, bool negative)
 {
-    RR_String* number = CC_Number(self);
-    CC_Assem(self, RR_String_Format("\tpsh %s%s", negative ? "-" : "", number->value));
-    RR_String_Kill(number);
+    String* number = CC_Number(self);
+    CC_AssemB(self, String_Format("\tpsh %s%s", negative ? "-" : "", number->value));
+    String_Kill(number);
 }
 
 static void
-CC_DirectCalling(CC* self, RR_String* ident, size_t args)
+CC_DirectCalling(CC* self, String* ident, size_t args)
 {
-    if(RR_String_Equals(ident, "Len"))
-        CC_Assem(self, RR_String_Init("\tlen"));
+    if(String_Equals(ident, "Len"))
+        CC_AssemB(self, String_Init("\tlen"));
     else
-    if(RR_String_Equals(ident, "Assert"))
-        CC_Assem(self, RR_String_Init("\tasr"));
+    if(String_Equals(ident, "Assert"))
+        CC_AssemB(self, String_Init("\tasr"));
     else
-    if(RR_String_Equals(ident, "Good"))
-        CC_Assem(self, RR_String_Init("\tgod"));
+    if(String_Equals(ident, "Good"))
+        CC_AssemB(self, String_Init("\tgod"));
     else
-    if(RR_String_Equals(ident, "Key"))
-        CC_Assem(self, RR_String_Init("\tkey"));
+    if(String_Equals(ident, "Keys"))
+        CC_AssemB(self, String_Init("\tkey"));
     else
-    if(RR_String_Equals(ident, "Search"))
-        CC_Assem(self, RR_String_Init("\tbsr"));
+    if(String_Equals(ident, "Search"))
+        CC_AssemB(self, String_Init("\tbsr"));
     else
-    if(RR_String_Equals(ident, "Sort"))
-        CC_Assem(self, RR_String_Init("\tsrt"));
+    if(String_Equals(ident, "Sort"))
+        CC_AssemB(self, String_Init("\tsrt"));
     else
-    if(RR_String_Equals(ident, "Open"))
-        CC_Assem(self, RR_String_Init("\topn"));
+    if(String_Equals(ident, "Open"))
+        CC_AssemB(self, String_Init("\topn"));
     else
-    if(RR_String_Equals(ident, "Read"))
-        CC_Assem(self, RR_String_Init("\tred"));
+    if(String_Equals(ident, "Read"))
+        CC_AssemB(self, String_Init("\tred"));
     else
-    if(RR_String_Equals(ident, "Copy"))
-        CC_Assem(self, RR_String_Init("\tcpy"));
+    if(String_Equals(ident, "Copy"))
+        CC_AssemB(self, String_Init("\tcpy"));
     else
-    if(RR_String_Equals(ident, "Write"))
-        CC_Assem(self, RR_String_Init("\twrt"));
+    if(String_Equals(ident, "Write"))
+        CC_AssemB(self, String_Init("\twrt"));
     else
-    if(RR_String_Equals(ident, "Refs"))
-        CC_Assem(self, RR_String_Init("\tref"));
+    if(String_Equals(ident, "Refs"))
+        CC_AssemB(self, String_Init("\tref"));
     else
-    if(RR_String_Equals(ident, "Line"))
-        CC_Assem(self, RR_String_Init("\tlin"));
+    if(String_Equals(ident, "Line"))
+        CC_AssemB(self, String_Init("\tlin"));
     else
-    if(RR_String_Equals(ident, "File"))
-        CC_Assem(self, RR_String_Init("\tfil"));
+    if(String_Equals(ident, "File"))
+        CC_AssemB(self, String_Init("\tfil"));
     else
-    if(RR_String_Equals(ident, "Del"))
-        CC_Assem(self, RR_String_Init("\tdel"));
+    if(String_Equals(ident, "Del"))
+        CC_AssemB(self, String_Init("\tdel"));
     else
-    if(RR_String_Equals(ident, "Exit"))
-        CC_Assem(self, RR_String_Init("\text"));
+    if(String_Equals(ident, "Floor"))
+        CC_AssemB(self, String_Init("\tflr"));
     else
-    if(RR_String_Equals(ident, "Time"))
-        CC_Assem(self, RR_String_Init("\ttim"));
+    if(String_Equals(ident, "Exit"))
+        CC_AssemB(self, String_Init("\text"));
     else
-    if(RR_String_Equals(ident, "Type"))
-        CC_Assem(self, RR_String_Init("\ttyp"));
+    if(String_Equals(ident, "Time"))
+        CC_AssemB(self, String_Init("\ttim"));
     else
-    if(RR_String_Equals(ident, "Print"))
-        CC_Assem(self, RR_String_Init("\tprt"));
+    if(String_Equals(ident, "Type"))
+        CC_AssemB(self, String_Init("\ttyp"));
     else
-    if(RR_String_Equals(ident, "String"))
-        CC_Assem(self, RR_String_Init("\tstr"));
+    if(String_Equals(ident, "Print"))
+        CC_AssemB(self, String_Init("\tprt"));
     else
-    if(RR_String_Equals(ident, "Srand"))
-        CC_Assem(self, RR_String_Init("\tsrd"));
+    if(String_Equals(ident, "String"))
+        CC_AssemB(self, String_Init("\tstr"));
     else
-    if(RR_String_Equals(ident, "Rand"))
-        CC_Assem(self, RR_String_Init("\trnd"));
+    if(String_Equals(ident, "Srand"))
+        CC_AssemB(self, String_Init("\tsrd"));
+    else
+    if(String_Equals(ident, "Rand"))
+        CC_AssemB(self, String_Init("\trnd"));
     else
         CC_Call(self, ident, args);
 }
 
 static void
-CC_Calling(CC* self, RR_String* ident)
+CC_Calling(CC* self, String* ident)
 {
     Meta* meta = CC_Meta(self, ident);
     size_t args = CC_Args(self);
@@ -2812,8 +2720,6 @@ CC_Calling(CC* self, RR_String* ident)
     {
         if(args != meta->stack)
             CC_Quit(self, "calling function %s required %lu arguments but got %lu arguments", ident->value, meta->stack, args);
-        if(meta->class == CLASS_FUNCTION_PROTOTYPE_NATIVE)
-            CC_NativeCalling(self, ident, meta);
         else
             CC_DirectCalling(self, ident, args);
     }
@@ -2825,11 +2731,11 @@ CC_Calling(CC* self, RR_String* ident)
 }
 
 static bool
-CC_Referencing(CC* self, RR_String* ident)
+CC_Referencing(CC* self, String* ident)
 {
     Meta* meta = CC_Meta(self, ident);
     if(CC_IsFunction(meta->class))
-        CC_Assem(self, RR_String_Format("\tpsh @%s,%lu", ident->value, meta->stack));
+        CC_AssemB(self, String_Format("\tpsh @%s,%lu", ident->value, meta->stack));
     else
     {
         CC_Ref(self, ident);
@@ -2842,22 +2748,22 @@ static bool
 CC_Identifier(CC* self)
 {
     bool storage = false;
-    RR_String* ident = NULL;
+    String* ident = NULL;
     if(self->prime)
-        RR_String_Swap(&self->prime, &ident);
+        String_Swap(&self->prime, &ident);
     else
         ident = CC_Ident(self);
     if(String_IsBoolean(ident))
-        CC_Assem(self, RR_String_Format("\tpsh %s", ident->value));
+        CC_AssemB(self, String_Format("\tpsh %s", ident->value));
     else
     if(String_IsNull(ident))
-        CC_Assem(self, RR_String_Format("\tpsh %s", ident->value));
+        CC_AssemB(self, String_Format("\tpsh %s", ident->value));
     else
     if(CC_Next(self) == '(')
         CC_Calling(self, ident);
     else
         storage = CC_Referencing(self, ident);
-    RR_String_Kill(ident);
+    String_Kill(ident);
     return storage;
 }
 
@@ -2868,14 +2774,14 @@ CC_ReserveFunctions(CC* self)
         { 2, "Sort"   },
         { 1, "Good"   },
         { 1, "Assert" },
-        { 1, "Key"    },
+        { 1, "Keys"   },
         { 1, "Copy"   },
         { 2, "Open"   },
         { 2, "Read"   },
-        { 1, "Close"  },
         { 1, "Refs"   },
         { 1, "Len"    },
         { 2, "Del"    },
+        { 1, "Floor"  },
         { 3, "Search" },
         { 0, "File"   },
         { 0, "Line"   },
@@ -2888,8 +2794,8 @@ CC_ReserveFunctions(CC* self)
         { 0, "Rand"   },
         { 2, "Write"  },
     };
-    for(size_t i = 0; i < RR_LEN(items); i++)
-        CC_Define(self, CLASS_FUNCTION, items[i].args, RR_String_Init(items[i].name), RR_String_Init(""));
+    for(size_t i = 0; i < LEN(items); i++)
+        CC_Define(self, CLASS_FUNCTION, items[i].args, String_Init(items[i].name), String_Init(""));
 }
 
 static void
@@ -2951,6 +2857,12 @@ CC_Factor(CC* self)
     return storage;
 }
 
+static void
+CC_BadStorage(CC* self, char* operator)
+{
+    CC_Quit(self, "the left hand side of operator `%s` must be storage", operator);
+}
+
 static bool
 CC_Term(CC* self)
 {
@@ -2961,50 +2873,50 @@ CC_Term(CC* self)
        || CC_Next(self) == '?'
        || CC_Next(self) == '|')
     {
-        RR_String* operator = CC_Operator(self);
-        if(RR_String_Equals(operator, "*="))
+        String* operator = CC_Operator(self);
+        if(String_Equals(operator, "*="))
         {
             if(!storage)
-                CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
+                CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tmul"));
+            CC_AssemB(self, String_Init("\tmul"));
         }
         else
-        if(RR_String_Equals(operator, "/="))
+        if(String_Equals(operator, "/="))
         {
             if(!storage)
-                CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
+                CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tdiv"));
+            CC_AssemB(self, String_Init("\tdiv"));
         }
         else
         {
             storage = false;
-            if(RR_String_Equals(operator, "?"))
+            if(String_Equals(operator, "?"))
             {
                 CC_Factor(self);
-                CC_Assem(self, RR_String_Init("\tmem"));
+                CC_AssemB(self, String_Init("\tmem"));
             }
             else
             {
-                CC_Assem(self, RR_String_Init("\tcpy"));
+                CC_AssemB(self, String_Init("\tcpy"));
                 CC_Factor(self);
-                if(RR_String_Equals(operator, "*"))
-                    CC_Assem(self, RR_String_Init("\tmul"));
+                if(String_Equals(operator, "*"))
+                    CC_AssemB(self, String_Init("\tmul"));
                 else
-                if(RR_String_Equals(operator, "/"))
-                    CC_Assem(self, RR_String_Init("\tdiv"));
+                if(String_Equals(operator, "/"))
+                    CC_AssemB(self, String_Init("\tdiv"));
                 else
-                if(RR_String_Equals(operator, "%"))
-                    CC_Assem(self, RR_String_Init("\tfmt"));
+                if(String_Equals(operator, "%"))
+                    CC_AssemB(self, String_Init("\tmod"));
                 else
-                if(RR_String_Equals(operator, "||"))
-                    CC_Assem(self, RR_String_Init("\tlor"));
+                if(String_Equals(operator, "||"))
+                    CC_AssemB(self, String_Init("\tlor"));
                 else
-                    CC_Quit(self, "operator %s is not supported for factors", operator->value);
+                    CC_Quit(self, "operator `%s` is not supported for factors", operator->value);
             }
         }
-        RR_String_Kill(operator);
+        String_Kill(operator);
     }
     return storage;
 }
@@ -3022,86 +2934,86 @@ CC_Expression(CC* self)
        || CC_Next(self) == '<'
        || CC_Next(self) == '&')
     {
-        RR_String* operator = CC_Operator(self);
-        if(RR_String_Equals(operator, "="))
+        String* operator = CC_Operator(self);
+        if(String_Equals(operator, "="))
         {
             if(!storage)
-                CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
+                CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tcpy"));
-            CC_Assem(self, RR_String_Init("\tmov"));
+            CC_AssemB(self, String_Init("\tcpy"));
+            CC_AssemB(self, String_Init("\tmov"));
         }
         else
-        if(RR_String_Equals(operator, "+="))
+        if(String_Equals(operator, "+="))
         {
             if(!storage)
-                CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
+                CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tcpy"));
-            CC_Assem(self, RR_String_Init("\tadd"));
+            CC_AssemB(self, String_Init("\tcpy"));
+            CC_AssemB(self, String_Init("\tadd"));
         }
         else
-        if(RR_String_Equals(operator, "-="))
+        if(String_Equals(operator, "-="))
         {
             if(!storage)
-                CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
+                CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tcpy"));
-            CC_Assem(self, RR_String_Init("\tsub"));
+            CC_AssemB(self, String_Init("\tcpy"));
+            CC_AssemB(self, String_Init("\tsub"));
         }
         else
-        if(RR_String_Equals(operator, "=="))
+        if(String_Equals(operator, "=="))
         {
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\teql"));
+            CC_AssemB(self, String_Init("\teql"));
         }
         else
-        if(RR_String_Equals(operator, "!="))
+        if(String_Equals(operator, "!="))
         {
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tneq"));
+            CC_AssemB(self, String_Init("\tneq"));
         }
         else
-        if(RR_String_Equals(operator, ">"))
+        if(String_Equals(operator, ">"))
         {
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tgrt"));
+            CC_AssemB(self, String_Init("\tgrt"));
         }
         else
-        if(RR_String_Equals(operator, "<"))
+        if(String_Equals(operator, "<"))
         {
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tlst"));
+            CC_AssemB(self, String_Init("\tlst"));
         }
         else
-        if(RR_String_Equals(operator, ">="))
+        if(String_Equals(operator, ">="))
         {
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tgte"));
+            CC_AssemB(self, String_Init("\tgte"));
         }
         else
-        if(RR_String_Equals(operator, "<="))
+        if(String_Equals(operator, "<="))
         {
             CC_Expression(self);
-            CC_Assem(self, RR_String_Init("\tlte"));
+            CC_AssemB(self, String_Init("\tlte"));
         }
         else
         {
             storage = false;
-            CC_Assem(self, RR_String_Init("\tcpy"));
+            CC_AssemB(self, String_Init("\tcpy"));
             CC_Term(self);
-            if(RR_String_Equals(operator, "+"))
-                CC_Assem(self, RR_String_Init("\tadd"));
+            if(String_Equals(operator, "+"))
+                CC_AssemB(self, String_Init("\tadd"));
             else
-            if(RR_String_Equals(operator, "-"))
-                CC_Assem(self, RR_String_Init("\tsub"));
+            if(String_Equals(operator, "-"))
+                CC_AssemB(self, String_Init("\tsub"));
             else
-            if(RR_String_Equals(operator, "&&"))
-                CC_Assem(self, RR_String_Init("\tand"));
+            if(String_Equals(operator, "&&"))
+                CC_AssemB(self, String_Init("\tand"));
             else
-                CC_Quit(self, "operator %s is not supported for terms", operator->value);
+                CC_Quit(self, "operator `%s` is not supported for terms", operator->value);
         }
-        RR_String_Kill(operator);
+        String_Kill(operator);
     }
 }
 
@@ -3120,30 +3032,30 @@ CC_Branch(CC* self, size_t head, size_t tail, size_t end, bool loop)
     CC_Match(self, "(");
     CC_Expression(self);
     CC_Match(self, ")");
-    CC_Assem(self, RR_String_Format("\tbrf @l%lu", next));
+    CC_AssemB(self, String_Format("\tbrf @l%lu", next));
     CC_Block(self, head, tail, loop);
-    CC_Assem(self, RR_String_Format("\tjmp @l%lu", end));
-    CC_Assem(self, RR_String_Format("@l%lu:", next));
+    CC_AssemB(self, String_Format("\tjmp @l%lu", end));
+    CC_AssemB(self, String_Format("@l%lu:", next));
 }
 
-static RR_String*
+static String*
 CC_Branches(CC* self, size_t head, size_t tail, size_t loop)
 {
     size_t end = CC_Label(self);
     CC_Branch(self, head, tail, end, loop);
-    RR_String* buffer = CC_Ident(self);
-    while(RR_String_Equals(buffer, "elif"))
+    String* buffer = CC_Ident(self);
+    while(String_Equals(buffer, "elif"))
     {
         CC_Branch(self, head, tail, end, loop);
-        RR_String_Kill(buffer);
+        String_Kill(buffer);
         buffer = CC_Ident(self);
     }
-    if(RR_String_Equals(buffer, "else"))
+    if(String_Equals(buffer, "else"))
         CC_Block(self, head, tail, loop);
-    CC_Assem(self, RR_String_Format("@l%lu:", end));
-    RR_String* backup = NULL;
-    if(buffer->size == 0 || RR_String_Equals(buffer, "elif") || RR_String_Equals(buffer, "else"))
-        RR_String_Kill(buffer);
+    CC_AssemB(self, String_Format("@l%lu:", end));
+    String* backup = NULL;
+    if(buffer->size == 0 || String_Equals(buffer, "elif") || String_Equals(buffer, "else"))
+        String_Kill(buffer);
     else
         backup = buffer;
     return backup;
@@ -3154,14 +3066,14 @@ CC_While(CC* self)
 {
     size_t A = CC_Label(self);
     size_t B = CC_Label(self);
-    CC_Assem(self, RR_String_Format("@l%lu:", A));
+    CC_AssemB(self, String_Format("@l%lu:", A));
     CC_Match(self, "(");
     CC_Expression(self);
-    CC_Assem(self, RR_String_Format("\tbrf @l%lu", B));
+    CC_AssemB(self, String_Format("\tbrf @l%lu", B));
     CC_Match(self, ")");
     CC_Block(self, A, B, true);
-    CC_Assem(self, RR_String_Format("\tjmp @l%lu", A));
-    CC_Assem(self, RR_String_Format("@l%lu:", B));
+    CC_AssemB(self, String_Format("\tjmp @l%lu", A));
+    CC_AssemB(self, String_Format("@l%lu:", B));
 }
 
 static void
@@ -3171,24 +3083,24 @@ CC_For(CC* self)
     size_t B = CC_Label(self);
     size_t C = CC_Label(self);
     size_t D = CC_Label(self);
-    RR_Queue* init = RR_Queue_Init((RR_Kill) RR_String_Kill, (RR_Copy) NULL);
+    Queue* init = Queue_Init((Kill) String_Kill, (Copy) NULL);
     CC_Match(self, "(");
-    RR_String* ident = CC_Ident(self);
-    RR_Queue_PshB(init, RR_String_Copy(ident));
+    String* ident = CC_Ident(self);
+    Queue_PshB(init, String_Copy(ident));
     CC_AssignLocal(self, ident);
-    CC_Assem(self, RR_String_Format("@l%lu:", A));
+    CC_AssemB(self, String_Format("@l%lu:", A));
     CC_Expression(self);
     CC_Match(self, ";");
-    CC_Assem(self, RR_String_Format("\tbrf @l%lu", D));
-    CC_Assem(self, RR_String_Format("\tjmp @l%lu", C));
-    CC_Assem(self, RR_String_Format("@l%lu:", B));
+    CC_AssemB(self, String_Format("\tbrf @l%lu", D));
+    CC_AssemB(self, String_Format("\tjmp @l%lu", C));
+    CC_AssemB(self, String_Format("@l%lu:", B));
     CC_ConsumeExpression(self);
     CC_Match(self, ")");
-    CC_Assem(self, RR_String_Format("\tjmp @l%lu", A));
-    CC_Assem(self, RR_String_Format("@l%lu:", C));
+    CC_AssemB(self, String_Format("\tjmp @l%lu", A));
+    CC_AssemB(self, String_Format("@l%lu:", C));
     CC_Block(self, B, D, true);
-    CC_Assem(self, RR_String_Format("\tjmp @l%lu", B));
-    CC_Assem(self, RR_String_Format("@l%lu:", D));
+    CC_AssemB(self, String_Format("\tjmp @l%lu", B));
+    CC_AssemB(self, String_Format("@l%lu:", D));
     CC_PopScope(self, init);
 }
 
@@ -3196,61 +3108,61 @@ static void
 CC_Ret(CC* self)
 {
     CC_Expression(self);
-    CC_Assem(self, RR_String_Init("\tsav"));
-    CC_Assem(self, RR_String_Init("\tfls"));
+    CC_AssemB(self, String_Init("\tsav"));
+    CC_AssemB(self, String_Init("\tfls"));
     CC_Match(self, ";");
 }
 
 static void
 CC_Block(CC* self, size_t head, size_t tail, bool loop)
 {
-    RR_Queue* scope = RR_Queue_Init((RR_Kill) RR_String_Kill, (RR_Copy) NULL);
+    Queue* scope = Queue_Init((Kill) String_Kill, (Copy) NULL);
     CC_Match(self, "{");
-    RR_String* prime = NULL; 
+    String* prime = NULL; 
     while(CC_Next(self) != '}')
     {
         if(CC_String_IsIdentLeader(CC_Next(self)) || prime)
         {
-            RR_String* ident = NULL;
+            String* ident = NULL;
             if(prime)
-                RR_String_Swap(&prime, &ident);
+                String_Swap(&prime, &ident);
             else
                 ident = CC_Ident(self);
-            if(RR_String_Equals(ident, "if"))
+            if(String_Equals(ident, "if"))
                 prime = CC_Branches(self, head, tail, loop);
             else
-            if(RR_String_Equals(ident, "elif"))
+            if(String_Equals(ident, "elif"))
                 CC_Quit(self, "the keyword elif must follow an if or elif block");
             else
-            if(RR_String_Equals(ident, "else"))
+            if(String_Equals(ident, "else"))
                 CC_Quit(self, "the keyword else must follow an if or elif block");
             else
-            if(RR_String_Equals(ident, "while"))
+            if(String_Equals(ident, "while"))
                 CC_While(self);
             else
-            if(RR_String_Equals(ident, "for"))
+            if(String_Equals(ident, "for"))
                 CC_For(self);
             else
-            if(RR_String_Equals(ident, "ret"))
+            if(String_Equals(ident, "ret"))
                 CC_Ret(self);
             else
-            if(RR_String_Equals(ident, "continue"))
+            if(String_Equals(ident, "continue"))
             {
                 if(loop)
                 {
                     CC_Match(self, ";");
-                    CC_Assem(self, RR_String_Format("\tjmp @l%lu", head));
+                    CC_AssemB(self, String_Format("\tjmp @l%lu", head));
                 }
                 else
                     CC_Quit(self, "the keyword continue can only be used within while or for loops");
             }
             else
-            if(RR_String_Equals(ident, "break"))
+            if(String_Equals(ident, "break"))
             {
                 if(loop)
                 {
                     CC_Match(self, ";");
-                    CC_Assem(self, RR_String_Format("\tjmp @l%lu", tail));
+                    CC_AssemB(self, String_Format("\tjmp @l%lu", tail));
                 }
                 else
                     CC_Quit(self, "the keyword break can only be used within while or for loops");
@@ -3258,15 +3170,15 @@ CC_Block(CC* self, size_t head, size_t tail, bool loop)
             else
             if(CC_Next(self) == ':')
             {
-                RR_Queue_PshB(scope, RR_String_Copy(ident));
-                CC_AssignLocal(self, RR_String_Copy(ident));
+                Queue_PshB(scope, String_Copy(ident));
+                CC_AssignLocal(self, String_Copy(ident));
             }
             else
             {
-                self->prime = RR_String_Copy(ident);
+                self->prime = String_Copy(ident);
                 CC_EmptyExpression(self);
             }
-            RR_String_Kill(ident);
+            String_Kill(ident);
         }
         else
             CC_EmptyExpression(self);
@@ -3276,150 +3188,67 @@ CC_Block(CC* self, size_t head, size_t tail, bool loop)
 }
 
 static void
-CC_FunctionPrototypeNative(CC* self, RR_Queue* params, RR_String* ident, RR_String* path)
+CC_FunctionPrototype(CC* self, Queue* params, String* ident)
 {
-    CC_Define(self, CLASS_FUNCTION_PROTOTYPE_NATIVE, params->size, ident, path);
-    RR_Queue_Kill(params);
+    CC_Define(self, CLASS_FUNCTION_PROTOTYPE, params->size, ident, String_Init(""));
+    Queue_Kill(params);
     CC_Match(self, ";");
 }
 
 static void
-CC_FunctionPrototype(CC* self, RR_Queue* params, RR_String* ident)
+CC_Function(CC* self, String* ident)
 {
-    CC_Define(self, CLASS_FUNCTION_PROTOTYPE, params->size, ident, RR_String_Init(""));
-    RR_Queue_Kill(params);
-    CC_Match(self, ";");
-}
-
-static RR_String*
-CC_GetModuleLibs(RR_String* source)
-{
-    RR_File* file = RR_File_Init(RR_String_Copy(source), RR_String_Init("r"));
-    FILE* fp = RR_File_File(file);
-    char* line = NULL;
-    size_t len = 0;
-    getline(&line, &len, fp);
-    RR_File_Kill(file);
-    size_t expect = 3;
-    if(len > expect)
-    {
-        if(line[0] == '/'
-        && line[1] == '/'
-        && line[2] == '!')
-        {
-            RR_String* libs = RR_String_Init(line + expect);
-            Free(line);
-            return libs;
-        }
-    }
-    Free(line);
-    return RR_String_Init("");;
-}
-
-static void
-CC_ImportModule(CC* self, RR_String* file)
-{
-    char* real = CC_RealPath(self, file);
-    RR_String* source = RR_String_Init(real);
-    RR_String* library = RR_String_Init(real);
-    RR_String_PopB(library);
-    RR_String_Appends(library, "so");
-    if(RR_Map_Exists(self->included, library->value) == false)
-    {
-        RR_String* libs = CC_GetModuleLibs(source);
-        RR_String* command = RR_String_Format(
-                "gcc -std=gnu99 -O3 -march=native -Wall -Wextra -Wpedantic %s -fpic -shared -o %s -l%s %s",
-                source->value, library->value, RR_LIBROMAN2, libs->value);
-        int64_t ret = system(command->value);
-        if(ret != 0)
-            CC_Quit(self, "compilation errors encountered while compiling native library %s", source->value);
-        RR_String_Kill(command);
-        RR_String_Kill(libs);
-        RR_Map_Set(self->included, RR_String_Copy(library), NULL);
-    }
-    CC_Match(self, "{");
-    while(CC_Next(self) != '}')
-    {
-        RR_String* ident = CC_Ident(self);
-        RR_Queue* params = CC_ParamRoll(self);
-        CC_FunctionPrototypeNative(self, params, ident, RR_String_Copy(library));
-    }
-    CC_Match(self, "}");
-    CC_Match(self, ";");
-    RR_String_Kill(library);
-    RR_String_Kill(source);
-    Free(real);
-}
-
-static void
-CC_Import(CC* self)
-{
-    RR_String* name = Module_Name(self, ".c");
-    CC_ImportModule(self, name);
-    RR_String_Kill(name);
-}
-
-static void
-CC_Function(CC* self, RR_String* ident)
-{
-    RR_Queue* params = CC_ParamRoll(self);
+    Queue* params = CC_ParamRoll(self);
     if(CC_Next(self) == '{')
     {
         CC_DefineParams(self, params);
-        CC_Define(self, CLASS_FUNCTION, params->size, ident, RR_String_Init(""));
-        CC_Assem(self, RR_String_Format("%s:", ident->value));
+        CC_Define(self, CLASS_FUNCTION, params->size, ident, String_Init(""));
+        CC_AssemB(self, String_Format("%s:", ident->value));
         CC_Block(self, 0, 0, false);
         CC_PopScope(self, params);
-        CC_Assem(self, RR_String_Init("\tpsh null"));
-        CC_Assem(self, RR_String_Init("\tsav"));
-        CC_Assem(self, RR_String_Init("\tret"));
+        CC_AssemB(self, String_Init("\tpsh null"));
+        CC_AssemB(self, String_Init("\tsav"));
+        CC_AssemB(self, String_Init("\tret"));
     }
     else
         CC_FunctionPrototype(self, params, ident);
 }
 
 static void
-CC_Spool(CC* self, RR_Queue* start)
+CC_Spool(CC* self, Queue* start)
 {
-    RR_Queue* spool = RR_Queue_Init((RR_Kill) RR_String_Kill, NULL);
-    RR_String* main = RR_String_Init("Main");
+    Queue* spool = Queue_Init((Kill) String_Kill, NULL);
+    String* main = String_Init("Main");
     CC_Expect(self, main, CC_IsFunction);
-    RR_Queue_PshB(spool, RR_String_Init("!start:"));
+    Queue_PshB(spool, String_Init("!start:"));
     for(size_t i = 0; i < start->size; i++)
     {
-        RR_String* label = RR_Queue_Get(start, i);
-        RR_Queue_PshB(spool, RR_String_Format("\tcal %s", label->value));
+        String* label = Queue_Get(start, i);
+        Queue_PshB(spool, String_Format("\tcal %s", label->value));
     }
-    RR_Queue_PshB(spool, RR_String_Format("\tcal %s", main->value));
-    RR_Queue_PshB(spool, RR_String_Format("\tend"));
+    Queue_PshB(spool, String_Format("\tcal %s", main->value));
+    Queue_PshB(spool, String_Format("\tend"));
     size_t i = spool->size;
     while(i != 0)
     {
         i -= 1;
-        RR_Queue_PshF(self->assembly, RR_String_Copy(RR_Queue_Get(spool, i)));
-        RR_Queue_PshF(self->debug, Debug_Init("N/A", -1));
+        CC_AssemF(self, String_Copy(Queue_Get(spool, i)));
     }
-    RR_String_Kill(main);
-    RR_Queue_Kill(spool);
+    String_Kill(main);
+    Queue_Kill(spool);
 }
 
 static void
 CC_Parse(CC* self)
 {
-    RR_Queue* start = RR_Queue_Init((RR_Kill) RR_String_Kill, (RR_Copy) NULL);
+    Queue* start = Queue_Init((Kill) String_Kill, (Copy) NULL);
     while(CC_Peak(self) != EOF)
     {
-        RR_String* ident = CC_Ident(self);
-        if(RR_String_Equals(ident, "inc"))
+        String* ident = CC_Ident(self);
+        if(String_Equals(ident, "inc"))
         {
             CC_Include(self);
-            RR_String_Kill(ident);
-        }
-        else
-        if(RR_String_Equals(ident, "imp"))
-        {
-            CC_Import(self);
-            RR_String_Kill(ident);
+            String_Kill(ident);
         }
         else
         if(CC_Next(self) == '(')
@@ -3427,19 +3256,19 @@ CC_Parse(CC* self)
         else
         if(CC_Next(self) == ':')
         {
-            RR_String* label = CC_Global(self, ident);
-            RR_Queue_PshB(start, label);
+            String* label = CC_Global(self, ident);
+            Queue_PshB(start, label);
         }
         else
             CC_Quit(self, "%s must either be a function or function prototype, a global variable, an import statement, or an include statement", ident->value);
         CC_Spin(self);
     }
     CC_Spool(self, start);
-    RR_Queue_Kill(start);
+    Queue_Kill(start);
 }
 
 static Stack*
-Stack_Init(RR_String* label, size_t address)
+Stack_Init(String* label, size_t address)
 {
     Stack* self = Malloc(sizeof(*self));
     self->label = label;
@@ -3450,7 +3279,7 @@ Stack_Init(RR_String* label, size_t address)
 static void
 Stack_Kill(Stack* self)
 {
-    RR_String_Kill(self->label);
+    String_Kill(self->label);
     Free(self);
 }
 
@@ -3460,55 +3289,55 @@ Stack_Compare(Stack* a, Stack* b)
     return a->address < b->address;
 }
 
-RR_Queue*
-ASM_Flatten(RR_Map* labels)
+static Queue*
+ASM_Flatten(Map* labels)
 {
-    RR_Queue* addresses = RR_Queue_Init((RR_Kill) Stack_Kill, (RR_Copy) NULL);
-    for(size_t i = 0; i < RR_Map_Buckets(labels); i++)
+    Queue* addresses = Queue_Init((Kill) Stack_Kill, (Copy) NULL);
+    for(size_t i = 0; i < Map_Buckets(labels); i++)
     {
         Node* chain = labels->bucket[i];
         while(chain)
         {
-            size_t* address = RR_Map_Get(labels, chain->key->value);
-            Stack* stack = Stack_Init(RR_String_Init(chain->key->value), *address);
-            RR_Queue_PshB(addresses, stack);
+            size_t* address = Map_Get(labels, chain->key->value);
+            Stack* stack = Stack_Init(String_Init(chain->key->value), *address);
+            Queue_PshB(addresses, stack);
             chain = chain->next;
         }
     }
-    RR_Queue_Sort(addresses, (RR_Compare) Stack_Compare);
+    Queue_Sort(addresses, (Compare) Stack_Compare);
     return addresses;
 }
 
-static RR_Map*
-ASM_Label(RR_Queue* assembly, size_t* size)
+static Map*
+ASM_Label(Queue* assembly, size_t* size)
 {
-    RR_Map* labels = RR_Map_Init((RR_Kill) Free, (RR_Copy) NULL);
+    Map* labels = Map_Init((Kill) Free, (Copy) NULL);
     for(size_t i = 0; i < assembly->size; i++)
     {
-        RR_String* stub = RR_Queue_Get(assembly, i);
+        String* stub = Queue_Get(assembly, i);
         if(stub->value[0] == '\t')
             *size += 1;
         else 
         {
-            RR_String* line = RR_String_Copy(stub);
+            String* line = String_Copy(stub);
             char* label = strtok(line->value, ":");
-            if(RR_Map_Exists(labels, label))
+            if(Map_Exists(labels, label))
                 Quit("assembler label %s already defined", label);
-            RR_Map_Set(labels, RR_String_Init(label), Int_Init(*size));
-            RR_String_Kill(line);
+            Map_Set(labels, String_Init(label), Int_Init(*size));
+            String_Kill(line);
         }
     }
     return labels;
 }
 
 static void
-ASM_Dump(RR_Queue* assembly)
+ASM_Dump(Queue* assembly)
 {
     size_t instructions = 0;
     size_t labels = 0;
     for(size_t i = 0; i < assembly->size; i++)
     {
-        RR_String* assem = RR_Queue_Get(assembly, i);
+        String* assem = Queue_Get(assembly, i);
         if(assem->value[0] == '\t')
             instructions += 1;
         else
@@ -3529,62 +3358,71 @@ Stack_Diff(void* a, void* b)
 static void
 VM_Quit(VM* self, const char* const message, ...)
 {
-    for(size_t i = 0; i < self->frame->size - 1; i++)
-    {
-        Frame* a = RR_Queue_Get(self->frame, i + 0);
-        Frame* b = RR_Queue_Get(self->frame, i + 1);
-        Stack key = { NULL, a->address };
-        Stack* found = RR_Queue_BSearch(self->addresses, &key, Stack_Diff);
-        fprintf(stderr, "%s(...): ", found->label->value);
-        Debug* sub = RR_Queue_Get(self->debug, b->pc);
-        fprintf(stderr, "%s: line %lu\n", sub->file, sub->line);
-    }
     va_list args;
-    Debug* debug = RR_Queue_Get(self->debug, self->pc);
     va_start(args, message);
-    fprintf(stderr, "error: file %s: line %lu: ", debug->file, debug->line);
-    vfprintf(stderr, message, args);
-    fprintf(stderr, "\n");
+    if(self->frame->size != 0)
+    {
+        for(size_t i = 0; i < self->frame->size - 1; i++)
+        {
+            Frame* a = Queue_Get(self->frame, i + 0);
+            Frame* b = Queue_Get(self->frame, i + 1);
+            Stack key = { NULL, a->address };
+            Stack* found = Queue_BSearch(self->addresses, &key, Stack_Diff);
+            fprintf(stderr, "%s(...): ", found->label->value);
+            Debug* sub = Queue_Get(self->debug, b->pc);
+            fprintf(stderr, "%s: line %lu\n", sub->file, sub->line);
+        }
+        Debug* debug = Queue_Get(self->debug, self->pc);
+        fprintf(stderr, "error: file %s: line %lu: ", debug->file, debug->line);
+        vfprintf(stderr, message, args);
+        fprintf(stderr, "\n");
+    }
+    else
+    {
+        fprintf(stderr, "error: Main return type ");
+        vfprintf(stderr, message, args);
+        fprintf(stderr, "\n");
+    }
     va_end(args);
     exit(0xFF);
 }
 
 static void
-VM_TypeExpect(VM* self, RR_Type a, RR_Type b)
+VM_TypeExpect(VM* self, Type a, Type b)
 {
     if(a != b)
-        VM_Quit(self, "encountered type %s but expected type %s", RR_Type_ToString(a), RR_Type_ToString(b));
+        VM_Quit(self, "encountered type %s but expected type %s", Type_ToString(a), Type_ToString(b));
 }
 
 static void
-VM_BadOperator(VM* self, RR_Type a, const char* op)
+VM_BadOperator(VM* self, Type a, const char* op)
 {
-    VM_Quit(self, "type %s not supported with operator %s", RR_Type_ToString(a), op);
+    VM_Quit(self, "type %s not supported with operator `%s`", Type_ToString(a), op);
 }
 
 static void
-VM_TypeMatch(VM* self, RR_Type a, RR_Type b, const char* op)
+VM_TypeMatch(VM* self, Type a, Type b, const char* op)
 {
     if(a != b)
-        VM_Quit(self, "type %s and type %s mismatch with operator %s", RR_Type_ToString(a), RR_Type_ToString(b), op);
+        VM_Quit(self, "type %s and type %s mismatch with operator `%s`", Type_ToString(a), Type_ToString(b), op);
 }
 
 static void
-VM_OutOfBounds(VM* self, RR_Type a, size_t index)
+VM_OutOfBounds(VM* self, Type a, size_t index)
 {
-    VM_Quit(self, "type %s was accessed out of bounds with index %lu", RR_Type_ToString(a), index);
+    VM_Quit(self, "type %s was accessed out of bounds with index %lu", Type_ToString(a), index);
 }
 
 static void
-VM_TypeBadIndex(VM* self, RR_Type a, RR_Type b)
+VM_TypeBadIndex(VM* self, Type a, Type b)
 {
-    VM_Quit(self, "type %s cannot be indexed with type %s", RR_Type_ToString(a), RR_Type_ToString(b));
+    VM_Quit(self, "type %s cannot be indexed with type %s", Type_ToString(a), Type_ToString(b));
 }
 
 static void
-VM_TypeBad(VM* self, RR_Type a)
+VM_TypeBad(VM* self, Type a)
 {
-    VM_Quit(self, "type %s cannot be used for this operation", RR_Type_ToString(a));
+    VM_Quit(self, "type %s cannot be used for this operation", Type_ToString(a));
 }
 
 static void
@@ -3601,20 +3439,20 @@ VM_UnknownEscapeChar(VM* self, size_t esc)
 }
 
 static void
-VM_RefImpurity(VM* self, RR_Value* value)
+VM_RefImpurity(VM* self, Value* value)
 {
-    RR_String* print = RR_Value_Sprint(value, true, 0);
+    String* print = Value_Sprint(value, true, 0, FORMAT_WIDTH, FORMAT_PRECI);
     VM_Quit(self, "the .data segment value %s contained %lu references at the time of exit", print->value, value->refs);
 }
 
 static VM*
-VM_Init(size_t size, RR_Queue* debug, RR_Queue* addresses)
+VM_Init(size_t size, Queue* debug, Queue* addresses)
 {
     VM* self = Malloc(sizeof(*self));
-    self->data = RR_Queue_Init((RR_Kill) RR_Value_Kill, (RR_Copy) NULL);
-    self->stack = RR_Queue_Init((RR_Kill) RR_Value_Kill, (RR_Copy) NULL);
-    self->frame = RR_Queue_Init((RR_Kill) Frame_Free, (RR_Copy) NULL);
-    self->track = RR_Map_Init((RR_Kill) Int_Kill, (RR_Copy) NULL);
+    self->data = Queue_Init((Kill) Value_Kill, (Copy) NULL);
+    self->stack = Queue_Init((Kill) Value_Kill, (Copy) NULL);
+    self->frame = Queue_Init((Kill) Frame_Free, (Copy) NULL);
+    self->track = Map_Init((Kill) Int_Kill, (Copy) NULL);
     self->addresses = addresses;
     self->debug = debug;
     self->ret = NULL;
@@ -3628,11 +3466,11 @@ VM_Init(size_t size, RR_Queue* debug, RR_Queue* addresses)
 static void
 VM_Kill(VM* self)
 {
-    RR_Queue_Kill(self->data);
-    RR_Queue_Kill(self->stack);
-    RR_Queue_Kill(self->frame);
-    RR_Queue_Kill(self->addresses);
-    RR_Map_Kill(self->track);
+    Queue_Kill(self->data);
+    Queue_Kill(self->stack);
+    Queue_Kill(self->frame);
+    Queue_Kill(self->addresses);
+    Map_Kill(self->track);
     Free(self->instructions);
     Free(self);
 }
@@ -3643,9 +3481,9 @@ VM_Data(VM* self)
     printf(".data:\n");
     for(size_t i = 0; i < self->data->size; i++)
     {
-        RR_Value* value = RR_Queue_Get(self->data, i);
+        Value* value = Queue_Get(self->data, i);
         printf("%2lu : %2lu : ", i, value->refs);
-        RR_Value_Print(value);
+        Value_Print(value);
     }
 }
 
@@ -3654,7 +3492,7 @@ VM_AssertRefCounts(VM* self)
 {
     for(size_t i = 0; i < self->data->size; i++)
     {
-        RR_Value* value = RR_Queue_Get(self->data, i);
+        Value* value = Queue_Get(self->data, i);
         if(value->refs > 0)
             VM_RefImpurity(self, value);
     }
@@ -3663,14 +3501,14 @@ VM_AssertRefCounts(VM* self)
 static void
 VM_Pop(VM* self)
 {
-    RR_Queue_PopB(self->stack);
+    Queue_PopB(self->stack);
 }
 
-static RR_String*
+static String*
 VM_ConvertEscs(VM* self, char* chars)
 {
     size_t len = strlen(chars);
-    RR_String* string = RR_String_Init("");
+    String* string = String_Init("");
     for(size_t i = 1; i < len - 1; i++)
     {
         char ch = chars[i];
@@ -3682,65 +3520,65 @@ VM_ConvertEscs(VM* self, char* chars)
             if(ch == -1)
                 VM_UnknownEscapeChar(self, esc);
         }
-        RR_String_PshB(string, ch);
+        String_PshB(string, ch);
     }
     return string;
 }
 
 static void
-VM_Store(VM* self, RR_Map* labels, char* operand)
+VM_Store(VM* self, Map* labels, char* operand)
 {
-    RR_Value* value;
+    Value* value;
     char ch = operand[0];
     if(ch == '[')
-        value = RR_Value_NewQueue();
+        value = Value_NewQueue();
     else
     if(ch == '{')
-        value = RR_Value_NewMap();
+        value = Value_NewMap();
     else
     if(ch == '"')
     {
-        RR_String* string = VM_ConvertEscs(self, operand);
-        value = RR_Value_NewString(string);
+        String* string = VM_ConvertEscs(self, operand);
+        value = Value_NewString(string);
     }
     else
     if(ch == '@')
     {
-        RR_String* name = RR_String_Init(strtok(operand + 1, ","));
+        String* name = String_Init(strtok(operand + 1, ","));
         size_t size = atoi(strtok(NULL, " \n"));
-        size_t* address = RR_Map_Get(labels, name->value);
+        size_t* address = Map_Get(labels, name->value);
         if(address == NULL)
             Quit("assembler label %s not defined", name);
-        value = RR_Value_NewFunction(RR_Function_Init(name, size, *address));
+        value = Value_NewFunction(Function_Init(name, size, *address));
     }
     else
     if(ch == 't' || ch == 'f')
-        value = RR_Value_NewBool(Equals(operand, "true") ? true : false);
+        value = Value_NewBool(Equals(operand, "true") ? true : false);
     else
     if(ch == 'n')
-        value = RR_Value_NewNull();
+        value = Value_NewNull();
     else
     if(CC_String_IsDigit(ch) || ch == '-')
-        value = RR_Value_NewNumber(atof(operand));
+        value = Value_NewNumber(atof(operand));
     else
     {
         value = NULL;
         Quit("assembler unknown psh operand %s encountered", operand);
     }
-    RR_Queue_PshB(self->data, value);
+    Queue_PshB(self->data, value);
 }
 
 static size_t
-VM_Datum(VM* self, RR_Map* labels, char* operand)
+VM_Datum(VM* self, Map* labels, char* operand)
 {
     VM_Store(self, labels, operand);
     return ((self->data->size - 1) << 8) | OPCODE_PSH;
 }
 
 static size_t
-VM_Indirect(Opcode oc, RR_Map* labels, char* label)
+VM_Indirect(Opcode oc, Map* labels, char* label)
 {
-    size_t* address = RR_Map_Get(labels, label);
+    size_t* address = Map_Get(labels, label);
     if(address == NULL)
         Quit("assembler label %s not defined", label);
     return *address << 8 | oc;
@@ -3753,19 +3591,19 @@ VM_Direct(Opcode oc, char* number)
 }
 
 static VM*
-VM_Assemble(RR_Queue* assembly, RR_Queue* debug)
+VM_Assemble(Queue* assembly, Queue* debug)
 {
     size_t size = 0;
-    RR_Map* labels = ASM_Label(assembly, &size);
-    RR_Queue* addresses = ASM_Flatten(labels);
+    Map* labels = ASM_Label(assembly, &size);
+    Queue* addresses = ASM_Flatten(labels);
     VM* self = VM_Init(size, debug, addresses);
     size_t pc = 0;
     for(size_t i = 0; i < assembly->size; i++)
     {
-        RR_String* stub = RR_Queue_Get(assembly, i);
+        String* stub = Queue_Get(assembly, i);
         if(stub->value[0] == '\t')
         {
-            RR_String* line = RR_String_Init(stub->value + 1);
+            String* line = String_Init(stub->value + 1);
             size_t instruction = 0;
             char* mnemonic = strtok(line->value, " \n");
             if(Equals(mnemonic, "add"))
@@ -3795,9 +3633,6 @@ VM_Assemble(RR_Queue* assembly, RR_Queue* debug)
             if(Equals(mnemonic, "div"))
                 instruction = OPCODE_DIV;
             else
-            if(Equals(mnemonic, "dll"))
-                instruction = OPCODE_DLL;
-            else
             if(Equals(mnemonic, "end"))
                 instruction = OPCODE_END;
             else
@@ -3810,11 +3645,14 @@ VM_Assemble(RR_Queue* assembly, RR_Queue* debug)
             if(Equals(mnemonic, "fil"))
                 instruction = OPCODE_FIL;
             else
+            if(Equals(mnemonic, "flr"))
+                instruction = OPCODE_FLR;
+            else
             if(Equals(mnemonic, "fls"))
                 instruction = OPCODE_FLS;
             else
-            if(Equals(mnemonic, "fmt"))
-                instruction = OPCODE_FMT;
+            if(Equals(mnemonic, "mod"))
+                instruction = OPCODE_MOD;
             else
             if(Equals(mnemonic, "get"))
                 instruction = OPCODE_GET;
@@ -3939,10 +3777,10 @@ VM_Assemble(RR_Queue* assembly, RR_Queue* debug)
                 Quit("assembler unknown mnemonic %s", mnemonic);
             self->instructions[pc] = instruction;
             pc += 1;
-            RR_String_Kill(line);
+            String_Kill(line);
         }
     }
-    RR_Map_Kill(labels);
+    Map_Kill(labels);
     return self;
 }
 
@@ -3951,7 +3789,7 @@ VM_Cal(VM* self, size_t address)
 {
     size_t sp = self->stack->size - self->spds;
     Frame* frame = Frame_Init(self->pc, sp, address);
-    RR_Queue_PshB(self->frame, frame);
+    Queue_PshB(self->frame, frame);
     self->pc = address;
     self->spds = 0;
 }
@@ -3959,10 +3797,10 @@ VM_Cal(VM* self, size_t address)
 static void
 VM_Cpy(VM* self)
 {
-    RR_Value* back = RR_Queue_Back(self->stack);
-    RR_Value* value = RR_Value_Copy(back);
+    Value* back = Queue_Back(self->stack);
+    Value* value = Value_Copy(back);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, value);
+    Queue_PshB(self->stack, value);
 }
 
 static size_t
@@ -3970,14 +3808,14 @@ VM_End(VM* self)
 {
     VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
     size_t ret = self->ret->of.number;
-    RR_Value_Kill(self->ret);
+    Value_Kill(self->ret);
     return ret;
 }
 
 static void
 VM_Fls(VM* self)
 {
-    Frame* frame = RR_Queue_Back(self->frame);
+    Frame* frame = Queue_Back(self->frame);
     size_t pops = self->stack->size - frame->sp;
     while(pops > 0)
     {
@@ -3985,24 +3823,24 @@ VM_Fls(VM* self)
         pops -= 1;
     }
     self->pc = frame->pc;
-    RR_Queue_PopB(self->frame);
+    Queue_PopB(self->frame);
 }
 
 static void
 VM_Glb(VM* self, size_t address)
 {
-    RR_Value* value = RR_Queue_Get(self->stack, address);
-    RR_Value_Inc(value);
-    RR_Queue_PshB(self->stack, value);
+    Value* value = Queue_Get(self->stack, address);
+    Value_Inc(value);
+    Queue_PshB(self->stack, value);
 }
 
 static void
 VM_Loc(VM* self, size_t address)
 {
-    Frame* frame = RR_Queue_Back(self->frame);
-    RR_Value* value = RR_Queue_Get(self->stack, address + frame->sp);
-    RR_Value_Inc(value);
-    RR_Queue_PshB(self->stack, value);
+    Frame* frame = Queue_Back(self->frame);
+    Value* value = Queue_Get(self->stack, address + frame->sp);
+    Value_Inc(value);
+    Queue_PshB(self->stack, value);
 }
 
 static void
@@ -4014,74 +3852,84 @@ VM_Jmp(VM* self, size_t address)
 static void
 VM_Ret(VM* self)
 {
-    Frame* frame = RR_Queue_Back(self->frame);
+    Frame* frame = Queue_Back(self->frame);
     self->pc = frame->pc;
-    RR_Queue_PopB(self->frame);
+    Queue_PopB(self->frame);
 }
 
 static void
 VM_Lod(VM* self)
 {
-    RR_Queue_PshB(self->stack, self->ret);
+    Queue_PshB(self->stack, self->ret);
 }
 
 static void
 VM_Sav(VM* self)
 {
-    RR_Value* value = RR_Queue_Back(self->stack);
-    RR_Value_Inc(value);
+    Value* value = Queue_Back(self->stack);
+    Value_Inc(value);
     self->ret = value;
 }
 
 static void
 VM_Psh(VM* self, size_t address)
 {
-    RR_Value* value = RR_Queue_Get(self->data, address);
-    RR_Value* copy = RR_Value_Copy(value); // Copy because .data is read only.
-    RR_Queue_PshB(self->stack, copy);
+    Value* value = Queue_Get(self->data, address);
+    Value* copy = Value_Copy(value); // Copy because .data is read only.
+    Queue_PshB(self->stack, copy);
 }
 
 static void
 VM_Mov(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
-        RR_Value_Sub(a, b);
+        Value_Sub(a, b);
     else
     {
-        RR_Type type = a->type;
+        Type type = a->type;
         if(type == TYPE_NULL)
-            VM_Quit(self, "cannot move %s to type null", RR_Type_ToString(b->type));
+            VM_Quit(self, "cannot move %s to type null", Type_ToString(b->type));
         Type_Kill(a->type, &a->of);
-        RR_Type_Copy(a, b);
+        Type_Copy(a, b);
     }
     VM_Pop(self);
+}
+
+static void
+VM_Flr(VM* self)
+{
+    Value* a = Queue_Back(self->stack);
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    double floored = floor(a->of.number);
+    VM_Pop(self);
+    Queue_PshB(self->stack, Value_NewNumber(floored));
 }
 
 static void
 VM_Add(VM* self)
 {
     char* operator = "+";
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type == TYPE_QUEUE && b->type != TYPE_QUEUE)
     {
-        RR_Value_Inc(b);
-        RR_Queue_PshB(a->of.queue, b);
+        Value_Inc(b);
+        Queue_PshB(a->of.queue, b);
     }
     else
     if(a->type == b->type)
         switch(a->type)
         {
         case TYPE_QUEUE:
-            RR_Queue_Append(a->of.queue, b->of.queue);
+            Queue_Append(a->of.queue, b->of.queue);
             break;
         case TYPE_MAP:
-            RR_Map_Append(a->of.map, b->of.map);
+            Map_Append(a->of.map, b->of.map);
             break;
         case TYPE_STRING:
-            RR_String_Appends(a->of.string, b->of.string->value);
+            String_Appends(a->of.string, b->of.string->value);
             break;
         case TYPE_NUMBER:
             a->of.number += b->of.number;
@@ -4102,19 +3950,19 @@ static void
 VM_Sub(VM* self)
 {
     char* operator = "-";
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type == TYPE_QUEUE && b->type != TYPE_QUEUE)
     {
-        RR_Value_Inc(b);
-        RR_Queue_PshF(a->of.queue, b);
+        Value_Inc(b);
+        Queue_PshF(a->of.queue, b);
     }
     else
     if(a->type == b->type)
         switch(a->type)
         {
         case TYPE_QUEUE:
-            RR_Queue_Prepend(a->of.queue, b->of.queue);
+            Queue_Prepend(a->of.queue, b->of.queue);
             break;
         case TYPE_NUMBER:
             a->of.number -= b->of.number;
@@ -4143,8 +3991,8 @@ VM_Sub(VM* self)
 static void
 VM_Mul(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeMatch(self, a->type, b->type, "*");
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     a->of.number *= b->of.number;
@@ -4154,8 +4002,8 @@ VM_Mul(VM* self)
 static void
 VM_Div(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeMatch(self, a->type, b->type, "/");
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     a->of.number /= b->of.number;
@@ -4163,117 +4011,10 @@ VM_Div(VM* self)
 }
 
 static void
-VM_Dll(VM* self)
-{
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 3);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* c = RR_Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_STRING);
-    VM_TypeExpect(self, b->type, TYPE_STRING);
-    VM_TypeExpect(self, c->type, TYPE_NUMBER);
-    typedef RR_Value* (*Call)();
-    Call call;
-    void* so = dlopen(a->of.string->value, RTLD_NOW | RTLD_GLOBAL);
-    if(so == NULL)
-        VM_Quit(self, "could not open shared object library %s\n", a->of.string->value);
-    *(void**)(&call) = dlsym(so, b->of.string->value);
-    if(call == NULL)
-        VM_Quit(self, "could not open shared object function %s from shared object library %s\n", b->of.string->value, a->of.string->value);
-    size_t params = 3;
-    size_t start = self->stack->size - params;
-    size_t args = c->of.number;
-    RR_Value* value = NULL;
-    switch(args)
-    {
-    case 0:
-        value = call();
-        break;
-    case 1:
-        value = call(
-            RR_Queue_Get(self->stack, start - 1));
-        break;
-    case 2:
-        value = call(
-            RR_Queue_Get(self->stack, start - 2),
-            RR_Queue_Get(self->stack, start - 1));
-        break;
-    case 3:
-        value = call(
-            RR_Queue_Get(self->stack, start - 3),
-            RR_Queue_Get(self->stack, start - 2),
-            RR_Queue_Get(self->stack, start - 1));
-        break;
-    case 4:
-        value = call(
-            RR_Queue_Get(self->stack, start - 4),
-            RR_Queue_Get(self->stack, start - 3),
-            RR_Queue_Get(self->stack, start - 2),
-            RR_Queue_Get(self->stack, start - 1));
-        break;
-    case 5:
-        value = call(
-            RR_Queue_Get(self->stack, start - 5),
-            RR_Queue_Get(self->stack, start - 4),
-            RR_Queue_Get(self->stack, start - 3),
-            RR_Queue_Get(self->stack, start - 2),
-            RR_Queue_Get(self->stack, start - 1));
-        break;
-    case 6:
-        value = call(
-            RR_Queue_Get(self->stack, start - 6),
-            RR_Queue_Get(self->stack, start - 5),
-            RR_Queue_Get(self->stack, start - 4),
-            RR_Queue_Get(self->stack, start - 3),
-            RR_Queue_Get(self->stack, start - 2),
-            RR_Queue_Get(self->stack, start - 1));
-        break;
-    case 7:
-        value = call(
-            RR_Queue_Get(self->stack, start - 7),
-            RR_Queue_Get(self->stack, start - 6),
-            RR_Queue_Get(self->stack, start - 5),
-            RR_Queue_Get(self->stack, start - 4),
-            RR_Queue_Get(self->stack, start - 3),
-            RR_Queue_Get(self->stack, start - 2),
-            RR_Queue_Get(self->stack, start - 1));
-        break;
-    case 8:
-        value = call(
-            RR_Queue_Get(self->stack, start - 8),
-            RR_Queue_Get(self->stack, start - 7),
-            RR_Queue_Get(self->stack, start - 6),
-            RR_Queue_Get(self->stack, start - 5),
-            RR_Queue_Get(self->stack, start - 4),
-            RR_Queue_Get(self->stack, start - 3),
-            RR_Queue_Get(self->stack, start - 2),
-            RR_Queue_Get(self->stack, start - 1));
-        break;
-    case 9:
-        value = call(
-            RR_Queue_Get(self->stack, start - 9),
-            RR_Queue_Get(self->stack, start - 8),
-            RR_Queue_Get(self->stack, start - 7),
-            RR_Queue_Get(self->stack, start - 6),
-            RR_Queue_Get(self->stack, start - 5),
-            RR_Queue_Get(self->stack, start - 4),
-            RR_Queue_Get(self->stack, start - 3),
-            RR_Queue_Get(self->stack, start - 2),
-            RR_Queue_Get(self->stack, start - 1));
-        break;
-    default:
-        VM_Quit(self, "only 9 arguments at most are supported for native functions calls");
-    }
-    for(size_t i = 0; i < args + params; i++)
-        VM_Pop(self);
-    RR_Value_Print(value);
-    RR_Queue_PshB(self->stack, value);
-}
-
-static void
 VM_Vrt(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_FUNCTION);
     VM_TypeExpect(self, b->type, TYPE_NUMBER);
     VM_ArgMatch(self, a->of.function->size, b->of.number);
@@ -4282,31 +4023,31 @@ VM_Vrt(VM* self)
     VM_Pop(self);
     VM_Pop(self);
     size_t sp = self->stack->size - spds;
-    RR_Queue_PshB(self->frame, Frame_Init(self->pc, sp, address));
+    Queue_PshB(self->frame, Frame_Init(self->pc, sp, address));
     self->pc = address;
 }
 
-static RR_Value*
-VM_BSearch(VM* self, RR_Queue* queue, RR_Value* key, RR_Value* diff)
+static Value*
+VM_BSearch(VM* self, Queue* queue, Value* key, Value* diff)
 {
     int64_t low = 0;
     int64_t high = queue->size - 1;
     while(low <= high)
     {
         int64_t mid = (low + high) / 2;
-        RR_Value* now = RR_Queue_Get(queue, mid);
-        RR_Value_Inc(key);
-        RR_Value_Inc(now);
-        RR_Value_Inc(diff);
-        RR_Queue_PshB(self->stack, key);
-        RR_Queue_PshB(self->stack, now);
-        RR_Queue_PshB(self->stack, diff);
-        RR_Queue_PshB(self->stack, RR_Value_NewNumber(2));
+        Value* now = Queue_Get(queue, mid);
+        Value_Inc(key);
+        Value_Inc(now);
+        Value_Inc(diff);
+        Queue_PshB(self->stack, key);
+        Queue_PshB(self->stack, now);
+        Queue_PshB(self->stack, diff);
+        Queue_PshB(self->stack, Value_NewNumber(2));
         VM_Vrt(self);
         VM_Run(self, true);
         VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
         int64_t cmp = self->ret->of.number;
-        RR_Value_Kill(self->ret);
+        Value_Kill(self->ret);
         if(cmp == 0)
             return now;
         else
@@ -4321,56 +4062,56 @@ VM_BSearch(VM* self, RR_Queue* queue, RR_Value* key, RR_Value* diff)
 static void
 VM_Bsr(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 3);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* c = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 3);
+    Value* b = Queue_Get(self->stack, self->stack->size - 2);
+    Value* c = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
     VM_TypeExpect(self, c->type, TYPE_FUNCTION);
-    RR_Value* found = VM_BSearch(self, a->of.queue, b, c);
+    Value* found = VM_BSearch(self, a->of.queue, b, c);
     VM_Pop(self);
     VM_Pop(self);
     VM_Pop(self);
     if(found == NULL)
-        RR_Queue_PshB(self->stack, RR_Value_NewNull());
+        Queue_PshB(self->stack, Value_NewNull());
     else
     {
-        RR_Value_Inc(found);
-        RR_Queue_PshB(self->stack, found);
+        Value_Inc(found);
+        Queue_PshB(self->stack, found);
     }
 }
 
 static void
-VM_RangedSort(VM* self, RR_Queue* queue, RR_Value* compare, int64_t left, int64_t right)
+VM_RangedSort(VM* self, Queue* queue, Value* compare, int64_t left, int64_t right)
 {
     if(left >= right)
         return;
-    RR_Queue_Swap(queue, left, (left + right) / 2);
+    Queue_Swap(queue, left, (left + right) / 2);
     int64_t last = left;
     for(int64_t i = left + 1; i <= right; i++)
     {
-        RR_Value* a = RR_Queue_Get(queue, i);
-        RR_Value* b = RR_Queue_Get(queue, left);
-        RR_Value_Inc(a);
-        RR_Value_Inc(b);
-        RR_Value_Inc(compare);
-        RR_Queue_PshB(self->stack, a);
-        RR_Queue_PshB(self->stack, b);
-        RR_Queue_PshB(self->stack, compare);
-        RR_Queue_PshB(self->stack, RR_Value_NewNumber(2));
+        Value* a = Queue_Get(queue, i);
+        Value* b = Queue_Get(queue, left);
+        Value_Inc(a);
+        Value_Inc(b);
+        Value_Inc(compare);
+        Queue_PshB(self->stack, a);
+        Queue_PshB(self->stack, b);
+        Queue_PshB(self->stack, compare);
+        Queue_PshB(self->stack, Value_NewNumber(2));
         VM_Vrt(self);
         VM_Run(self, true);
         VM_TypeExpect(self, self->ret->type, TYPE_BOOL);
         if(self->ret->of.boolean)
-             RR_Queue_Swap(queue, ++last, i);
-        RR_Value_Kill(self->ret);
+             Queue_Swap(queue, ++last, i);
+        Value_Kill(self->ret);
     }
-   RR_Queue_Swap(queue, left, last);
+   Queue_Swap(queue, left, last);
    VM_RangedSort(self, queue, compare, left, last - 1);
    VM_RangedSort(self, queue, compare, last + 1, right);
 }
 
 static void
-VM_Sort(VM* self, RR_Queue* queue, RR_Value* compare)
+VM_Sort(VM* self, Queue* queue, Value* compare)
 {
     VM_TypeExpect(self, compare->type, TYPE_FUNCTION);
     VM_ArgMatch(self, compare->of.function->size, 2);
@@ -4380,69 +4121,69 @@ VM_Sort(VM* self, RR_Queue* queue, RR_Value* compare)
 static void
 VM_Srt(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
     VM_TypeExpect(self, b->type, TYPE_FUNCTION);
     VM_Sort(self, a->of.queue, b);
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewNull());
+    Queue_PshB(self->stack, Value_NewNull());
 }
 
 static void
 VM_Lst(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeMatch(self, a->type, b->type, "<");
-    bool boolean = RR_Value_LessThan(a, b);
+    bool boolean = Value_LessThan(a, b);
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
 VM_Lte(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeMatch(self, a->type, b->type, "<=");
-    bool boolean = RR_Value_LessThanEqualTo(a, b);
+    bool boolean = Value_LessThanEqualTo(a, b);
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
 VM_Grt(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeMatch(self, a->type, b->type, ">");
-    bool boolean = RR_Value_GreaterThan(a, b);
+    bool boolean = Value_GreaterThan(a, b);
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
 VM_Gte(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeMatch(self, a->type, b->type, ">=");
-    bool boolean = RR_Value_GreaterThanEqualTo(a, b);
+    bool boolean = Value_GreaterThanEqualTo(a, b);
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
 VM_And(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeMatch(self, a->type, b->type, "&&");
     VM_TypeExpect(self, a->type, TYPE_BOOL);
     a->of.boolean = a->of.boolean && b->of.boolean;
@@ -4452,8 +4193,8 @@ VM_And(VM* self)
 static void
 VM_Lor(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeMatch(self, a->type, b->type, "||");
     VM_TypeExpect(self, a->type, TYPE_BOOL);
     a->of.boolean = a->of.boolean || b->of.boolean;
@@ -4463,23 +4204,23 @@ VM_Lor(VM* self)
 static void
 VM_Eql(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
-    bool boolean = RR_Value_Equal(a, b);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    bool boolean = Value_Equal(a, b);
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
 VM_Neq(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
-    bool boolean = !RR_Value_Equal(a, b);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    bool boolean = !Value_Equal(a, b);
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
@@ -4491,7 +4232,7 @@ VM_Spd(VM* self)
 static void
 VM_Not(VM* self)
 {
-    RR_Value* value = RR_Queue_Back(self->stack);
+    Value* value = Queue_Back(self->stack);
     VM_TypeExpect(self, value->type, TYPE_BOOL);
     value->of.boolean = !value->of.boolean;
 }
@@ -4499,7 +4240,7 @@ VM_Not(VM* self)
 static void
 VM_Brf(VM* self, size_t address)
 {
-    RR_Value* value = RR_Queue_Back(self->stack);
+    Value* value = Queue_Back(self->stack);
     VM_TypeExpect(self, value->type, TYPE_BOOL);
     if(value->of.boolean == false)
         self->pc = address;
@@ -4509,68 +4250,70 @@ VM_Brf(VM* self, size_t address)
 static void
 VM_Prt(VM* self)
 {
-    RR_Value* value = RR_Queue_Back(self->stack);
-    RR_String* print = RR_Value_Sprint(value, false, 0);
+    Value* value = Queue_Back(self->stack);
+    String* print = Value_Sprint(value, false, 0, FORMAT_WIDTH, FORMAT_PRECI);
     puts(print->value);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewNumber(print->size));
-    RR_String_Kill(print);
+    Queue_PshB(self->stack, Value_NewNumber(print->size));
+    String_Kill(print);
 }
 
 static void
 VM_Str(VM* self)
 {
-    RR_Value* value = RR_Queue_Back(self->stack);
-    RR_String* string = RR_Value_Sprint(value, false, 0);
+    Value* value = Queue_Back(self->stack);
+    String* string = Value_Sprint(value, false, 0, FORMAT_WIDTH, FORMAT_PRECI);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewString(string));
+    Queue_PshB(self->stack, Value_NewString(string));
 }
 
 static void
 VM_Len(VM* self)
 {
-    RR_Value* value = RR_Queue_Back(self->stack);
-    size_t len = RR_Value_Len(value);
+    Value* value = Queue_Back(self->stack);
+    size_t len = Value_Len(value);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewNumber(len));
+    Queue_PshB(self->stack, Value_NewNumber(len));
 }
 
 static void
 VM_Psb(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
-    RR_Queue_PshB(a->of.queue, b);
-    RR_Value_Inc(b);
+    Queue_PshB(a->of.queue, b);
+    Value_Inc(b);
     VM_Pop(self);
 }
 
 static void
 VM_Psf(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
-    RR_Queue_PshF(a->of.queue, b);
-    RR_Value_Inc(b);
+    Queue_PshF(a->of.queue, b);
+    Value_Inc(b);
     VM_Pop(self);
 }
 
 static void
 VM_Ins(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 3);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* c = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 3);
+    Value* b = Queue_Get(self->stack, self->stack->size - 2);
+    Value* c = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_MAP);
+    if(c->type == TYPE_NULL)
+        VM_TypeBad(self, c->type);
     if(b->type == TYPE_CHAR)
         VM_TypeBadIndex(self, a->type, b->type);
     else
     if(b->type == TYPE_STRING)
     {
-        RR_Map_Set(a->of.map, RR_String_Copy(b->of.string), c); // Map keys are not reference counted.
-        RR_Value_Inc(c);
+        Map_Set(a->of.map, String_Copy(b->of.string), c); // Map keys are not reference counted.
+        Value_Inc(c);
     }
     else
         VM_TypeBad(self, b->type);
@@ -4581,61 +4324,61 @@ VM_Ins(VM* self)
 static void
 VM_Ref(VM* self)
 {
-    RR_Value* a = RR_Queue_Back(self->stack);
+    Value* a = Queue_Back(self->stack);
     size_t refs = a->refs;
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewNumber(refs));
+    Queue_PshB(self->stack, Value_NewNumber(refs));
 }
 
-static RR_Value*
-VM_IndexRR_Queue(VM* self, RR_Value* queue, RR_Value* index)
+static Value*
+VM_IndexQueue(VM* self, Value* queue, Value* index)
 {
-    RR_Value* value = RR_Queue_Get(queue->of.queue, index->of.number);
+    Value* value = Queue_Get(queue->of.queue, index->of.number);
     if(value == NULL)
         VM_OutOfBounds(self, queue->type, index->of.number);
-    RR_Value_Inc(value);
+    Value_Inc(value);
     return value;
 }
 
-static RR_Value*
-VM_IndexRR_String(VM* self, RR_Value* queue, RR_Value* index)
+static Value*
+VM_IndexString(VM* self, Value* queue, Value* index)
 {
-    RR_Char* character = RR_Char_Init(queue, index->of.number);
+    Char* character = Char_Init(queue, index->of.number);
     if(character == NULL)
         VM_OutOfBounds(self, queue->type, index->of.number);
-    RR_Value* value = RR_Value_NewChar(character);
-    RR_Value_Inc(queue);
+    Value* value = Value_NewChar(character);
+    Value_Inc(queue);
     return value;
 }
 
-static RR_Value*
-VM_Index(VM* self, RR_Value* storage, RR_Value* index)
+static Value*
+VM_Index(VM* self, Value* storage, Value* index)
 {
     if(storage->type == TYPE_QUEUE)
-        return VM_IndexRR_Queue(self, storage, index);
+        return VM_IndexQueue(self, storage, index);
     else
     if(storage->type == TYPE_STRING)
-        return VM_IndexRR_String(self, storage, index);
+        return VM_IndexString(self, storage, index);
     VM_TypeBadIndex(self, storage->type, index->type);
     return NULL;
 }
 
-static RR_Value*
-VM_Lookup(VM* self, RR_Value* map, RR_Value* index)
+static Value*
+VM_Lookup(VM* self, Value* map, Value* index)
 {
     VM_TypeExpect(self, map->type, TYPE_MAP);
-    RR_Value* value = RR_Map_Get(map->of.map, index->of.string->value);
+    Value* value = Map_Get(map->of.map, index->of.string->value);
     if(value != NULL)
-        RR_Value_Inc(value);
+        Value_Inc(value);
     return value;
 }
 
 static void
 VM_Get(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
-    RR_Value* value = NULL;
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    Value* value = NULL;
     if(b->type == TYPE_NUMBER)
         value = VM_Index(self, a, b);
     else
@@ -4646,70 +4389,88 @@ VM_Get(VM* self)
     VM_Pop(self);
     VM_Pop(self);
     if(value == NULL)
-        RR_Queue_PshB(self->stack, RR_Value_NewNull());
+        Queue_PshB(self->stack, Value_NewNull());
     else
-        RR_Queue_PshB(self->stack, value);
+        Queue_PshB(self->stack, value);
 }
 
 static void
-VM_Fmt(VM* self)
+VM_Mod(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_STRING);
-    VM_TypeExpect(self, b->type, TYPE_QUEUE);
-    RR_String* formatted = RR_String_Init("");
-    size_t index = 0;
-    char* ref = a->of.string->value;
-    for(char* c = ref; *c; c++)
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    if(a->type == TYPE_NUMBER && b->type == TYPE_NUMBER)
     {
-        if(*c == '{')
+        a->of.number = (int64_t) a->of.number % (int64_t) b->of.number;
+        VM_Pop(self);
+    }
+    else
+    {
+        VM_TypeExpect(self, a->type, TYPE_STRING);
+        VM_TypeExpect(self, b->type, TYPE_QUEUE);
+        String* formatted = String_Init("");
+        size_t index = 0;
+        char* ref = a->of.string->value;
+        for(char* c = ref; *c; c++)
         {
-            char next = *(c + 1);
-            if(next == '}')
+            if(*c == '{' && index < b->of.queue->size)
             {
-                RR_Value* value = RR_Queue_Get(b->of.queue, index);
+                String* buffer = String_Init("");
+                c += 1;
+                while(*c != '}')
+                {
+                    if(CC_String_IsSpace(*c))
+                        VM_Quit(self, "spaces between `{` and `}` are not allowed with string formatters");
+                    String_PshB(buffer, *c);
+                    c += 1;
+                }
+                Value* value = Queue_Get(b->of.queue, index);
                 if(value == NULL)
                     VM_OutOfBounds(self, b->type, index);
-                String_Append(formatted, RR_Value_Sprint(value, false, 0));
+                char* width = strtok(buffer->value, ".");
+                char* preci = strtok(NULL, "\n");
+                String_Append(formatted,
+                        Value_Sprint(value, false, 0,
+                            width ? atoi(width) : FORMAT_WIDTH,
+                            preci ? atoi(preci) : FORMAT_PRECI));
                 index += 1;
-                c += 1;
+                String_Kill(buffer);
                 continue;
             }
+            String_PshB(formatted, *c);
         }
-        RR_String_PshB(formatted, *c);
+        VM_Pop(self);
+        VM_Pop(self);
+        Queue_PshB(self->stack, Value_NewString(formatted));
     }
-    VM_Pop(self);
-    VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewString(formatted));
 }
 
 static void
 VM_Typ(VM* self)
 {
-    RR_Value* a = RR_Queue_Back(self->stack);
-    RR_Type type = a->type;
+    Value* a = Queue_Back(self->stack);
+    Type type = a->type;
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewString(RR_String_Init(RR_Type_ToString(type))));
+    Queue_PshB(self->stack, Value_NewString(String_Init(Type_ToString(type))));
 }
 
 static void
 VM_Del(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(b->type == TYPE_NUMBER)
     {
         if(a->type == TYPE_QUEUE)
         {
-            bool success = RR_Queue_Del(a->of.queue, b->of.number);
+            bool success = Queue_Del(a->of.queue, b->of.number);
             if(success == false)
                 VM_OutOfBounds(self, a->type, b->of.number);
         }
         else
         if(a->type == TYPE_STRING)
         {
-            bool success = RR_String_Del(a->of.string, b->of.number);
+            bool success = String_Del(a->of.string, b->of.number);
             if(success == false)
                 VM_OutOfBounds(self, a->type, b->of.number);
         }
@@ -4721,68 +4482,68 @@ VM_Del(VM* self)
     {
         if(a->type != TYPE_MAP)
             VM_TypeBadIndex(self, a->type, b->type);
-        RR_Map_Del(a->of.map, b->of.string->value);
+        Map_Del(a->of.map, b->of.string->value);
     }
     else
         VM_TypeBad(self, a->type);
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewNull());
+    Queue_PshB(self->stack, Value_NewNull());
 }
 
 static void
 VM_Mem(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     bool boolean = a == b;
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
 VM_Opn(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_STRING);
     VM_TypeExpect(self, b->type, TYPE_STRING);
-    RR_File* file = RR_File_Init(RR_String_Copy(a->of.string), RR_String_Copy(b->of.string));
+    File* file = File_Init(String_Copy(a->of.string), String_Copy(b->of.string));
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewFile(file));
+    Queue_PshB(self->stack, Value_NewFile(file));
 }
 
 static void
 VM_Red(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_FILE);
     VM_TypeExpect(self, b->type, TYPE_NUMBER);
-    RR_String* buffer = RR_String_Init("");
+    String* buffer = String_Init("");
     if(a->of.file->file)
     {
-        RR_String_Resize(buffer, b->of.number);
+        String_Resize(buffer, b->of.number);
         size_t size = fread(buffer->value, sizeof(char), b->of.number, a->of.file->file);
         size_t diff = b->of.number - size;
         while(diff)
         {
-            RR_String_PopB(buffer);
+            String_PopB(buffer);
             diff -= 1;
         }
     }
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewString(buffer));
+    Queue_PshB(self->stack, Value_NewString(buffer));
 }
 
 static void
 VM_Wrt(VM* self)
 {
-    RR_Value* a = RR_Queue_Get(self->stack, self->stack->size - 2);
-    RR_Value* b = RR_Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_FILE);
     VM_TypeExpect(self, b->type, TYPE_STRING);
     size_t bytes = 0;
@@ -4790,86 +4551,86 @@ VM_Wrt(VM* self)
         bytes = fwrite(b->of.string->value, sizeof(char), b->of.string->size, a->of.file->file);
     VM_Pop(self);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewNumber(bytes));
+    Queue_PshB(self->stack, Value_NewNumber(bytes));
 }
 
 static void
 VM_God(VM* self)
 {
-    RR_Value* a = RR_Queue_Back(self->stack);
+    Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_FILE);
     bool boolean = a->of.file->file != NULL;
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
 VM_Key(VM* self)
 {
-    RR_Value* a = RR_Queue_Back(self->stack);
+    Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_MAP);
-    RR_Value* queue = RR_Map_Key(a->of.map);
+    Value* queue = Map_Key(a->of.map);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, queue);
+    Queue_PshB(self->stack, queue);
 }
 
 static void
 VM_Ext(VM* self)
 {
-    RR_Value* a = RR_Queue_Back(self->stack);
+    Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     exit(a->of.number);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewNull());
+    Queue_PshB(self->stack, Value_NewNull());
 }
 
 static void
 VM_Tim(VM* self)
 {
     double us = Microseconds();
-    RR_Queue_PshB(self->stack, RR_Value_NewNumber(us));
+    Queue_PshB(self->stack, Value_NewNumber(us));
 }
 
 static void
 VM_Srd(VM* self)
 {
-    RR_Value* a = RR_Queue_Back(self->stack);
+    Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     srand(a->of.number);
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewNull());
+    Queue_PshB(self->stack, Value_NewNull());
 }
 
 static void
 VM_Rnd(VM* self)
 {
     double number = rand();
-    RR_Queue_PshB(self->stack, RR_Value_NewNumber(number));
+    Queue_PshB(self->stack, Value_NewNumber(number));
 }
 
 static void
 VM_Lin(VM* self)
 {
-    Debug* debug = RR_Queue_Get(self->debug, self->pc);
-    RR_Queue_PshB(self->stack, RR_Value_NewNumber(debug->line));
+    Debug* debug = Queue_Get(self->debug, self->pc);
+    Queue_PshB(self->stack, Value_NewNumber(debug->line));
 }
 
 static void
 VM_Fil(VM* self)
 {
-    Debug* debug = RR_Queue_Get(self->debug, self->pc);
-    RR_Queue_PshB(self->stack, RR_Value_NewString(RR_String_Init(debug->file)));
+    Debug* debug = Queue_Get(self->debug, self->pc);
+    Queue_PshB(self->stack, Value_NewString(String_Init(debug->file)));
 }
 
 static void
 VM_Asr(VM* self)
 {
-    RR_Value* a = RR_Queue_Back(self->stack);
+    Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_BOOL);
     if(a->of.boolean == false)
         VM_Quit(self, "assert");
     VM_Pop(self);
-    RR_Queue_PshB(self->stack, RR_Value_NewNull());
+    Queue_PshB(self->stack, Value_NewNull());
 }
 
 static int64_t
@@ -4892,13 +4653,13 @@ VM_Run(VM* self, bool arbitrary)
         case OPCODE_CPY: VM_Cpy(self); break;
         case OPCODE_DEL: VM_Del(self); break;
         case OPCODE_DIV: VM_Div(self); break;
-        case OPCODE_DLL: VM_Dll(self); break;
         case OPCODE_END: return VM_End(self);
         case OPCODE_EQL: VM_Eql(self); break;
         case OPCODE_EXT: VM_Ext(self); break;
         case OPCODE_FIL: VM_Fil(self); break;
+        case OPCODE_FLR: VM_Flr(self); break;
         case OPCODE_FLS: VM_Fls(self); break;
-        case OPCODE_FMT: VM_Fmt(self); break;
+        case OPCODE_MOD: VM_Mod(self); break;
         case OPCODE_GET: VM_Get(self); break;
         case OPCODE_GLB: VM_Glb(self, address); break;
         case OPCODE_GOD: VM_God(self); break;
@@ -4985,7 +4746,7 @@ main(int argc, char* argv[])
     if(args.entry)
     {
         int64_t ret = 0;
-        RR_String* entry = RR_String_Init(args.entry);
+        String* entry = String_Init(args.entry);
         CC* cc = CC_Init();
         CC_ReserveFunctions(cc);
         CC_IncludeModule(cc, entry);
@@ -5001,7 +4762,7 @@ main(int argc, char* argv[])
         VM_AssertRefCounts(vm);
         VM_Kill(vm);
         CC_Kill(cc);
-        RR_String_Kill(entry);
+        String_Kill(entry);
         return ret;
     }
     else
@@ -5010,5 +4771,3 @@ main(int argc, char* argv[])
     else
         Quit("usage: rr -h");
 }
-
-#endif

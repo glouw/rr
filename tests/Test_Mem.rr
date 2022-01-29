@@ -5,12 +5,6 @@ Main()
         "key": string
     };
     b := a["key"];
-    if(a["key"] ? b)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a["key"] ? b);
+    ret 0;
 }

@@ -8,12 +8,6 @@ Main()
         b += a[2 + i];
         i += 1;
     }
-    if(b == "345")
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(b == "345");
+    ret 0;
 }

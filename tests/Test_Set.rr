@@ -2,12 +2,7 @@ SET := { "a", "b", "c" };
 
 Main()
 {
-    if((SET["a"] != null) && (SET["d"] == null))
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(SET["a"] != null);
+    Assert(SET["d"] == null);
+    ret 0;
 }

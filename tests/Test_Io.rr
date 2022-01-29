@@ -10,12 +10,7 @@ Main()
     a := Read(file, 3);
     b := Read(file, 1);
     c := Read(file, 5);
-    if((a == "the") && (c == "quick"))
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(a == "the");
+    Assert(c == "quick");
+    ret 0;
 }

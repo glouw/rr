@@ -1,0 +1,135 @@
+# Single Element in a Sorted Array 
+# 
+#   Given a sorted array consisting of only integers where every element appears
+#   twice except for one element which appears once. Find this single element that appears only once. 
+#   
+#   Your solution should run in O(log n) time and O(1) space.
+#
+#   Answer:
+#
+#     Granted m is an even number, check
+#     arr[m] and arr[m + 1]. If the two are the same
+#     then the value we seek lies to the right, otherwise the left.
+#             |
+#     [ 0, 0, 4, 4, 5, 6 ]
+#
+#     Granted m is an odd number, check
+#     arr[m] and arr[m + 1]. If the two are the same
+#     then the value we seek lies to the left, otherwise to the right.
+#                |
+#     [ 0, 0, 4, 4, 5, 5, 6 ]
+
+inc lib;
+
+Mid(l, r)
+{
+    ret l + (r - l) / 2;
+}
+
+FindRecursive(arr, l, r)
+{
+    if(l <= r)
+    {
+        if(l == r)
+        {
+            ret arr[l];
+        }
+        m := Mid(l, r);
+        if(IsEven(m))
+        {
+            if(arr[m] == arr[m + 1])
+            {
+                ret FindRecursive(arr, m + 1, r);
+            }
+            else
+            {
+                ret FindRecursive(arr, l, m);
+            }
+        }
+        else
+        {
+            if(arr[m] == arr[m + 1])
+            {
+                ret FindRecursive(arr, l, m);
+            }
+            else
+            {
+                ret FindRecursive(arr, m + 1, r);
+            }
+        }
+    }
+    else
+    {
+        ret -1;
+    }
+}
+
+FindLin(arr, l, r)
+{
+    while(true)
+    {
+        if(l > r)
+        {
+            break;
+        }
+        m := l + (r - l) / 2;
+        if(l == r)
+        {
+            ret arr[m];
+        }
+        if(IsEven(m))
+        {
+            if(arr[m] == arr[m + 1])
+            {
+                l = m + 1;
+            }
+            else
+            {
+                r = m;
+            }
+        }
+        else
+        {
+            if(arr[m] == arr[m + 1])
+            {
+                r = m;
+            }
+            else
+            {
+                l = m + 1;
+            }
+        }
+    }
+    ret -1;
+}
+
+Test()
+{
+    funcs := [ Find, FindRecursive ];
+    for(j := 0; j < Len(funcs); j += 1)
+    {
+        func := funcs[j];
+        tests := [
+            { "expect": 2,  "queue" : [1, 1, 2,  3,  3,  4,  4, 8, 8] },
+            { "expect": 10, "queue" : [3, 3, 7,  7, 10, 11, 11]       },
+            { "expect": 7,  "queue" : [3, 3, 7, 10, 10, 11, 11]       },
+            { "expect": 7,  "queue" : [3, 3, 7,  9,  9]               },
+            { "expect": 7,  "queue" : [3, 3, 7]                       },
+            { "expect": 3,  "queue" : [3, 4, 4]                       },
+            { "expect": 1,  "queue" : [1],                            },
+            { "expect": -1, "queue" : [2, 2],                         },
+            { "expect": -1, "queue" : [],                             },
+        ];
+        for(i := 0; i < Len(tests); i += 1)
+        {
+            test := tests[i];
+            Assert(func(test.queue, 0, Len(test.queue) - 1) == test.expect);
+        }
+    }
+}
+
+Main()
+{
+    Test();
+    ret 0;
+}

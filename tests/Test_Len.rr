@@ -1,12 +1,6 @@
 Main()
 {
     a := [0, 1, 2, 3, 4, [3, 1, 9]];
-    if(Len(a) == 6)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(Len(a) == 6);
+    ret 0;
 }

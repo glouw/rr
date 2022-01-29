@@ -6,12 +6,6 @@ Add(a, b)
 Main()
 {
     callback := Add;
-    if(callback(1, 2) == 3)
-    {
-        ret 0;
-    }
-    else
-    {
-        ret 1;
-    }
+    Assert(callback(1, 2) == 3);
+    ret 0;
 }
