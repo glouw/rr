@@ -64,7 +64,7 @@ FindRecursive(arr, l, r)
     }
 }
 
-FindLin(arr, l, r)
+Find(arr, l, r)
 {
     while(true)
     {
