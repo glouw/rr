@@ -466,6 +466,12 @@ String_Indent(size_t indents)
     return ident;
 }
 
+static uint64_t
+String_ToUll(char* self)
+{
+    return strtoull(self, NULL, 10);
+}
+
 static void
 String_PopB(String* self)
 {
@@ -1583,8 +1589,8 @@ Value_Kill(Value* self)
         return a->of.number                       \
            CMP b->of.number;                      \
     case TYPE_FILE:                               \
-        return File_Size(a->of.file)           \
-           CMP File_Size(b->of.file);          \
+        return File_Size(a->of.file)              \
+           CMP File_Size(b->of.file);             \
     case TYPE_QUEUE:                              \
         return a->of.queue->size                  \
            CMP b->of.queue->size;                 \
@@ -3445,6 +3451,13 @@ VM_RefImpurity(VM* self, Value* value)
     VM_Quit(self, "the .data segment value %s contained %lu references at the time of exit", print->value, value->refs);
 }
 
+static void
+VM_CheckZeroDivision(VM* self, Value* value)
+{
+    if(value->of.number == 0)
+        VM_Quit(self, "division by zero encountered");
+}
+
 static VM*
 VM_Init(size_t size, Queue* debug, Queue* addresses)
 {
@@ -3545,7 +3558,7 @@ VM_Store(VM* self, Map* labels, char* operand)
     if(ch == '@')
     {
         String* name = String_Init(strtok(operand + 1, ","));
-        size_t size = atoi(strtok(NULL, " \n"));
+        size_t size = String_ToUll(strtok(NULL, " \n"));
         size_t* address = Map_Get(labels, name->value);
         if(address == NULL)
             Quit("assembler label %s not defined", name);
@@ -3587,7 +3600,7 @@ VM_Indirect(Opcode oc, Map* labels, char* label)
 static size_t
 VM_Direct(Opcode oc, char* number)
 {
-    return (atoi(number) << 8) | oc;
+    return (String_ToUll(number) << 8) | oc;
 }
 
 static VM*
@@ -4006,6 +4019,7 @@ VM_Div(VM* self)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeMatch(self, a->type, b->type, "/");
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    VM_CheckZeroDivision(self, b);
     a->of.number /= b->of.number;
     VM_Pop(self);
 }
@@ -4401,6 +4415,7 @@ VM_Mod(VM* self)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type == TYPE_NUMBER && b->type == TYPE_NUMBER)
     {
+        VM_CheckZeroDivision(self, b);
         a->of.number = (int64_t) a->of.number % (int64_t) b->of.number;
         VM_Pop(self);
     }
@@ -4413,30 +4428,28 @@ VM_Mod(VM* self)
         char* ref = a->of.string->value;
         for(char* c = ref; *c; c++)
         {
-            if(*c == '{' && index < b->of.queue->size)
-            {
-                String* buffer = String_Init("");
-                c += 1;
-                while(*c != '}')
+            if(*c == '{')
+                if(index < b->of.queue->size)
                 {
-                    if(CC_String_IsSpace(*c))
-                        VM_Quit(self, "spaces between `{` and `}` are not allowed with string formatters");
-                    String_PshB(buffer, *c);
+                    String* buffer = String_Init("");
                     c += 1;
+                    while(*c != '}')
+                    {
+                        if(CC_String_IsSpace(*c))
+                            VM_Quit(self, "spaces may not be inserted between `{` and `}` with formatted printing");
+                        String_PshB(buffer, *c);
+                        c += 1;
+                    }
+                    size_t iw = FORMAT_WIDTH;
+                    size_t ip = FORMAT_PRECI;
+                    if(sscanf(buffer->value, "%lu.%lu", &iw, &ip) == 0)
+                        sscanf(buffer->value, ".%lu", &ip);
+                    Value* value = Queue_Get(b->of.queue, index);
+                    String_Append(formatted, Value_Sprint(value, false, 0, iw, ip));
+                    index += 1;
+                    String_Kill(buffer);
+                    continue;
                 }
-                Value* value = Queue_Get(b->of.queue, index);
-                if(value == NULL)
-                    VM_OutOfBounds(self, b->type, index);
-                char* width = strtok(buffer->value, ".");
-                char* preci = strtok(NULL, "\n");
-                String_Append(formatted,
-                        Value_Sprint(value, false, 0,
-                            width ? atoi(width) : FORMAT_WIDTH,
-                            preci ? atoi(preci) : FORMAT_PRECI));
-                index += 1;
-                String_Kill(buffer);
-                continue;
-            }
             String_PshB(formatted, *c);
         }
         VM_Pop(self);

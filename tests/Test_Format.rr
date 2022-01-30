@@ -1,14 +1,5 @@
 Main()
 {
-    a := "{}, {}, {}, {}" % [
-        "string",
-        1,
-        {"goose": "louw"},
-        [ 0, 1, 2, 3, 4, "foo", { "asdf" : 1 }]
-    ];
-    # Traliing newline is not included in the print count.
-    Print(Len(String(a)));
-    Assert(Len(String(a)) == 180);
-    Assert(Print(a) == 180);
+    Print("{.1}" % [ 1.2345 ]);
     ret 0;
 }
