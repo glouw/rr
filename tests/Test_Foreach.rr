@@ -1,0 +1,25 @@
+Main()
+{
+    a := [0, 1, 2, 3];
+    b := [0, 1, 2, 3];
+    c := [0, 1, 2, 3];
+    foreach(x : a)
+    {
+        x = 0;
+    }
+    foreach(x : b)
+    {
+        break;
+        x = 0;
+    }
+    foreach(x : c)
+    {
+        x = 1;
+        continue;
+        x = 2;
+    }
+    Assert(a == [0, 0, 0, 0]);
+    Assert(b == [0, 1, 2, 3]);
+    Assert(c == [1, 1, 1, 1]);
+    ret 0;
+}

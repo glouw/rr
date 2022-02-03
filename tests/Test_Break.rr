@@ -6,15 +6,21 @@ Main()
     B := 99;
     while(true)
     {
+        x := 1;
         if(a == A)
         {
+            y := 1;
             break;
+            z := 1;
         }
         while(true)
         {
+            y := 1;
             if(b == B)
             {
+                z := 1;
                 break;
+                c := 1;
             }
             b += 1;
         }

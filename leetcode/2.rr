@@ -2,7 +2,9 @@
 # Coin Change 2 
 # ------------------------------
 # 
-# You are given coins of different denominations and a total amount of money. Write a function to compute the number of combinations that make up that amount. You may assume that you have infinite number of each kind of coin.
+# You are given coins of different denominations and a total amount of money.
+# Write a function to compute the number of combinations that make up that amount.
+# You may assume that you have infinite number of each kind of coin.
 # 
 # 
 # Note: 
@@ -37,3 +39,100 @@
 # 
 # Input: amount = 10, coins = [10] 
 # Output: 1
+
+Largest(amount, coins)
+{
+    out := 0;
+    foreach(coin : coins)
+    {
+        if(coin <= amount)
+        {
+            out = coin;
+        }
+    }
+    ret out;
+}
+
+Find(key, queue)
+{
+    index := 0;
+    foreach(value : queue)
+    {
+        if(value == key)
+        {
+            ret index;
+        }
+        index += 1;
+    }
+    ret -1;
+}
+
+Split(amount, coins)
+{
+    if(Len(coins) == 0)
+    {
+        ret 0;
+    }
+    if(Largest(amount, coins) == 0)
+    {
+        ret 0;
+    }
+    if(amount <= 1)
+    {
+        ret 0;
+    }
+    split := [];
+    change := amount;
+    while(change > 0)
+    {
+        coin := Largest(change, coins);
+        if(coin == 0)
+        {
+            break;
+        }
+        change -= coin;
+        split += coin;
+    }
+    count := 1;
+    if(change != 0)
+    {
+        split += change;
+        count = 0;
+    }
+    Print(split);
+    foreach(s : split)
+    {
+        temp := coins;
+        index := Find(s, temp);
+        if(index >= 0)
+        {
+            Del(temp, index);
+        }
+        count += Split(s, temp);
+    }
+    ret count;
+}
+
+Test()
+{
+    tests := [
+        #{ "amount":   10, "coins" : [         10 ], "count" :  1 },
+        #{ "amount":   11, "coins" : [ 1,  2,   5 ], "count" :  7 },
+        #{ "amount":    5, "coins" : [ 1,  2,   5 ], "count" :  4 },
+        #{ "amount":    3, "coins" : [          2 ], "count" :  0 },
+        #{ "amount":    8, "coins" : [ 1,  5,  10 ], "count" :  2 },
+        #{ "amount":   10, "coins" : [ 1,  5,  10 ], "count" :  4 },
+        { "amount":   10, "coins" : [ 2,  3,  5, 6 ], "count" :  3 },
+    ];
+    foreach(test : tests)
+    {
+        Print(Split(test.amount, test.coins));
+        #Assert(Split(test.amount, test.coins) == test.count);
+    }
+}
+
+Main()
+{
+    Test();
+    ret 0;
+}

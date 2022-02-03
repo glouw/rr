@@ -6,7 +6,6 @@ A(a)
 
 Fun(a, b, c, d)
 {
-    val := "asf";
     ret A(a);
 }
 
@@ -16,7 +15,7 @@ Main()
     b := a;
     c := b;
     d := c;
-    r := Fun(a, b, c, d);
-    Assert(r == 9);
+    r := Fun(a, a, c, d);
+    Assert(r == 4);
     ret 0;
 }

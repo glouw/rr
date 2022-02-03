@@ -5,6 +5,9 @@ Main()
         "key": string
     };
     b := a["key"];
-    Assert(a["key"] ? b);
+    Assert(!(a["key"] ? b));
+    value := 0;
+    queue := [value];
+    Assert(!(queue[0] ? value));
     ret 0;
 }
