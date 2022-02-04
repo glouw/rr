@@ -3,12 +3,24 @@ Main()
     a := 1;
     b := a += 1;
     c := 1;
-    d := c *= 1;
     Assert(!(a ? b));
-    Assert(!(c ? d));
     Assert(a == 2);
     Assert(b == 2);
     Assert(c == 1);
-    Assert(d == 1);
+    e := "asdf";
+    e += e;
+    Assert(e == "asdfasdf");
+    f := [0, 1, 2];
+    f += f;
+    Assert(f == [0,1,2,0,1,2]);
+    g := {"a" : 1};
+    g += g;
+    Assert(g == {"a" : 1});
+    h := "asd";
+    h += h[0];
+    Assert(h == "asda");
+    i := [[]];
+    i += [[]];
+    Assert(i == [[], []]);
     ret 0;
 }

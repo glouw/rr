@@ -6,9 +6,16 @@ Fun()
     ret value;
 }
 
+NoRetExpression()
+{
+    ret;
+    ret 1 + 1;
+}
+
 Main()
 {
-    v := Fun();
-    Assert(v["asfd"] == 1);
+    Assert(NoRetExpression() == null);
+    Assert(Fun()["asfd"] == 1);
+    Fun(); # Cleansup.
     ret 0;
 }

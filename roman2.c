@@ -2642,7 +2642,6 @@ CC_Map(CC* self)
         {
             CC_Match(self, ":");
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tcpy"));
         }
         else
             CC_AssemB(self, String_Init("\tpsh true"));
@@ -2661,7 +2660,6 @@ CC_Queue(CC* self)
     while(CC_Next(self) != ']')
     {
         CC_Expression(self);
-        CC_AssemB(self, String_Init("\tcpy"));
         CC_AssemB(self, String_Init("\tpsb"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
@@ -3013,7 +3011,6 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tcpy")); // Protection mechanism because add can append.
             CC_AssemB(self, String_Init("\tadd"));
         }
         else
@@ -3022,7 +3019,6 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tcpy")); // Protection mechanism because add can prepend.
             CC_AssemB(self, String_Init("\tsub"));
         }
         else
@@ -3211,11 +3207,20 @@ CC_For(CC* self, int64_t scoping)
 static void
 CC_Ret(CC* self)
 {
-    CC_Expression(self);
-    CC_AssemB(self, String_Init("\tcpy"));
-    CC_AssemB(self, String_Init("\tsav"));
-    CC_AssemB(self, String_Init("\tfls"));
-    CC_Match(self, ";");
+    if(CC_Next(self) == ';')
+    {
+        CC_AssemB(self, String_Init("\tpsh null"));
+        CC_AssemB(self, String_Init("\tsav"));
+        CC_AssemB(self, String_Init("\tfls"));
+        CC_Match(self, ";");
+    }
+    else
+    {
+        CC_Expression(self);
+        CC_AssemB(self, String_Init("\tsav"));
+        CC_AssemB(self, String_Init("\tfls"));
+        CC_Match(self, ";");
+    }
 }
 
 static void
@@ -3983,8 +3988,6 @@ VM_Jmp(VM* self, int64_t address)
 static void
 VM_Ret(VM* self)
 {
-    if(self->stack->size != 0)
-        VM_Quit(self, "detected %ld stack items when executing opcode `ret`", self->stack->size);
     Frame* frame = Queue_Back(self->frame);
     self->pc = frame->pc;
     Queue_PopB(self->frame);
@@ -4050,24 +4053,37 @@ VM_Add(VM* self)
     char* operator = "+";
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type == TYPE_QUEUE && b->type != TYPE_QUEUE)
-    {
-        Value_Inc(b);
-        Queue_PshB(a->of.queue, b);
-    }
+    if(a->type == TYPE_QUEUE
+    && b->type != TYPE_QUEUE)
+        Queue_PshB(a->of.queue, Value_Copy(b));
+    else
+    if(a->type == TYPE_STRING
+    && b->type == TYPE_CHAR)
+        String_PshB(a->of.string, *b->of.character->value);
     else
     if(a->type == b->type)
         switch(a->type)
         {
         case TYPE_QUEUE:
-            Queue_Append(a->of.queue, b->of.queue);
+        {
+            Queue* copy = Queue_Copy(b->of.queue);
+            Queue_Append(a->of.queue, copy);
+            Queue_Kill(copy);
             break;
+        }
         case TYPE_MAP:
-            Map_Append(a->of.map, b->of.map);
+        {
+            Map* copy = Map_Copy(b->of.map);
+            Map_Append(a->of.map, copy);
+            Map_Kill(copy);
             break;
+        }
         case TYPE_STRING:
-            String_Appends(a->of.string, b->of.string->value);
+        {
+            String* copy = String_Copy(b->of.string);
+            String_Append(a->of.string, copy); // Consumes.
             break;
+        }
         case TYPE_NUMBER:
             a->of.number += b->of.number;
             break;
@@ -4089,18 +4105,20 @@ VM_Sub(VM* self)
     char* operator = "-";
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type == TYPE_QUEUE && b->type != TYPE_QUEUE)
-    {
-        Value_Inc(b);
-        Queue_PshF(a->of.queue, b);
-    }
+    if(a->type == TYPE_QUEUE
+    && b->type != TYPE_QUEUE)
+        Queue_PshF(a->of.queue, Value_Copy(b));
     else
     if(a->type == b->type)
         switch(a->type)
         {
         case TYPE_QUEUE:
-            Queue_Prepend(a->of.queue, b->of.queue);
+        {
+            Queue* copy = Queue_Copy(b->of.queue);
+            Queue_Prepend(a->of.queue, copy);
+            Queue_Kill(copy);
             break;
+        }
         case TYPE_NUMBER:
             a->of.number -= b->of.number;
             break;
@@ -4410,8 +4428,7 @@ VM_Psb(VM* self)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
-    Queue_PshB(a->of.queue, b);
-    Value_Inc(b);
+    Queue_PshB(a->of.queue, Value_Copy(b));
     VM_Pop(self, 1);
 }
 
@@ -4421,8 +4438,7 @@ VM_Psf(VM* self)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
-    Queue_PshF(a->of.queue, b);
-    Value_Inc(b);
+    Queue_PshF(a->of.queue, Value_Copy(b));
     VM_Pop(self, 1);
 }
 
@@ -4439,10 +4455,7 @@ VM_Ins(VM* self)
         VM_TypeBadIndex(self, a->type, b->type);
     else
     if(b->type == TYPE_STRING)
-    {
-        Map_Set(a->of.map, String_Copy(b->of.string), c); // Map keys are not reference counted.
-        Value_Inc(c);
-    }
+        Map_Set(a->of.map, String_Copy(b->of.string), Value_Copy(c)); // Map keys are not reference counted.
     else
         VM_TypeBad(self, b->type);
     VM_Pop(self, 2);

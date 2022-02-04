@@ -1,0 +1,20 @@
+Main()
+{
+    a := 1;
+    b := a -= 1;
+    c := 1;
+    Assert(!(a ? b));
+    Assert(a == 0);
+    Assert(b == 0);
+    Assert(c == 1);
+    e := "asdf";
+    e -= e;
+    Assert(e == 0);
+    f := [0, 1, 2];
+    f -= f;
+    Assert(f == [0,1,2,0,1,2]);
+    i := [[]];
+    i -= [[]];
+    Assert(i == [[], []]);
+    ret 0;
+}
