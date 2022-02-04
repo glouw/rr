@@ -14,125 +14,34 @@
 #  1 <= coin <= 5000
 #  the number of coins is less than 500 
 #  the answer is guaranteed to fit into signed 32-bit integer
-# 
-# 
-# 
-# Example 1:
-# 
-# Input: amount = 5, coins = [1, 2, 5]
-# Output: 4
-# Explanation: there are four ways to make up the amount:
-# 5=5
-# 5=2+2+1
-# 5=2+1+1+1
-# 5=1+1+1+1+1
-# 
-# 
-# Example 2:
-# 
-# Input: amount = 3, coins = [2]
-# Output: 0
-# Explanation: the amount of 3 cannot be made up just with coins of 2.
-# 
-# 
-# Example 3:
-# 
-# Input: amount = 10, coins = [10] 
-# Output: 1
-
-Largest(amount, coins)
-{
-    out := 0;
-    foreach(coin : coins)
-    {
-        if(coin <= amount)
-        {
-            out = coin;
-        }
-    }
-    ret out;
-}
-
-Find(key, queue)
-{
-    index := 0;
-    foreach(value : queue)
-    {
-        if(value == key)
-        {
-            ret index;
-        }
-        index += 1;
-    }
-    ret -1;
-}
 
 Split(amount, coins)
 {
+    # A perfect split - a solution exists.
+    if(amount == 0)
+    {
+        ret 1;
+    }
+
+    # An imperfect split - a solution does not exist.
+    if(amount < 0)
+    {
+        ret 0;
+    }
+
+    # Not enough coins to peform the split with.
     if(Len(coins) == 0)
     {
         ret 0;
     }
-    if(Largest(amount, coins) == 0)
-    {
-        ret 0;
-    }
-    if(amount <= 1)
-    {
-        ret 0;
-    }
-    split := [];
-    change := amount;
-    while(change > 0)
-    {
-        coin := Largest(change, coins);
-        if(coin == 0)
-        {
-            break;
-        }
-        change -= coin;
-        split += coin;
-    }
-    count := 1;
-    if(change != 0)
-    {
-        split += change;
-        count = 0;
-    }
-    Print(split);
-    foreach(s : split)
-    {
-        temp := coins;
-        index := Find(s, temp);
-        if(index >= 0)
-        {
-            Del(temp, index);
-        }
-        count += Split(s, temp);
-    }
-    ret count;
-}
 
-Test()
-{
-    tests := [
-        #{ "amount":   10, "coins" : [         10 ], "count" :  1 },
-        #{ "amount":   11, "coins" : [ 1,  2,   5 ], "count" :  7 },
-        #{ "amount":    5, "coins" : [ 1,  2,   5 ], "count" :  4 },
-        #{ "amount":    3, "coins" : [          2 ], "count" :  0 },
-        #{ "amount":    8, "coins" : [ 1,  5,  10 ], "count" :  2 },
-        #{ "amount":   10, "coins" : [ 1,  5,  10 ], "count" :  4 },
-        { "amount":   10, "coins" : [ 2,  3,  5, 6 ], "count" :  3 },
-    ];
-    foreach(test : tests)
-    {
-        Print(Split(test.amount, test.coins));
-        #Assert(Split(test.amount, test.coins) == test.count);
-    }
+    ret Split(amount - coins[-1], coins) + Split(amount, coins[0 : -1]);
 }
 
 Main()
 {
-    Test();
+    Assert(Split(5, [1, 2, 5]) == 4);
+    Assert(Split(3, [2]) == 0);
+    Assert(Split(10, [10]) == 1);
     ret 0;
 }

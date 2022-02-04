@@ -60,8 +60,8 @@ Type;
 typedef struct
 {
     char* value;
-    size_t size;
-    size_t cap;
+    int64_t size;
+    int64_t cap;
 }
 String;
 
@@ -75,16 +75,16 @@ Char;
 typedef struct
 {
     String* name;
-    size_t size;
-    size_t address;
+    int64_t size;
+    int64_t address;
 }
 Function;
 
 typedef struct
 {
     void* value[QUEUE_BLOCK_SIZE];
-    size_t a;
-    size_t b;
+    int64_t a;
+    int64_t b;
 }
 Block;
 
@@ -93,8 +93,8 @@ typedef struct
     Block** block;
     Kill kill;
     Copy copy;
-    size_t size;
-    size_t blocks;
+    int64_t size;
+    int64_t blocks;
 }
 Queue;
 
@@ -119,7 +119,7 @@ typedef struct
     Node** bucket;
     Kill kill;
     Copy copy;
-    size_t size;
+    int64_t size;
     int64_t prime_index;
     float load_factor;
     uint64_t rand1;
@@ -144,7 +144,7 @@ struct Value
 {
     Type type;
     Of of;
-    size_t refs;
+    int64_t refs;
 };
 
 typedef enum
@@ -211,6 +211,7 @@ typedef enum
     OPCODE_NOT,
     OPCODE_OPN,
     OPCODE_POP,
+    OPCODE_POW,
     OPCODE_PRT,
     OPCODE_PSB,
     OPCODE_PSF,
@@ -243,9 +244,9 @@ typedef struct
     Map* files;
     Map* included;
     String* prime;
-    size_t globals;
-    size_t locals;
-    size_t labels;
+    int64_t globals;
+    int64_t locals;
+    int64_t labels;
 }
 CC;
 
@@ -253,9 +254,9 @@ typedef struct
 {
     FILE* file;
     String* name;
-    size_t index;
-    size_t size;
-    size_t line;
+    int64_t index;
+    int64_t size;
+    int64_t line;
     unsigned char buffer[MODULE_BUFFER_SIZE];
 }
 Module;
@@ -263,7 +264,7 @@ Module;
 typedef struct
 {
     Class class;
-    size_t stack;
+    int64_t stack;
     String* path;
 }
 Meta;
@@ -278,36 +279,36 @@ typedef struct
     Map* track;
     Value* ret;
     uint64_t* instructions;
-    size_t size;
-    size_t pc;
-    size_t spds;
+    int64_t size;
+    int64_t pc;
+    int64_t spds;
 }
 VM;
 
 typedef struct
 {
-    size_t pc;
-    size_t sp;
-    size_t address;
+    int64_t pc;
+    int64_t sp;
+    int64_t address;
 }
 Frame;
 
 typedef struct
 {
     String* label;
-    size_t address;
+    int64_t address;
 }
 Stack;
 
 typedef struct
 {
     char* file;
-    size_t line;
+    int64_t line;
 }
 Debug;
 
 static String*
-Value_Sprint(Value* self, bool newline, size_t indents, size_t width, size_t precision);
+Value_Sprint(Value* self, bool newline, int64_t indents, int64_t width, int64_t precision);
 
 static Value*
 Value_NewQueue(void);
@@ -328,19 +329,19 @@ static bool
 CC_Factor(CC*);
 
 static void
-CC_Block(CC*, size_t head, size_t tail, size_t scoping, bool loop);
+CC_Block(CC*, int64_t head, int64_t tail, int64_t scoping, bool loop);
 
 static int64_t
 VM_Run(VM*, bool arbitrary);
 
 static void*
-Malloc(size_t size)
+Malloc(int64_t size)
 {
     return malloc(size);
 }
 
 static void*
-Realloc(void *ptr, size_t size)
+Realloc(void *ptr, int64_t size)
 {
     return realloc(ptr, size);
 }
@@ -352,7 +353,7 @@ Free(void* pointer)
 }
 
 static void*
-Calloc(size_t nmemb, size_t size)
+Calloc(int64_t nmemb, int64_t size)
 {
     return calloc(nmemb, size);
 }
@@ -391,7 +392,7 @@ Quit(const char* const message, ...)
 }
 
 static void
-String_Alloc(String* self, size_t cap)
+String_Alloc(String* self, int64_t cap)
 {
     self->cap = cap;
     self->value = Realloc(self->value, (1 + cap) * sizeof(*self->value));
@@ -439,7 +440,7 @@ String_Copy(String* self)
 static void
 String_Replace(String* self, char x, char y)
 {
-    for(size_t i = 0; i < self->size; i++)
+    for(int64_t i = 0; i < self->size; i++)
         if(self->value[i] == x)
             self->value[i] = y;
 }
@@ -467,25 +468,25 @@ String_PshB(String* self, char ch)
 }
 
 static String*
-String_Indent(size_t indents)
+String_Indent(int64_t indents)
 {
-    size_t width = 4;
+    int64_t width = 4;
     String* ident = String_Init("");
     while(indents > 0)
     {
-        for(size_t i = 0; i < width; i++)
+        for(int64_t i = 0; i < width; i++)
             String_PshB(ident, ' ');
         indents -= 1;
     }
     return ident;
 }
 
-static size_t
+static int64_t
 String_ToUll(char* string)
 {
     errno = 0;
     char* end;
-    size_t ull = strtoull(string, &end, 10);
+    int64_t ull = strtoull(string, &end, 10);
     if(*end != '\0' || errno != 0)
         Quit("%s is not a valid number", string);
     return ull;
@@ -510,7 +511,7 @@ String_PopB(String* self)
 }
 
 static void
-String_Resize(String* self, size_t size)
+String_Resize(String* self, int64_t size)
 {
     if(size > self->cap)
         String_Alloc(self, size);
@@ -588,7 +589,7 @@ String_Format(char* format, ...)
     va_list args;
     va_start(args, format);
     String* line = String_Init("");
-    size_t size = vsnprintf(line->value, line->size, format, args);
+    int64_t size = vsnprintf(line->value, line->size, format, args);
     va_end(args);
     if(size >= line->size)
     {
@@ -603,19 +604,27 @@ String_Format(char* format, ...)
 }
 
 static char*
-String_Get(String* self, size_t index)
+String_Get(String* self, int64_t index)
 {
+    if(index == -1)
+        return &self->value[self->size - 1];
     if(index >= self->size)
         return NULL;
     return &self->value[index];
 }
 
 static bool
-String_Del(String* self, size_t index)
+String_Del(String* self, int64_t index)
 {
+    if(index == -1)
+    {
+        String_PopB(self);
+        return true;
+    }
+    else
     if(String_Get(self, index))
     {
-        for(size_t i = index; i < self->size - 1; i++)
+        for(int64_t i = index; i < self->size - 1; i++)
             self->value[i] = self->value[i + 1];
         String_PopB(self);
         return true;
@@ -663,14 +672,14 @@ File_Copy(File* self)
     return File_Init(String_Copy(self->path), String_Copy(self->mode));
 }
 
-static size_t
+static int64_t
 File_Size(File* self)
 {
     if(self->file)
     {
-        size_t prev = ftell(self->file);
+        int64_t prev = ftell(self->file);
         fseek(self->file, 0L, SEEK_END);
-        size_t size = ftell(self->file);
+        int64_t size = ftell(self->file);
         fseek(self->file, prev, SEEK_SET);
         return size;
     }
@@ -679,7 +688,7 @@ File_Size(File* self)
 }
 
 static Function*
-Function_Init(String* name, size_t size, size_t address)
+Function_Init(String* name, int64_t size, int64_t address)
 {
     Function* self = Malloc(sizeof(*self));
     self->name = name;
@@ -761,7 +770,7 @@ Queue_Init(Kill kill, Copy copy)
 static void
 Queue_Kill(Queue* self)
 {
-    for(size_t step = 0; step < self->blocks; step++)
+    for(int64_t step = 0; step < self->blocks; step++)
     {
         Block* block = self->block[step];
         while(block->a < block->b)
@@ -776,26 +785,26 @@ Queue_Kill(Queue* self)
 }
 
 static void**
-Queue_At(Queue* self, size_t index)
+Queue_At(Queue* self, int64_t index)
 {
     if(index < self->size)
     {
         Block* block = *Queue_BlockF(self);
-        size_t at = index + block->a;
-        size_t step = at / QUEUE_BLOCK_SIZE;
-        size_t item = at % QUEUE_BLOCK_SIZE;
+        int64_t at = index + block->a;
+        int64_t step = at / QUEUE_BLOCK_SIZE;
+        int64_t item = at % QUEUE_BLOCK_SIZE;
         return &self->block[step]->value[item];
     }
     return NULL;
 }
 
 static void*
-Queue_Get(Queue* self, size_t index)
+Queue_Get(Queue* self, int64_t index)
 {
     if(index == 0)
         return Queue_Front(self);
     else
-    if(index == self->size - 1)
+    if(index == self->size - 1 || index == -1)
         return Queue_Back(self);
     else
     {
@@ -805,7 +814,7 @@ Queue_Get(Queue* self, size_t index)
 }
 
 static void
-Queue_Alloc(Queue* self, size_t blocks)
+Queue_Alloc(Queue* self, int64_t blocks)
 {
     self->blocks = blocks;
     self->block = Realloc(self->block, blocks * sizeof(*self->block));
@@ -863,7 +872,7 @@ Queue_PshF(Queue* self, void* value)
         if(block->b == 0 || block->a == 0)
         {
             Queue_Alloc(self, self->blocks + 1);
-            for(size_t i = self->blocks - 1; i > 0; i--)
+            for(int64_t i = self->blocks - 1; i > 0; i--)
                 self->block[i] = self->block[i - 1];
             *Queue_BlockF(self) = Block_Init(FRONT);
         }
@@ -894,7 +903,7 @@ Queue_Pop(Queue* self, End end)
             block->a += 1;
             if(block->a == QUEUE_BLOCK_SIZE)
             {
-                for(size_t i = 0; i < self->blocks - 1; i++)
+                for(int64_t i = 0; i < self->blocks - 1; i++)
                     self->block[i] = self->block[i + 1];
                 Free(block);
                 Queue_Alloc(self, self->blocks - 1);
@@ -935,12 +944,12 @@ Queue_PopBSoft(Queue* self)
 }
 
 static bool
-Queue_Del(Queue* self, size_t index)
+Queue_Del(Queue* self, int64_t index)
 {
     if(index == 0)
         Queue_PopF(self);
     else
-    if(index == self->size - 1)
+    if(index == self->size - 1 || index == -1)
         Queue_PopB(self);
     else
     {
@@ -977,7 +986,7 @@ static Queue*
 Queue_Copy(Queue* self)
 {
     Queue* copy = Queue_Init(self->kill, self->copy);
-    for(size_t i = 0; i < self->size; i++)
+    for(int64_t i = 0; i < self->size; i++)
     {
         void* temp = Queue_Get(self, i);
         void* value = copy->copy ? copy->copy(temp) : temp;
@@ -989,7 +998,7 @@ Queue_Copy(Queue* self)
 static void
 Queue_Prepend(Queue* self, Queue* other)
 {
-    size_t i = other->size;
+    int64_t i = other->size;
     while(i != 0)
     {
         i -= 1;
@@ -1002,7 +1011,7 @@ Queue_Prepend(Queue* self, Queue* other)
 static void
 Queue_Append(Queue* self, Queue* other)
 {
-    for(size_t i = 0; i < other->size; i++)
+    for(int64_t i = 0; i < other->size; i++)
     {
         void* temp = Queue_Get(other, i);
         void* value = self->copy ? self->copy(temp) : temp;
@@ -1016,7 +1025,7 @@ Queue_Equal(Queue* self, Queue* other, Compare compare)
     if(self->size != other->size)
         return false;
     else
-        for(size_t i = 0; i < self->size; i++)
+        for(int64_t i = 0; i < self->size; i++)
             if(!compare(Queue_Get(self, i), Queue_Get(other, i)))
                 return false;
     return true;
@@ -1058,18 +1067,18 @@ Queue_Sort(Queue* self, Compare compare)
 }
 
 static String*
-Queue_Print(Queue* self, size_t indents)
+Queue_Print(Queue* self, int64_t indents)
 {
     if(self->size == 0)
         return String_Init("[]");
     else
     {
         String* print = String_Init("[\n");
-        size_t size = self->size;
-        for(size_t i = 0; i < size; i++)
+        int64_t size = self->size;
+        for(int64_t i = 0; i < size; i++)
         {
             String_Append(print, String_Indent(indents + 1));
-            String_Append(print, String_Format("[%lu] = ", i));
+            String_Append(print, String_Format("[%ld] = ", i));
             String_Append(print, Value_Sprint(Queue_Get(self, i), false, indents + 1, FORMAT_WIDTH, FORMAT_PRECI));
             if(i < size - 1)
                 String_Appends(print, ",");
@@ -1141,7 +1150,7 @@ Node_Copy(Node* self, Copy copy)
     return Node_Init(String_Copy(self->key), copy ? copy(self->value) : self->value);
 }
 
-static const size_t
+static const int64_t
 Map_Primes[] = {
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67,
     71, 73, 79, 83, 89, 97, 103, 109, 113, 127, 137, 139, 149, 157, 167, 179,
@@ -1154,7 +1163,7 @@ Map_Primes[] = {
     45481, 49201, 53201, 57557, 62233, 67307, 72817, 78779, 85229, 92203,
 };
 
-static size_t
+static int64_t
 Map_Buckets(Map* self)
 {
     if(self->prime_index == MAP_UNPRIMED)
@@ -1186,7 +1195,7 @@ Map_Init(Kill kill, Copy copy)
 static void
 Map_Kill(Map* self)
 {
-    for(size_t i = 0; i < Map_Buckets(self); i++)
+    for(int64_t i = 0; i < Map_Buckets(self); i++)
     {
         Node* bucket = self->bucket[i];
         while(bucket)
@@ -1224,7 +1233,7 @@ Map_Bucket(Map* self, char* key)
 }
 
 static void
-Map_Alloc(Map* self, size_t index)
+Map_Alloc(Map* self, int64_t index)
 {
     self->prime_index = index;
     self->bucket = Calloc(Map_Buckets(self), sizeof(*self->bucket));
@@ -1238,7 +1247,7 @@ Map_Rehash(Map* self)
 {
     Map* other = Map_Init(self->kill, self->copy);
     Map_Alloc(other, self->prime_index + 1);
-    for(size_t i = 0; i < Map_Buckets(self); i++)
+    for(int64_t i = 0; i < Map_Buckets(self); i++)
     {
         Node* bucket = self->bucket[i];
         while(bucket)
@@ -1343,7 +1352,7 @@ static Map*
 Map_Copy(Map* self)
 {
     Map* copy = Map_Init(self->kill, self->copy);
-    for(size_t i = 0; i < Map_Buckets(self); i++)
+    for(int64_t i = 0; i < Map_Buckets(self); i++)
     {
         Node* chain = self->bucket[i];
         while(chain)
@@ -1359,7 +1368,7 @@ Map_Copy(Map* self)
 static void
 Map_Append(Map* self, Map* other)
 {
-    for(size_t i = 0; i < Map_Buckets(other); i++)
+    for(int64_t i = 0; i < Map_Buckets(other); i++)
     {
         Node* chain = other->bucket[i];
         while(chain)
@@ -1375,7 +1384,7 @@ Map_Equal(Map* self, Map* other, Compare compare)
 {
     if(self->size == other->size)
     {
-        for(size_t i = 0; i < Map_Buckets(self); i++)
+        for(int64_t i = 0; i < Map_Buckets(self); i++)
         {
             Node* chain = self->bucket[i];
             while(chain)
@@ -1393,14 +1402,14 @@ Map_Equal(Map* self, Map* other, Compare compare)
 }
 
 static String*
-Map_Print(Map* self, size_t indents)
+Map_Print(Map* self, int64_t indents)
 {
     if(self->size == 0)
         return String_Init("{}");
     else
     {
         String* print = String_Init("{\n");
-        for(size_t i = 0; i < Map_Buckets(self); i++)
+        for(int64_t i = 0; i < Map_Buckets(self); i++)
         {
             Node* bucket = self->bucket[i];
             while(bucket)
@@ -1424,7 +1433,7 @@ static Value*
 Map_Key(Map* self)
 {
     Value* queue = Value_NewQueue();
-    for(size_t i = 0; i < Map_Buckets(self); i++)
+    for(int64_t i = 0; i < Map_Buckets(self); i++)
     {
         Node* chain = self->bucket[i];
         while(chain)
@@ -1439,7 +1448,7 @@ Map_Key(Map* self)
 }
 
 static Char*
-Char_Init(Value* string, size_t index)
+Char_Init(Value* string, int64_t index)
 {
     char* value = String_Get(string->of.string, index);
     if(value)
@@ -1516,16 +1525,16 @@ Type_Kill(Type type, Of* of)
     }
 }
 
-static size_t*
-Int_Init(size_t value)
+static int64_t*
+Int_Init(int64_t value)
 {
-    size_t* self = Malloc(sizeof(*self));
+    int64_t* self = Malloc(sizeof(*self));
     *self = value;
     return self;
 }
 
 static void
-Int_Kill(size_t* self)
+Int_Kill(int64_t* self)
 {
     Free(self);
 }
@@ -1563,7 +1572,7 @@ Type_Copy(Value* copy, Value* self)
     }
 }
 
-static size_t
+static int64_t
 Value_Len(Value* self)
 {
     switch(self->type)
@@ -1796,7 +1805,7 @@ Value_NewNull(void)
 }
 
 static String*
-Value_Sprint(Value* self, bool newline, size_t indents, size_t width, size_t precision)
+Value_Sprint(Value* self, bool newline, int64_t indents, int64_t width, int64_t precision)
 {
     String* print = String_Init("");
     switch(self->type)
@@ -1805,7 +1814,7 @@ Value_Sprint(Value* self, bool newline, size_t indents, size_t width, size_t pre
         String_Append(print, String_Format("{ \"%s\", \"%s\", %p }", self->of.file->path->value, self->of.file->mode->value, self->of.file->file));
         break;
     case TYPE_FUNCTION:
-        String_Append(print, String_Format("{ %s, %lu, %lu }", self->of.function->name->value, self->of.function->size, self->of.function->address));
+        String_Append(print, String_Format("{ %s, %ld, %ld }", self->of.function->name->value, self->of.function->size, self->of.function->address));
         break;
     case TYPE_QUEUE:
         String_Append(print, Queue_Print(self->of.queue, indents));
@@ -1873,7 +1882,7 @@ Class_ToString(Class self)
 }
 
 static Frame*
-Frame_Init(size_t pc, size_t sp, size_t address)
+Frame_Init(int64_t pc, int64_t sp, int64_t address)
 {
     Frame* self = Malloc(sizeof(*self));
     self->pc = pc;
@@ -1889,7 +1898,7 @@ Frame_Free(Frame* self)
 }
 
 static Meta*
-Meta_Init(Class class, size_t stack, String* path)
+Meta_Init(Class class, int64_t stack, String* path)
 {
     Meta* self = Malloc(sizeof(*self));
     self->class = class;
@@ -1936,13 +1945,13 @@ Module_Kill(Module* self)
     Free(self);
 }
 
-static size_t
+static int64_t
 Module_At(Module* self)
 {
     return self->buffer[self->index];
 }
 
-static size_t
+static int64_t
 Module_Peak(Module* self)
 {
     if(self->index == self->size)
@@ -1953,7 +1962,7 @@ Module_Peak(Module* self)
 static void
 Module_Advance(Module* self)
 {
-    size_t at = Module_At(self);
+    int64_t at = Module_At(self);
     if(at == '\n')
         self->line += 1;
     self->index += 1;
@@ -1965,7 +1974,7 @@ CC_Quit(CC* self, const char* const message, ...)
     Module* back = Queue_Back(self->modules);
     va_list args;
     va_start(args, message);
-    fprintf(stderr, "error: file %s: line %lu: ", back ? back->name->value : "?", back ? back->line : 0);
+    fprintf(stderr, "error: file %s: line %ld: ", back ? back->name->value : "?", back ? back->line : 0);
     vfprintf(stderr, message, args);
     fprintf(stderr, "\n");
     va_end(args);
@@ -2191,7 +2200,7 @@ CC_StringStream(CC* self)
 }
 
 static Debug*
-Debug_Init(char* file, size_t line)
+Debug_Init(char* file, int64_t line)
 {
     Debug* self = Malloc(sizeof(*self));
     self->file = file;
@@ -2350,7 +2359,7 @@ CC_IsFunction(Class class)
 }
 
 static void
-CC_Define(CC* self, Class class, size_t stack, String* ident, String* path)
+CC_Define(CC* self, Class class, int64_t stack, String* ident, String* path)
 {
     Meta* old = Map_Get(self->identifiers, ident->value);
     Meta* new = Meta_Init(class, stack, path);
@@ -2361,7 +2370,7 @@ CC_Define(CC* self, Class class, size_t stack, String* ident, String* path)
         && new->class == CLASS_FUNCTION)
         {
             if(new->stack != old->stack)
-                CC_Quit(self, "function %s with %lu argument(s) was previously defined as a function prototype with %lu argument(s)", ident->value, new->stack, old->stack);
+                CC_Quit(self, "function %s with %ld argument(s) was previously defined as a function prototype with %ld argument(s)", ident->value, new->stack, old->stack);
         }
         else
             CC_Quit(self, "%s %s was already defined as a %s", Class_ToString(new->class), ident->value, Class_ToString(old->class));
@@ -2414,10 +2423,10 @@ CC_AssemF(CC* self, String* assem)
 }
 
 void
-CC_Pops(CC* self, size_t count)
+CC_Pops(CC* self, int64_t count)
 {
     if(count > 0)
-        CC_AssemB(self, String_Format("\tpop %lu", count));
+        CC_AssemB(self, String_Format("\tpop %ld", count));
 }
 
 static void
@@ -2483,18 +2492,18 @@ static void
 CC_DefineParams(CC* self, Queue* params)
 {
     self->locals = 0;
-    for(size_t i = 0; i < params->size; i++)
+    for(int64_t i = 0; i < params->size; i++)
     {
         String* ident = String_Copy(Queue_Get(params, i));
         CC_Local(self, ident); // Reference type.
     }
 }
 
-static size_t
+static int64_t
 CC_PopScope(CC* self, Queue* scope)
 {
-    size_t popped = scope->size;
-    for(size_t i = 0; i < popped; i++)
+    int64_t popped = scope->size;
+    for(int64_t i = 0; i < popped; i++)
     {
         String* key = Queue_Get(scope, i);
         Map_Del(self->identifiers, key->value);
@@ -2528,10 +2537,10 @@ CC_Ref(CC* self, String* ident)
 {
     Meta* meta = CC_Expect(self, ident, CC_IsVariable);
     if(meta->class == CLASS_VARIABLE_GLOBAL)
-        CC_AssemB(self, String_Format("\tglb %lu", meta->stack));
+        CC_AssemB(self, String_Format("\tglb %ld", meta->stack));
     else
     if(meta->class == CLASS_VARIABLE_LOCAL)
-        CC_AssemB(self, String_Format("\tloc %lu", meta->stack));
+        CC_AssemB(self, String_Format("\tloc %ld", meta->stack));
 }
 
 static void
@@ -2587,11 +2596,11 @@ CC_Resolve(CC* self)
     return storage;
 }
 
-static size_t
+static int64_t
 CC_Args(CC* self)
 {
     CC_Match(self, "(");
-    size_t args = 0;
+    int64_t args = 0;
     while(CC_Next(self) != ')')
     {
         CC_Expression(self);
@@ -2604,19 +2613,19 @@ CC_Args(CC* self)
 }
 
 static void
-CC_Call(CC* self, String* ident, size_t args)
+CC_Call(CC* self, String* ident, int64_t args)
 {
-    for(size_t i = 0; i < args; i++)
+    for(int64_t i = 0; i < args; i++)
         CC_AssemB(self, String_Init("\tspd"));
     CC_AssemB(self, String_Format("\tcal %s", ident->value));
     CC_AssemB(self, String_Init("\tlod"));
 }
 
 static void
-CC_IndirectCalling(CC* self, String* ident, size_t args)
+CC_IndirectCalling(CC* self, String* ident, int64_t args)
 {
     CC_Ref(self, ident);
-    CC_AssemB(self, String_Format("\tpsh %lu", args));
+    CC_AssemB(self, String_Format("\tpsh %ld", args));
     CC_AssemB(self, String_Init("\tvrt"));
     CC_AssemB(self, String_Init("\tlod"));
 }
@@ -2636,10 +2645,7 @@ CC_Map(CC* self)
             CC_AssemB(self, String_Init("\tcpy"));
         }
         else
-        {
-            CC_AssemB(self, String_Init("\tpsh true")); // No values default to true for quick to build string sets.
-            CC_AssemB(self, String_Init("\tcpy"));
-        }
+            CC_AssemB(self, String_Init("\tpsh true"));
         CC_AssemB(self, String_Init("\tins"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
@@ -2680,7 +2686,7 @@ CC_Direct(CC* self, bool negative)
 }
 
 static void
-CC_DirectCalling(CC* self, String* ident, size_t args)
+CC_DirectCalling(CC* self, String* ident, int64_t args)
 {
     if(String_Equals(ident, "Len"))
         CC_AssemB(self, String_Init("\tlen"));
@@ -2755,11 +2761,11 @@ static void
 CC_Calling(CC* self, String* ident)
 {
     Meta* meta = CC_Meta(self, ident);
-    size_t args = CC_Args(self);
+    int64_t args = CC_Args(self);
     if(CC_IsFunction(meta->class))
     {
         if(args != meta->stack)
-            CC_Quit(self, "calling function %s required %lu arguments but got %lu arguments", ident->value, meta->stack, args);
+            CC_Quit(self, "calling function %s required %ld arguments but got %ld arguments", ident->value, meta->stack, args);
         else
             CC_DirectCalling(self, ident, args);
     }
@@ -2775,7 +2781,7 @@ CC_Referencing(CC* self, String* ident)
 {
     Meta* meta = CC_Meta(self, ident);
     if(CC_IsFunction(meta->class))
-        CC_AssemB(self, String_Format("\tpsh @%s,%lu", ident->value, meta->stack));
+        CC_AssemB(self, String_Format("\tpsh @%s,%ld", ident->value, meta->stack));
     else
     {
         CC_Ref(self, ident);
@@ -2810,7 +2816,7 @@ CC_Identifier(CC* self)
 static void
 CC_ReserveFunctions(CC* self)
 {
-    struct { size_t args; char* name; } items[] = {
+    struct { int64_t args; char* name; } items[] = {
         { 2, "Sort"   },
         { 1, "Good"   },
         { 1, "Assert" },
@@ -2834,7 +2840,7 @@ CC_ReserveFunctions(CC* self)
         { 0, "Rand"   },
         { 2, "Write"  },
     };
-    for(size_t i = 0; i < LEN(items); i++)
+    for(uint64_t i = 0; i < LEN(items); i++)
         CC_Define(self, CLASS_FUNCTION, items[i].args, String_Init(items[i].name), String_Init(""));
 }
 
@@ -2919,7 +2925,6 @@ CC_Term(CC* self)
             if(!storage)
                 CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tcpy"));
             CC_AssemB(self, String_Init("\tmul"));
         }
         else
@@ -2928,7 +2933,6 @@ CC_Term(CC* self)
             if(!storage)
                 CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tcpy"));
             CC_AssemB(self, String_Init("\tdiv"));
         }
         else
@@ -2937,8 +2941,15 @@ CC_Term(CC* self)
             if(!storage)
                 CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tcpy"));
             CC_AssemB(self, String_Init("\tmod"));
+        }
+        else
+        if(String_Equals(operator, "**="))
+        {
+            if(!storage)
+                CC_BadStorage(self, operator->value);
+            CC_Expression(self);
+            CC_AssemB(self, String_Init("\tpow"));
         }
         else
         {
@@ -2963,6 +2974,9 @@ CC_Term(CC* self)
                 else
                 if(String_Equals(operator, "||"))
                     CC_AssemB(self, String_Init("\tlor"));
+                else
+                if(String_Equals(operator, "**"))
+                    CC_AssemB(self, String_Init("\tpow"));
                 else
                     CC_Quit(self, "operator `%s` is not supported for factors", operator->value);
             }
@@ -2991,7 +3005,6 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tcpy"));
             CC_AssemB(self, String_Init("\tmov"));
         }
         else
@@ -3000,7 +3013,7 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tcpy"));
+            CC_AssemB(self, String_Init("\tcpy")); // Protection mechanism because add can append.
             CC_AssemB(self, String_Init("\tadd"));
         }
         else
@@ -3009,7 +3022,7 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_BadStorage(self, operator->value);
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tcpy"));
+            CC_AssemB(self, String_Init("\tcpy")); // Protection mechanism because add can prepend.
             CC_AssemB(self, String_Init("\tsub"));
         }
         else
@@ -3068,31 +3081,31 @@ CC_Expression(CC* self)
     }
 }
 
-static size_t
+static int64_t
 CC_Label(CC* self)
 {
-    size_t label = self->labels;
+    int64_t label = self->labels;
     self->labels += 1;
     return label;
 }
 
 static void
-CC_Branch(CC* self, size_t head, size_t tail, size_t end, size_t scoping, bool loop)
+CC_Branch(CC* self, int64_t head, int64_t tail, int64_t end, int64_t scoping, bool loop)
 {
-    size_t next = CC_Label(self);
+    int64_t next = CC_Label(self);
     CC_Match(self, "(");
     CC_Expression(self);
     CC_Match(self, ")");
-    CC_AssemB(self, String_Format("\tbrf @l%lu", next));
+    CC_AssemB(self, String_Format("\tbrf @l%ld", next));
     CC_Block(self, head, tail, scoping, loop);
-    CC_AssemB(self, String_Format("\tjmp @l%lu", end));
-    CC_AssemB(self, String_Format("@l%lu:", next));
+    CC_AssemB(self, String_Format("\tjmp @l%ld", end));
+    CC_AssemB(self, String_Format("@l%ld:", next));
 }
 
 static String*
-CC_Branches(CC* self, size_t head, size_t tail, size_t scoping, bool loop)
+CC_Branches(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
 {
-    size_t end = CC_Label(self);
+    int64_t end = CC_Label(self);
     CC_Branch(self, head, tail, end, scoping, loop);
     String* buffer = CC_Ident(self);
     while(String_Equals(buffer, "elif"))
@@ -3103,7 +3116,7 @@ CC_Branches(CC* self, size_t head, size_t tail, size_t scoping, bool loop)
     }
     if(String_Equals(buffer, "else"))
         CC_Block(self, head, tail, scoping, loop);
-    CC_AssemB(self, String_Format("@l%lu:", end));
+    CC_AssemB(self, String_Format("@l%ld:", end));
     String* backup = NULL;
     if(buffer->size == 0 || String_Equals(buffer, "elif") || String_Equals(buffer, "else"))
         String_Kill(buffer);
@@ -3113,34 +3126,34 @@ CC_Branches(CC* self, size_t head, size_t tail, size_t scoping, bool loop)
 }
 
 static void
-CC_While(CC* self, size_t scoping)
+CC_While(CC* self, int64_t scoping)
 {
-    size_t A = CC_Label(self);
-    size_t B = CC_Label(self);
-    CC_AssemB(self, String_Format("@l%lu:", A));
+    int64_t A = CC_Label(self);
+    int64_t B = CC_Label(self);
+    CC_AssemB(self, String_Format("@l%ld:", A));
     CC_Match(self, "(");
     CC_Expression(self);
-    CC_AssemB(self, String_Format("\tbrf @l%lu", B));
+    CC_AssemB(self, String_Format("\tbrf @l%ld", B));
     CC_Match(self, ")");
     CC_Block(self, A, B, scoping, true);
-    CC_AssemB(self, String_Format("\tjmp @l%lu", A));
-    CC_AssemB(self, String_Format("@l%lu:", B));
+    CC_AssemB(self, String_Format("\tjmp @l%ld", A));
+    CC_AssemB(self, String_Format("@l%ld:", B));
 }
 
 static void
-CC_Foreach(CC* self, size_t scoping)
+CC_Foreach(CC* self, int64_t scoping)
 {
-    size_t A = CC_Label(self);
-    size_t B = CC_Label(self);
-    size_t C = CC_Label(self);
+    int64_t A = CC_Label(self);
+    int64_t B = CC_Label(self);
+    int64_t C = CC_Label(self);
     Queue* init = Queue_Init((Kill) String_Kill, (Copy) NULL);
     CC_Match(self, "(");
     String* ident = CC_Ident(self);
     CC_Match(self, ":");
     CC_Expression(self);
     CC_Match(self, ")");
-    String* queue = String_Init("!queue");
-    String* index = String_Init("!index");
+    String* queue = String_Format("!queue_%s", ident->value);
+    String* index = String_Format("!index_%s", ident->value);
     CC_Local(self, queue);
     Queue_PshB(init, String_Copy(queue));
     CC_AssemB(self, String_Init("\tpsh 0"));
@@ -3149,49 +3162,49 @@ CC_Foreach(CC* self, size_t scoping)
     CC_AssemB(self, String_Init("\tpsh null")); // Reference type.
     CC_Local(self, ident);
     Queue_PshB(init, String_Copy(ident));
-    CC_AssemB(self, String_Format("@l%lu:", A));
+    CC_AssemB(self, String_Format("@l%ld:", A));
     CC_AssemB(self, String_Init("\tpop 1"));
     CC_Ref(self, queue);
     CC_Ref(self, index);
     CC_AssemB(self, String_Init("\tget"));
     CC_Block(self, C, B, scoping, true);
-    CC_AssemB(self, String_Format("@l%lu:", C));
+    CC_AssemB(self, String_Format("@l%ld:", C));
     CC_Ref(self, index);
     CC_AssemB(self, String_Init("\tpsh 1"));
     CC_AssemB(self, String_Init("\tadd"));
     CC_Ref(self, queue);
     CC_AssemB(self, String_Init("\tlen"));
     CC_AssemB(self, String_Init("\teql"));
-    CC_AssemB(self, String_Format("\tbrf @l%lu", A));
-    CC_AssemB(self, String_Format("@l%lu:", B));
+    CC_AssemB(self, String_Format("\tbrf @l%ld", A));
+    CC_AssemB(self, String_Format("@l%ld:", B));
     CC_PopScope(self, init);
 }
 
 static void
-CC_For(CC* self, size_t scoping)
+CC_For(CC* self, int64_t scoping)
 {
-    size_t A = CC_Label(self);
-    size_t B = CC_Label(self);
-    size_t C = CC_Label(self);
-    size_t D = CC_Label(self);
+    int64_t A = CC_Label(self);
+    int64_t B = CC_Label(self);
+    int64_t C = CC_Label(self);
+    int64_t D = CC_Label(self);
     Queue* init = Queue_Init((Kill) String_Kill, (Copy) NULL);
     CC_Match(self, "(");
     String* ident = CC_Ident(self);
     Queue_PshB(init, String_Copy(ident));
     CC_AssignLocal(self, ident);
-    CC_AssemB(self, String_Format("@l%lu:", A));
+    CC_AssemB(self, String_Format("@l%ld:", A));
     CC_Expression(self);
     CC_Match(self, ";");
-    CC_AssemB(self, String_Format("\tbrf @l%lu", D));
-    CC_AssemB(self, String_Format("\tjmp @l%lu", C));
-    CC_AssemB(self, String_Format("@l%lu:", B));
+    CC_AssemB(self, String_Format("\tbrf @l%ld", D));
+    CC_AssemB(self, String_Format("\tjmp @l%ld", C));
+    CC_AssemB(self, String_Format("@l%ld:", B));
     CC_ConsumeExpression(self);
     CC_Match(self, ")");
-    CC_AssemB(self, String_Format("\tjmp @l%lu", A));
-    CC_AssemB(self, String_Format("@l%lu:", C));
+    CC_AssemB(self, String_Format("\tjmp @l%ld", A));
+    CC_AssemB(self, String_Format("@l%ld:", C));
     CC_Block(self, B, D, scoping, true);
-    CC_AssemB(self, String_Format("\tjmp @l%lu", B));
-    CC_AssemB(self, String_Format("@l%lu:", D));
+    CC_AssemB(self, String_Format("\tjmp @l%ld", B));
+    CC_AssemB(self, String_Format("@l%ld:", D));
     CC_PopScope(self, init);
 }
 
@@ -3206,7 +3219,7 @@ CC_Ret(CC* self)
 }
 
 static void
-CC_Block(CC* self, size_t head, size_t tail, size_t scoping, bool loop)
+CC_Block(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
 {
     Queue* scope = Queue_Init((Kill) String_Kill, (Copy) NULL);
     CC_Match(self, "{");
@@ -3247,7 +3260,7 @@ CC_Block(CC* self, size_t head, size_t tail, size_t scoping, bool loop)
                 {
                     CC_Match(self, ";");
                     CC_Pops(self, scoping + scope->size);
-                    CC_AssemB(self, String_Format("\tjmp @l%lu", head));
+                    CC_AssemB(self, String_Format("\tjmp @l%ld", head));
                 }
                 else
                     CC_Quit(self, "the keyword continue can only be used within while, for, or foreach loops");
@@ -3259,7 +3272,7 @@ CC_Block(CC* self, size_t head, size_t tail, size_t scoping, bool loop)
                 {
                     CC_Match(self, ";");
                     CC_Pops(self, scoping + scope->size);
-                    CC_AssemB(self, String_Format("\tjmp @l%lu", tail));
+                    CC_AssemB(self, String_Format("\tjmp @l%ld", tail));
                 }
                 else
                     CC_Quit(self, "the keyword break can only be used within while, for, or foreach loops");
@@ -3322,14 +3335,14 @@ CC_Spool(CC* self, Queue* start)
     String* main = String_Init("Main");
     CC_Expect(self, main, CC_IsFunction);
     Queue_PshB(spool, String_Init("!start:"));
-    for(size_t i = 0; i < start->size; i++)
+    for(int64_t i = 0; i < start->size; i++)
     {
         String* label = Queue_Get(start, i);
         Queue_PshB(spool, String_Format("\tcal %s", label->value));
     }
     Queue_PshB(spool, String_Format("\tcal %s", main->value));
     Queue_PshB(spool, String_Format("\tend"));
-    size_t i = spool->size;
+    int64_t i = spool->size;
     while(i != 0)
     {
         i -= 1;
@@ -3369,7 +3382,7 @@ CC_Parse(CC* self)
 }
 
 static Stack*
-Stack_Init(String* label, size_t address)
+Stack_Init(String* label, int64_t address)
 {
     Stack* self = Malloc(sizeof(*self));
     self->label = label;
@@ -3394,12 +3407,12 @@ static Queue*
 ASM_Flatten(Map* labels)
 {
     Queue* addresses = Queue_Init((Kill) Stack_Kill, (Copy) NULL);
-    for(size_t i = 0; i < Map_Buckets(labels); i++)
+    for(int64_t i = 0; i < Map_Buckets(labels); i++)
     {
         Node* chain = labels->bucket[i];
         while(chain)
         {
-            size_t* address = Map_Get(labels, chain->key->value);
+            int64_t* address = Map_Get(labels, chain->key->value);
             Stack* stack = Stack_Init(String_Init(chain->key->value), *address);
             Queue_PshB(addresses, stack);
             chain = chain->next;
@@ -3410,10 +3423,10 @@ ASM_Flatten(Map* labels)
 }
 
 static Map*
-ASM_Label(Queue* assembly, size_t* size)
+ASM_Label(Queue* assembly, int64_t* size)
 {
     Map* labels = Map_Init((Kill) Free, (Copy) NULL);
-    for(size_t i = 0; i < assembly->size; i++)
+    for(int64_t i = 0; i < assembly->size; i++)
     {
         String* stub = Queue_Get(assembly, i);
         if(stub->value[0] == '\t')
@@ -3434,9 +3447,9 @@ ASM_Label(Queue* assembly, size_t* size)
 static void
 ASM_Dump(Queue* assembly)
 {
-    size_t instructions = 0;
-    size_t labels = 0;
-    for(size_t i = 0; i < assembly->size; i++)
+    int64_t instructions = 0;
+    int64_t labels = 0;
+    for(int64_t i = 0; i < assembly->size; i++)
     {
         String* assem = Queue_Get(assembly, i);
         if(assem->value[0] == '\t')
@@ -3445,7 +3458,7 @@ ASM_Dump(Queue* assembly)
             labels += 1;
         puts(assem->value);
     }
-    printf("instructions %lu : labels %lu\n", instructions, labels);
+    printf("instructions %ld : labels %ld\n", instructions, labels);
 }
 
 static int64_t
@@ -3463,7 +3476,7 @@ VM_Quit(VM* self, const char* const message, ...)
     va_start(args, message);
     if(self->frame->size != 0)
     {
-        for(size_t i = 0; i < self->frame->size - 1; i++)
+        for(int64_t i = 0; i < self->frame->size - 1; i++)
         {
             Frame* a = Queue_Get(self->frame, i + 0);
             Frame* b = Queue_Get(self->frame, i + 1);
@@ -3471,10 +3484,10 @@ VM_Quit(VM* self, const char* const message, ...)
             Stack* found = Queue_BSearch(self->addresses, &key, Stack_Diff);
             fprintf(stderr, "%s(...): ", found->label->value);
             Debug* sub = Queue_Get(self->debug, b->pc);
-            fprintf(stderr, "%s: line %lu\n", sub->file, sub->line);
+            fprintf(stderr, "%s: line %ld\n", sub->file, sub->line);
         }
         Debug* debug = Queue_Get(self->debug, self->pc);
-        fprintf(stderr, "error: file %s: line %lu: ", debug->file, debug->line);
+        fprintf(stderr, "error: file %s: line %ld: ", debug->file, debug->line);
         vfprintf(stderr, message, args);
         fprintf(stderr, "\n");
     }
@@ -3516,9 +3529,9 @@ VM_TypeMatch(VM* self, Type a, Type b, const char* op)
 }
 
 static void
-VM_OutOfBounds(VM* self, Type a, size_t index)
+VM_OutOfBounds(VM* self, Type a, int64_t index)
 {
-    VM_Quit(self, "type %s was accessed out of bounds with index %lu", Type_ToString(a), index);
+    VM_Quit(self, "type %s was accessed out of bounds with index %ld", Type_ToString(a), index);
 }
 
 static void
@@ -3534,14 +3547,14 @@ VM_TypeBad(VM* self, Type a)
 }
 
 static void
-VM_ArgMatch(VM* self, size_t a, size_t b)
+VM_ArgMatch(VM* self, int64_t a, int64_t b)
 {
     if(a != b)
-        VM_Quit(self, "expected %lu arguments but encountered %lu arguments", a, b);
+        VM_Quit(self, "expected %ld arguments but encountered %ld arguments", a, b);
 }
 
 static void
-VM_UnknownEscapeChar(VM* self, size_t esc)
+VM_UnknownEscapeChar(VM* self, int64_t esc)
 {
     VM_Quit(self, "an unknown escape character 0x%02X was encountered\n", esc);
 }
@@ -3550,7 +3563,7 @@ static void
 VM_RefImpurity(VM* self, Value* value)
 {
     String* print = Value_Sprint(value, true, 0, FORMAT_WIDTH, FORMAT_PRECI);
-    VM_Quit(self, "the .data segment value %s contained %lu references at the time of exit", print->value, value->refs);
+    VM_Quit(self, "the .data segment value %s contained %ld references at the time of exit", print->value, value->refs);
 }
 
 static void
@@ -3561,7 +3574,7 @@ VM_CheckZeroDivision(VM* self, Value* value)
 }
 
 static VM*
-VM_Init(size_t size, Queue* debug, Queue* addresses)
+VM_Init(int64_t size, Queue* debug, Queue* addresses)
 {
     VM* self = Malloc(sizeof(*self));
     self->data = Queue_Init((Kill) Value_Kill, (Copy) NULL);
@@ -3594,7 +3607,7 @@ static void
 VM_Data(VM* self)
 {
     printf(".data:\n");
-    for(size_t i = 0; i < self->data->size; i++)
+    for(int64_t i = 0; i < self->data->size; i++)
     {
         Value* value = Queue_Get(self->data, i);
         printf("%2lu : %2lu : ", i, value->refs);
@@ -3605,7 +3618,7 @@ VM_Data(VM* self)
 static void
 VM_AssertRefCounts(VM* self)
 {
-    for(size_t i = 0; i < self->data->size; i++)
+    for(int64_t i = 0; i < self->data->size; i++)
     {
         Value* value = Queue_Get(self->data, i);
         if(value->refs > 0)
@@ -3614,7 +3627,7 @@ VM_AssertRefCounts(VM* self)
 }
 
 static void
-VM_Pop(VM* self, size_t count)
+VM_Pop(VM* self, int64_t count)
 {
     while(count--)
         Queue_PopB(self->stack);
@@ -3623,15 +3636,15 @@ VM_Pop(VM* self, size_t count)
 static String*
 VM_ConvertEscs(VM* self, char* chars)
 {
-    size_t len = strlen(chars);
+    int64_t len = strlen(chars);
     String* string = String_Init("");
-    for(size_t i = 1; i < len - 1; i++)
+    for(int64_t i = 1; i < len - 1; i++)
     {
         char ch = chars[i];
         if(ch == '\\')
         {
             i += 1;
-            size_t esc = chars[i];
+            int64_t esc = chars[i];
             ch = CC_String_EscToByte(esc);
             if(ch == -1)
                 VM_UnknownEscapeChar(self, esc);
@@ -3661,8 +3674,8 @@ VM_Store(VM* self, Map* labels, char* operand)
     if(ch == '@')
     {
         String* name = String_Init(strtok(operand + 1, ","));
-        size_t size = String_ToUll(strtok(NULL, " \n"));
-        size_t* address = Map_Get(labels, name->value);
+        int64_t size = String_ToUll(strtok(NULL, " \n"));
+        int64_t* address = Map_Get(labels, name->value);
         if(address == NULL)
             Quit("assembler label %s not defined", name);
         value = Value_NewFunction(Function_Init(name, size, *address));
@@ -3684,23 +3697,23 @@ VM_Store(VM* self, Map* labels, char* operand)
     Queue_PshB(self->data, value);
 }
 
-static size_t
+static int64_t
 VM_Datum(VM* self, Map* labels, char* operand)
 {
     VM_Store(self, labels, operand);
     return ((self->data->size - 1) << 8) | OPCODE_PSH;
 }
 
-static size_t
+static int64_t
 VM_Indirect(Opcode oc, Map* labels, char* label)
 {
-    size_t* address = Map_Get(labels, label);
+    int64_t* address = Map_Get(labels, label);
     if(address == NULL)
         Quit("assembler label %s not defined", label);
     return *address << 8 | oc;
 }
 
-static size_t
+static int64_t
 VM_Direct(Opcode oc, char* number)
 {
     return (String_ToUll(number) << 8) | oc;
@@ -3709,18 +3722,18 @@ VM_Direct(Opcode oc, char* number)
 static VM*
 VM_Assemble(Queue* assembly, Queue* debug)
 {
-    size_t size = 0;
+    int64_t size = 0;
     Map* labels = ASM_Label(assembly, &size);
     Queue* addresses = ASM_Flatten(labels);
     VM* self = VM_Init(size, debug, addresses);
-    size_t pc = 0;
-    for(size_t i = 0; i < assembly->size; i++)
+    int64_t pc = 0;
+    for(int64_t i = 0; i < assembly->size; i++)
     {
         String* stub = Queue_Get(assembly, i);
         if(stub->value[0] == '\t')
         {
             String* line = String_Init(stub->value + 1);
-            size_t instruction = 0;
+            int64_t instruction = 0;
             char* mnemonic = strtok(line->value, " \n");
             if(Equals(mnemonic, "add"))
                 instruction = OPCODE_ADD;
@@ -3836,6 +3849,9 @@ VM_Assemble(Queue* assembly, Queue* debug)
             if(Equals(mnemonic, "pop"))
                 instruction = VM_Direct(OPCODE_POP, strtok(NULL, "\n"));
             else
+            if(Equals(mnemonic, "pow"))
+                instruction = OPCODE_POW;
+            else
             if(Equals(mnemonic, "prt"))
                 instruction = OPCODE_PRT;
             else
@@ -3904,9 +3920,9 @@ VM_Assemble(Queue* assembly, Queue* debug)
 }
 
 static void
-VM_Cal(VM* self, size_t address)
+VM_Cal(VM* self, int64_t address)
 {
-    size_t sp = self->stack->size - self->spds;
+    int64_t sp = self->stack->size - self->spds;
     Frame* frame = Frame_Init(self->pc, sp, address);
     Queue_PshB(self->frame, frame);
     self->pc = address;
@@ -3922,11 +3938,11 @@ VM_Cpy(VM* self)
     Queue_PshB(self->stack, copy);
 }
 
-static size_t
+static int64_t
 VM_End(VM* self)
 {
     VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
-    size_t ret = self->ret->of.number;
+    int64_t ret = self->ret->of.number;
     Value_Kill(self->ret);
     return ret;
 }
@@ -3935,14 +3951,14 @@ static void
 VM_Fls(VM* self)
 {
     Frame* frame = Queue_Back(self->frame);
-    size_t pops = self->stack->size - frame->sp;
+    int64_t pops = self->stack->size - frame->sp;
     VM_Pop(self, pops);
     self->pc = frame->pc;
     Queue_PopB(self->frame);
 }
 
 static void
-VM_Glb(VM* self, size_t address)
+VM_Glb(VM* self, int64_t address)
 {
     Value* value = Queue_Get(self->stack, address);
     Value_Inc(value);
@@ -3950,7 +3966,7 @@ VM_Glb(VM* self, size_t address)
 }
 
 static void
-VM_Loc(VM* self, size_t address)
+VM_Loc(VM* self, int64_t address)
 {
     Frame* frame = Queue_Back(self->frame);
     Value* value = Queue_Get(self->stack, address + frame->sp);
@@ -3959,7 +3975,7 @@ VM_Loc(VM* self, size_t address)
 }
 
 static void
-VM_Jmp(VM* self, size_t address)
+VM_Jmp(VM* self, int64_t address)
 {
     self->pc = address;
 }
@@ -3967,6 +3983,8 @@ VM_Jmp(VM* self, size_t address)
 static void
 VM_Ret(VM* self)
 {
+    if(self->stack->size != 0)
+        VM_Quit(self, "detected %ld stack items when executing opcode `ret`", self->stack->size);
     Frame* frame = Queue_Back(self->frame);
     self->pc = frame->pc;
     Queue_PopB(self->frame);
@@ -3988,7 +4006,7 @@ VM_Sav(VM* self)
 }
 
 static void
-VM_Psh(VM* self, size_t address)
+VM_Psh(VM* self, int64_t address)
 {
     Value* value = Queue_Get(self->data, address);
     Value* copy = Value_Copy(value); // Copy because .data is read only.
@@ -4007,8 +4025,11 @@ VM_Mov(VM* self)
         Type type = a->type;
         if(type == TYPE_NULL)
             VM_Quit(self, "cannot move %s to type null", Type_ToString(b->type));
-        Type_Kill(a->type, &a->of);
-        Type_Copy(a, b);
+        if(a != b)
+        {
+            Type_Kill(a->type, &a->of);
+            Type_Copy(a, b);
+        }
     }
     VM_Pop(self, 1);
 }
@@ -4135,10 +4156,10 @@ VM_Vrt(VM* self)
     VM_TypeExpect(self, a->type, TYPE_FUNCTION);
     VM_TypeExpect(self, b->type, TYPE_NUMBER);
     VM_ArgMatch(self, a->of.function->size, b->of.number);
-    size_t spds = b->of.number;
-    size_t address = a->of.function->address;
+    int64_t spds = b->of.number;
+    int64_t address = a->of.function->address;
     VM_Pop(self, 2);
-    size_t sp = self->stack->size - spds;
+    int64_t sp = self->stack->size - spds;
     Queue_PshB(self->frame, Frame_Init(self->pc, sp, address));
     self->pc = address;
 }
@@ -4345,7 +4366,7 @@ VM_Not(VM* self)
 }
 
 static void
-VM_Brf(VM* self, size_t address)
+VM_Brf(VM* self, int64_t address)
 {
     Value* value = Queue_Back(self->stack);
     VM_TypeExpect(self, value->type, TYPE_BOOL);
@@ -4378,7 +4399,7 @@ static void
 VM_Len(VM* self)
 {
     Value* value = Queue_Back(self->stack);
-    size_t len = Value_Len(value);
+    int64_t len = Value_Len(value);
     VM_Pop(self, 1);
     Queue_PshB(self->stack, Value_NewNumber(len));
 }
@@ -4431,7 +4452,7 @@ static void
 VM_Ref(VM* self)
 {
     Value* a = Queue_Back(self->stack);
-    size_t refs = a->refs;
+    int64_t refs = a->refs;
     VM_Pop(self, 1);
     Queue_PshB(self->stack, Value_NewNumber(refs));
 }
@@ -4515,7 +4536,7 @@ VM_Mod(VM* self)
         VM_TypeExpect(self, a->type, TYPE_STRING);
         VM_TypeExpect(self, b->type, TYPE_QUEUE);
         String* formatted = String_Init("");
-        size_t index = 0;
+        int64_t index = 0;
         char* ref = a->of.string->value;
         for(char* c = ref; *c; c++)
         {
@@ -4531,10 +4552,10 @@ VM_Mod(VM* self)
                         String_PshB(buffer, *c);
                         c += 1;
                     }
-                    size_t iw = FORMAT_WIDTH;
-                    size_t ip = FORMAT_PRECI;
-                    if(sscanf(buffer->value, "%lu.%lu", &iw, &ip) == 0)
-                        sscanf(buffer->value, ".%lu", &ip);
+                    int64_t iw = FORMAT_WIDTH;
+                    int64_t ip = FORMAT_PRECI;
+                    if(sscanf(buffer->value, "%ld.%ld", &iw, &ip) == 0)
+                        sscanf(buffer->value, ".%ld", &ip);
                     Value* value = Queue_Get(b->of.queue, index);
                     String_Append(formatted, Value_Sprint(value, false, 0, iw, ip));
                     index += 1;
@@ -4616,6 +4637,17 @@ VM_Opn(VM* self)
 }
 
 static void
+VM_Pow(VM* self)
+{
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    VM_TypeMatch(self, a->type, b->type, "**");
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    a->of.number = pow(a->of.number, b->of.number);
+    VM_Pop(self, 1);
+}
+
+static void
 VM_Red(VM* self)
 {
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
@@ -4626,8 +4658,8 @@ VM_Red(VM* self)
     if(a->of.file->file)
     {
         String_Resize(buffer, b->of.number);
-        size_t size = fread(buffer->value, sizeof(char), b->of.number, a->of.file->file);
-        size_t diff = b->of.number - size;
+        int64_t size = fread(buffer->value, sizeof(char), b->of.number, a->of.file->file);
+        int64_t diff = b->of.number - size;
         while(diff)
         {
             String_PopB(buffer);
@@ -4645,17 +4677,17 @@ VM_Wrt(VM* self)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_FILE);
     VM_TypeExpect(self, b->type, TYPE_STRING);
-    size_t bytes = 0;
+    int64_t bytes = 0;
     if(a->of.file->file)
         bytes = fwrite(b->of.string->value, sizeof(char), b->of.string->size, a->of.file->file);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewNumber(bytes));
 }
 
-static size_t
-Queue_Index(Queue* self, size_t from, void* value, Compare compare)
+static int64_t
+Queue_Index(Queue* self, int64_t from, void* value, Compare compare)
 {
-    for(size_t x = from; x < self->size; x++)
+    for(int64_t x = from; x < self->size; x++)
         if(compare(Queue_Get(self, x), value))
             return x;
     return SIZE_MAX;
@@ -4678,27 +4710,41 @@ VM_Slc(VM* self)
     {
         int64_t x = b->of.number;
         int64_t y = c->of.number;
-        if(x >= y || x < 0)
-            VM_BadSlice(self, x, y);
         if(a->type == TYPE_STRING)
         {
+            VM_TypeExpect(self, a->type, TYPE_STRING);
+            VM_TypeExpect(self, b->type, TYPE_NUMBER);
+            VM_TypeExpect(self, c->type, TYPE_NUMBER);
+            if(x == -1)
+                x = a->of.string->size - 1;
+            if(y == -1)
+                y = a->of.string->size - 1;
+            if(x > y || x < 0)
+                VM_BadSlice(self, x, y);
             if(y > (int64_t) a->of.string->size)
                 VM_BadSlice(self, x, y);
             int64_t size = y - x;
             String* sub = String_Init("");
-            String_Resize(sub, size);
-            strncpy(sub->value, a->of.string->value + x, size);
+            if(size > 0)
+            {
+                String_Resize(sub, size);
+                strncpy(sub->value, a->of.string->value + x, size);
+            }
             value = Value_NewString(sub);
         }
         else
         if(a->type == TYPE_QUEUE)
         {
-            if(y > (int64_t) a->of.queue->size)
-                VM_BadSlice(self, x, y);
-            value = Value_NewQueue();
             VM_TypeExpect(self, a->type, TYPE_QUEUE);
             VM_TypeExpect(self, b->type, TYPE_NUMBER);
             VM_TypeExpect(self, c->type, TYPE_NUMBER);
+            if(x == -1)
+                x = a->of.queue->size - 1;
+            if(y == -1)
+                y = a->of.queue->size - 1;
+            if(y > (int64_t) a->of.queue->size)
+                VM_BadSlice(self, x, y);
+            value = Value_NewQueue();
             for(int64_t i = x; i < y; i++)
                 Queue_PshB(value->of.queue, Value_Copy(Queue_Get(a->of.queue, i)));
         }
@@ -4715,9 +4761,9 @@ VM_Slc(VM* self)
         VM_BadKeyCheck(self, a->of.map, b->of.string->value);
         VM_BadKeyCheck(self, a->of.map, c->of.string->value);
         Value* keys = Map_Key(a->of.map);
-        size_t x = Queue_Index(keys->of.queue, 0, b, (Compare) Value_Equal);
-        size_t y = Queue_Index(keys->of.queue, x, c, (Compare) Value_Equal);
-        for(size_t i = x; i < y; i++)
+        int64_t x = Queue_Index(keys->of.queue, 0, b, (Compare) Value_Equal);
+        int64_t y = Queue_Index(keys->of.queue, x, c, (Compare) Value_Equal);
+        for(int64_t i = x; i < y; i++)
         {
             Value* temp = Queue_Get(keys->of.queue, i);
             String* key = String_Copy(temp->of.string);
@@ -4727,7 +4773,7 @@ VM_Slc(VM* self)
     }
     else
         VM_TypeBadIndex(self, a->type, b->type);
-    VM_Pop(self, 2);
+    VM_Pop(self, 3);
     Queue_PshB(self->stack, value);
 }
 
@@ -4815,10 +4861,10 @@ VM_Run(VM* self, bool arbitrary)
 {
     while(true)
     {
-        size_t instruction = self->instructions[self->pc];
+        uint64_t instruction = self->instructions[self->pc];
         self->pc += 1;
         Opcode oc = instruction & 0xFF;
-        size_t address = instruction >> 8;
+        int64_t address = instruction >> 8;
         switch(oc)
         {
         case OPCODE_ADD: VM_Add(self); break;
@@ -4858,6 +4904,7 @@ VM_Run(VM* self, bool arbitrary)
         case OPCODE_NEQ: VM_Neq(self); break;
         case OPCODE_NOT: VM_Not(self); break;
         case OPCODE_OPN: VM_Opn(self); break;
+        case OPCODE_POW: VM_Pow(self); break;
         case OPCODE_POP: VM_Pop(self, address); break;
         case OPCODE_PRT: VM_Prt(self); break;
         case OPCODE_PSB: VM_Psb(self); break;

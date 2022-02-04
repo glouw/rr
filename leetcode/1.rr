@@ -1,23 +1,11 @@
+# ------------------------------
 # Single Element in a Sorted Array 
+# ------------------------------
 # 
 #   Given a sorted array consisting of only integers where every element appears
 #   twice except for one element which appears once. Find this single element that appears only once. 
 #   
 #   Your solution should run in O(log n) time and O(1) space.
-#
-#   Answer:
-#
-#     Granted m is an even number, check
-#     arr[m] and arr[m + 1]. If the two are the same
-#     then the value we seek lies to the right, otherwise the left.
-#             |
-#     [ 0, 0, 4, 4, 5, 6 ]
-#
-#     Granted m is an odd number, check
-#     arr[m] and arr[m + 1]. If the two are the same
-#     then the value we seek lies to the left, otherwise to the right.
-#                |
-#     [ 0, 0, 4, 4, 5, 5, 6 ]
 
 inc lib;
 
@@ -105,10 +93,8 @@ Find(arr, l, r)
 
 Test()
 {
-    funcs := [ Find, FindRecursive ];
-    for(j := 0; j < Len(funcs); j += 1)
+    foreach(func : [Find, FindRecursive])
     {
-        func := funcs[j];
         tests := [
             { "expect": 2,  "queue" : [1, 1, 2,  3,  3,  4,  4, 8, 8] },
             { "expect": 10, "queue" : [3, 3, 7,  7, 10, 11, 11]       },
@@ -120,9 +106,8 @@ Test()
             { "expect": -1, "queue" : [2, 2],                         },
             { "expect": -1, "queue" : [],                             },
         ];
-        for(i := 0; i < Len(tests); i += 1)
+        foreach(test : tests)
         {
-            test := tests[i];
             Assert(func(test.queue, 0, Len(test.queue) - 1) == test.expect);
         }
     }

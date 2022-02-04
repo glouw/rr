@@ -9,6 +9,8 @@ Main()
     Assert(a[0:3] == "asd");
     Assert(a[0:2] == "as");
     Assert(a[0:1] == "a");
+    Assert(a[-1:-1] == "");
+    Assert(a[0:0] == "");
     Assert(b[3:4] == [3]);
     Assert(b[2:4] == [2,3]);
     Assert(b[1:4] == [1,2,3]);
@@ -16,5 +18,8 @@ Main()
     Assert(b[0:3] == [0,1,2]);
     Assert(b[0:2] == [0,1]);
     Assert(b[0:1] == [0]);
+    Assert(b[0:-1] == [0, 1, 2]);
+    Assert(b[-1:-1] == []);
+    Assert(b[0:0] == []);
     ret 0;
 }

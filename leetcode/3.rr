@@ -1,0 +1,52 @@
+# ------------------------------
+# Largest Palindrome Product 
+# ------------------------------
+# Find the largest palindrome made from the product of two n-digit numbers.
+#  Since the result could be very large, you should return the largest palindrome mod 1337.
+# 
+# Example:
+# Input: 2
+# Output: 987
+# Explanation: 99 x 91 = 9009, 9009 % 1337 = 987
+
+IsPalidrome(value)
+{
+    s := String("{0.0}" % [value]);
+    for(i := 0; i < Len(s) / 2; i += 1)
+    {
+        a := s[i];
+        b := s[Len(s) - i - 1];
+        if(a != b)
+        {
+            ret false;
+        }
+    }
+    ret true;
+}
+
+Largest(width)
+{
+    upper := 10 ** width;
+    largest := 0;
+    for(x := 0; x < upper; x += 1)
+    {
+        for(y := 0; y < upper; y += 1)
+        {
+            prod := x * y;
+            if(IsPalidrome(prod))
+            {
+                if(prod > largest)
+                {
+                    largest = prod;
+                }
+            }
+        }
+    }
+    ret largest % 1337;
+}
+
+Main()
+{
+    Print(Largest(3));
+    ret 0;
+}
