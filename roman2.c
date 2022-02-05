@@ -3372,7 +3372,7 @@ CC_Parse(CC* self)
             Queue_PshB(start, label);
         }
         else
-            CC_Quit(self, "%s must either be a function or function prototype, a global variable, an import statement, or an include statement", ident->value);
+            CC_Quit(self, "%s must either be a function or function prototype, a global variable, or an include statement", ident->value);
         CC_Spin(self);
     }
     CC_Spool(self, start);
