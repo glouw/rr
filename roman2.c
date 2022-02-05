@@ -4065,25 +4065,34 @@ VM_Add(VM* self)
         switch(a->type)
         {
         case TYPE_QUEUE:
-        {
-            Queue* copy = Queue_Copy(b->of.queue);
-            Queue_Append(a->of.queue, copy);
-            Queue_Kill(copy);
+            if(a == b)
+            {
+                Queue* copy = Queue_Copy(b->of.queue);
+                Queue_Append(a->of.queue, copy);
+                Queue_Kill(copy);
+            }
+            else
+                Queue_Append(a->of.queue, b->of.queue);
             break;
-        }
         case TYPE_MAP:
-        {
-            Map* copy = Map_Copy(b->of.map);
-            Map_Append(a->of.map, copy);
-            Map_Kill(copy);
+            if(a == b)
+            {
+                Map* copy = Map_Copy(b->of.map);
+                Map_Append(a->of.map, copy);
+                Map_Kill(copy);
+            }
+            else
+                Map_Append(a->of.map, b->of.map);
             break;
-        }
         case TYPE_STRING:
-        {
-            String* copy = String_Copy(b->of.string);
-            String_Append(a->of.string, copy); // Consumes.
+            if(a == b)
+            {
+                String* copy = String_Copy(b->of.string);
+                String_Append(a->of.string, copy);
+            }
+            else
+                String_Appends(a->of.string, b->of.string->value);
             break;
-        }
         case TYPE_NUMBER:
             a->of.number += b->of.number;
             break;
@@ -4113,12 +4122,15 @@ VM_Sub(VM* self)
         switch(a->type)
         {
         case TYPE_QUEUE:
-        {
-            Queue* copy = Queue_Copy(b->of.queue);
-            Queue_Prepend(a->of.queue, copy);
-            Queue_Kill(copy);
+            if(a == b)
+            {
+                Queue* copy = Queue_Copy(b->of.queue);
+                Queue_Prepend(a->of.queue, copy);
+                Queue_Kill(copy);
+            }
+            else
+                Queue_Prepend(a->of.queue, b->of.queue);
             break;
-        }
         case TYPE_NUMBER:
             a->of.number -= b->of.number;
             break;

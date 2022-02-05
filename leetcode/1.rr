@@ -2,12 +2,23 @@
 # Single Element in a Sorted Array 
 # ------------------------------
 # 
-#   Given a sorted array consisting of only integers where every element appears
-#   twice except for one element which appears once. Find this single element that appears only once. 
-#   
-#   Your solution should run in O(log n) time and O(1) space.
+# Given a sorted array consisting of only integers where
+# every element appears twice except for one element which
+# appears once.
+#
+# Find this single element that appears only once. 
+# 
+# Your solution should run in O(log n) time and O(1) space.
 
-inc lib;
+IsEven(n)
+{ 
+    ret (n % 2) == 0;
+}
+
+IsOdd(n)
+{
+    ret !IsEven(n);
+}
 
 Mid(l, r)
 {

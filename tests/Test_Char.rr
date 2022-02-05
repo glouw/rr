@@ -1,5 +1,15 @@
+Fun()
+{
+    a := "asdf";
+    ret a[0];
+}
+
 Main()
 {
+    Fun(); # Should cleanup.
+    Assert(Type(Fun()) == "char");
+    x := Fun();
+    Assert(Type(x) == "string");
     str := "string";
     str[0] = "S";
     str[1] = "T";

@@ -1,0 +1,35 @@
+# ------------------------------
+# Find All Duplicates in an Array 
+# ------------------------------
+#
+# Given an array of integers, 1 &le; a[i] &le; n (n = size of array),
+# some elements appear twice and others appear once.
+#
+# Find all the elements that appear twice in this array.
+#
+# Could you do it without extra space and in O(n) runtime?
+
+CountDups(input)
+{
+    count := {};
+    output := [];
+    foreach(x : input)
+    {
+        key := String(x);
+        if(count[key] == null)
+        {
+            count[key] := true;
+        }
+        elif(count[key] != null)
+        {
+            output += x;
+        }
+    }
+    ret output;
+}
+
+Main()
+{
+    Assert(CountDups([4, 3, 2, 7, 8, 2, 3, 1]) == [2, 3]);
+    ret 0;
+}

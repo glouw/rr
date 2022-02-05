@@ -2,39 +2,29 @@
 # Coin Change 2 
 # ------------------------------
 # 
-# You are given coins of different denominations and a total amount of money.
-# Write a function to compute the number of combinations that make up that amount.
-# You may assume that you have infinite number of each kind of coin.
-# 
-# 
-# Note: 
-# You can assume that
-# 
-#  0 <= amount <= 5000
-#  1 <= coin <= 5000
-#  the number of coins is less than 500 
-#  the answer is guaranteed to fit into signed 32-bit integer
+# You are given coins of different denominations and a
+# total amount of money.
+#
+# Write a function to compute the number of combinations
+# that make up that amount.
+#
+# You may assume that you have infinite number of each
+# kind of coin.
 
 Split(amount, coins)
 {
-    # A perfect split - a solution exists.
     if(amount == 0)
     {
         ret 1;
     }
-
-    # An imperfect split - a solution does not exist.
     if(amount < 0)
     {
         ret 0;
     }
-
-    # Not enough coins to peform the split with.
     if(Len(coins) == 0)
     {
         ret 0;
     }
-
     ret Split(amount - coins[-1], coins) + Split(amount, coins[0 : -1]);
 }
 

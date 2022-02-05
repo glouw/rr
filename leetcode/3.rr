@@ -1,13 +1,12 @@
 # ------------------------------
 # Largest Palindrome Product 
 # ------------------------------
-# Find the largest palindrome made from the product of two n-digit numbers.
-#  Since the result could be very large, you should return the largest palindrome mod 1337.
-# 
-# Example:
-# Input: 2
-# Output: 987
-# Explanation: 99 x 91 = 9009, 9009 % 1337 = 987
+#
+# Find the largest palindrome made from the product of
+# two n-digit numbers.
+#
+# Since the result could be very large, you should
+# return the largest palindrome mod 1337.
 
 IsPalidrome(value)
 {
@@ -47,6 +46,6 @@ Largest(width)
 
 Main()
 {
-    Print(Largest(3));
+    Assert(Largest(2) == 987);
     ret 0;
 }
