@@ -3208,19 +3208,12 @@ static void
 CC_Ret(CC* self)
 {
     if(CC_Next(self) == ';')
-    {
         CC_AssemB(self, String_Init("\tpsh null"));
-        CC_AssemB(self, String_Init("\tsav"));
-        CC_AssemB(self, String_Init("\tfls"));
-        CC_Match(self, ";");
-    }
     else
-    {
         CC_Expression(self);
-        CC_AssemB(self, String_Init("\tsav"));
-        CC_AssemB(self, String_Init("\tfls"));
-        CC_Match(self, ";");
-    }
+    CC_AssemB(self, String_Init("\tsav"));
+    CC_AssemB(self, String_Init("\tfls"));
+    CC_Match(self, ";");
 }
 
 static void
