@@ -41,8 +41,7 @@ roman2 Main.rr
 Flags passed to `roman2`:
 
 ```
--d: Output bytecode and .data segment then terminate. Do not run the
-program.
+-d: Output bytecode and .data segment then terminate. Do not run the program.
 ```
 
 Example bytecode output of the above Fib example follows:
