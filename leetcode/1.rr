@@ -12,7 +12,7 @@
 
 IsEven(n)
 { 
-    ret (n % 2) == 0;
+    ret (Floor(n) % 2) == 0;
 }
 
 IsOdd(n)
@@ -102,30 +102,30 @@ Find(arr, l, r)
     ret -1;
 }
 
-Test()
+Helper(func, queue)
 {
-    foreach(func : [Find, FindRecursive])
-    {
-        tests := [
-            { "expect": 2,  "queue" : [1, 1, 2,  3,  3,  4,  4, 8, 8] },
-            { "expect": 10, "queue" : [3, 3, 7,  7, 10, 11, 11]       },
-            { "expect": 7,  "queue" : [3, 3, 7, 10, 10, 11, 11]       },
-            { "expect": 7,  "queue" : [3, 3, 7,  9,  9]               },
-            { "expect": 7,  "queue" : [3, 3, 7]                       },
-            { "expect": 3,  "queue" : [3, 4, 4]                       },
-            { "expect": 1,  "queue" : [1],                            },
-            { "expect": -1, "queue" : [2, 2],                         },
-            { "expect": -1, "queue" : [],                             },
-        ];
-        foreach(test : tests)
-        {
-            Assert(func(test.queue, 0, Len(test.queue) - 1) == test.expect);
-        }
-    }
+    ret func(queue, 0, Len(queue) - 1);
 }
 
 Main()
 {
-    Test();
+    Assert( 2 == Helper(Find,          [1, 1, 2,  3,  3,  4,  4, 8, 8]));
+    Assert(10 == Helper(Find,          [3, 3, 7,  7, 10, 11, 11]      ));
+    Assert( 7 == Helper(Find,          [3, 3, 7, 10, 10, 11, 11]      ));
+    Assert( 7 == Helper(Find,          [3, 3, 7,  9,  9]              ));
+    Assert( 7 == Helper(Find,          [3, 3, 7]                      ));
+    Assert( 3 == Helper(Find,          [3, 4, 4]                      ));
+    Assert( 1 == Helper(Find,          [1],                           ));
+    Assert(-1 == Helper(Find,          [2, 2],                        ));
+    Assert(-1 == Helper(Find,          [],                            ));
+    Assert( 2 == Helper(FindRecursive, [1, 1, 2,  3,  3,  4,  4, 8, 8]));
+    Assert(10 == Helper(FindRecursive, [3, 3, 7,  7, 10, 11, 11]      ));
+    Assert( 7 == Helper(FindRecursive, [3, 3, 7, 10, 10, 11, 11]      ));
+    Assert( 7 == Helper(FindRecursive, [3, 3, 7,  9,  9]              ));
+    Assert( 7 == Helper(FindRecursive, [3, 3, 7]                      ));
+    Assert( 3 == Helper(FindRecursive, [3, 4, 4]                      ));
+    Assert( 1 == Helper(FindRecursive, [1],                           ));
+    Assert(-1 == Helper(FindRecursive, [2, 2],                        ));
+    Assert(-1 == Helper(FindRecursive, [],                            ));
     ret 0;
 }

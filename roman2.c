@@ -174,12 +174,14 @@ Class;
 
 typedef enum
 {
+    OPCODE_ABS,
     OPCODE_ADD,
     OPCODE_AND,
     OPCODE_ASR,
     OPCODE_BRF,
     OPCODE_BSR,
     OPCODE_CAL,
+    OPCODE_CEL,
     OPCODE_CPY,
     OPCODE_DEL,
     OPCODE_DIV,
@@ -1866,6 +1868,15 @@ Value_Sub(Value* a, Value* b)
     }
 }
 
+static void
+Value_PromoteChar(Value* ch)
+{
+    Value* copy = Value_Copy(ch);
+    Type_Kill(ch->type, &ch->of);
+    Type_Copy(ch, copy);
+    Value_Kill(copy);
+}
+
 static char*
 Class_ToString(Class self)
 {
@@ -2740,6 +2751,12 @@ CC_DirectCalling(CC* self, String* ident, int64_t args)
     if(String_Equals(ident, "Floor"))
         CC_AssemB(self, String_Init("\tflr"));
     else
+    if(String_Equals(ident, "Ceil"))
+        CC_AssemB(self, String_Init("\tcel"));
+    else
+    if(String_Equals(ident, "Abs"))
+        CC_AssemB(self, String_Init("\tabs"));
+    else
     if(String_Equals(ident, "Exit"))
         CC_AssemB(self, String_Init("\text"));
     else
@@ -2835,6 +2852,8 @@ CC_ReserveFunctions(CC* self)
         { 1, "Len"    },
         { 2, "Del"    },
         { 1, "Floor"  },
+        { 1, "Ceil"   },
+        { 1, "Abs"    },
         { 3, "Search" },
         { 0, "File"   },
         { 0, "Line"   },
@@ -2905,7 +2924,7 @@ CC_Factor(CC* self)
     if(next == '"')
         CC_String(self);
     else
-        CC_Quit(self, "an unknown factor starting with %c was encountered", next);
+        CC_Quit(self, "an unknown factor starting with `%c` was encountered", next);
     storage &= CC_Resolve(self);
     return storage;
 }
@@ -3164,11 +3183,17 @@ CC_Foreach(CC* self, int64_t scoping)
     CC_AssemB(self, String_Init("\tpsh 0"));
     CC_Local(self, index);
     Queue_PshB(init, String_Copy(index));
-    CC_AssemB(self, String_Init("\tpsh null")); // Reference type.
+    CC_AssemB(self, String_Init("\tpsh null")); // Reference type - temp storage
     CC_Local(self, ident);
     Queue_PshB(init, String_Copy(ident));
     CC_AssemB(self, String_Format("@l%ld:", A));
-    CC_AssemB(self, String_Init("\tpop 1"));
+    CC_Ref(self, queue);
+    CC_AssemB(self, String_Init("\tlen"));
+    CC_Ref(self, index);
+    CC_AssemB(self, String_Init("\teql"));
+    CC_AssemB(self, String_Init("\tnot"));
+    CC_AssemB(self, String_Format("\tbrf @l%ld", B));
+    CC_AssemB(self, String_Init("\tpop 1")); // Pops the temp storage
     CC_Ref(self, queue);
     CC_Ref(self, index);
     CC_AssemB(self, String_Init("\tget"));
@@ -3177,10 +3202,8 @@ CC_Foreach(CC* self, int64_t scoping)
     CC_Ref(self, index);
     CC_AssemB(self, String_Init("\tpsh 1"));
     CC_AssemB(self, String_Init("\tadd"));
-    CC_Ref(self, queue);
-    CC_AssemB(self, String_Init("\tlen"));
-    CC_AssemB(self, String_Init("\teql"));
-    CC_AssemB(self, String_Format("\tbrf @l%ld", A));
+    CC_AssemB(self, String_Init("\tpop 1"));
+    CC_AssemB(self, String_Format("\tjmp @l%ld", A));
     CC_AssemB(self, String_Format("@l%ld:", B));
     CC_PopScope(self, init);
 }
@@ -3534,25 +3557,6 @@ VM_TypeBadIndex(VM* self, Type a, Type b)
     VM_Quit(self, "type %s cannot be indexed with type %s", Type_ToString(a), Type_ToString(b));
 }
 
-static void
-VM_TypeBad(VM* self, Type a)
-{
-    VM_Quit(self, "type %s cannot be used for this operation", Type_ToString(a));
-}
-
-static void
-VM_UnknownEscapeChar(VM* self, int64_t esc)
-{
-    VM_Quit(self, "an unknown escape character 0x%02X was encountered\n", esc);
-}
-
-static void
-VM_RefImpurity(VM* self, Value* value)
-{
-    String* print = Value_Sprint(value, true, 0, FORMAT_WIDTH, FORMAT_PRECI);
-    VM_Quit(self, "the .data segment value %s contained %ld references at the time of exit", print->value, value->refs);
-}
-
 static VM*
 VM_Init(int64_t size, Queue* debug, Queue* addresses)
 {
@@ -3604,7 +3608,10 @@ VM_AssertRefCounts(VM* self)
     {
         Value* value = Queue_Get(self->data, i);
         if(value->refs > 0)
-            VM_RefImpurity(self, value);
+        {
+            String* print = Value_Sprint(value, true, 0, FORMAT_WIDTH, FORMAT_PRECI);
+            VM_Quit(self, "the .data segment value `%s` contained %ld references at the time of exit", print->value, value->refs);
+        }
     }
 }
 
@@ -3629,7 +3636,7 @@ VM_ConvertEscs(VM* self, char* chars)
             int64_t esc = chars[i];
             ch = CC_String_EscToByte(esc);
             if(ch == -1)
-                VM_UnknownEscapeChar(self, esc);
+                VM_Quit(self, "an unknown escape character 0x%02X was encountered\n", esc);
         }
         String_PshB(string, ch);
     }
@@ -3726,6 +3733,9 @@ VM_Assemble(Queue* assembly, Queue* debug)
             String* line = String_Init(stub->value + 1);
             int64_t instruction = 0;
             char* mnemonic = strtok(line->value, " \n");
+            if(Equals(mnemonic, "abs"))
+                instruction = OPCODE_ABS;
+            else
             if(Equals(mnemonic, "add"))
                 instruction = OPCODE_ADD;
             else
@@ -3743,6 +3753,9 @@ VM_Assemble(Queue* assembly, Queue* debug)
             else
             if(Equals(mnemonic, "cal"))
                 instruction = VM_Indirect(OPCODE_CAL, labels, strtok(NULL, "\n"));
+            else
+            if(Equals(mnemonic, "cel"))
+                instruction = OPCODE_CEL;
             else
             if(Equals(mnemonic, "cpy"))
                 instruction = OPCODE_CPY;
@@ -4032,64 +4045,108 @@ VM_Flr(VM* self)
 }
 
 static void
+VM_Abs(VM* self)
+{
+    Value* a = Queue_Back(self->stack);
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    double absolute = fabs(a->of.number);
+    VM_Pop(self, 1);
+    Queue_PshB(self->stack, Value_NewNumber(absolute));
+}
+
+static void
+VM_Cel(VM* self)
+{
+    Value* a = Queue_Back(self->stack);
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    double ceiled = ceil(a->of.number);
+    VM_Pop(self, 1);
+    Queue_PshB(self->stack, Value_NewNumber(ceiled));
+}
+
+static void
+VM_Psb(VM* self)
+{
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    VM_TypeExpect(self, a->type, TYPE_QUEUE);
+    if(b->type == TYPE_NULL)
+        VM_Quit(self, "nulls cannot be appended to queues");
+    Queue_PshB(a->of.queue, Value_Copy(b));
+    VM_Pop(self, 1);
+}
+
+static void
+VM_Psf(VM* self)
+{
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    VM_TypeExpect(self, a->type, TYPE_QUEUE);
+    if(b->type == TYPE_NULL)
+        VM_Quit(self, "nulls cannot be prepended to queues");
+    Queue_PshF(a->of.queue, Value_Copy(b));
+    VM_Pop(self, 1);
+}
+
+static void
 VM_Add(VM* self)
 {
     char* operator = "+";
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type == TYPE_QUEUE
-    && b->type != TYPE_QUEUE)
-        Queue_PshB(a->of.queue, Value_Copy(b));
+    if(a->type == TYPE_QUEUE && b->type != TYPE_QUEUE)
+        VM_Psb(self);
     else
-    if(a->type == TYPE_STRING
-    && b->type == TYPE_CHAR)
-        String_PshB(a->of.string, *b->of.character->value);
-    else
-    if(a->type == b->type)
-        switch(a->type)
-        {
-        case TYPE_QUEUE:
-            if(a == b)
+    {
+        if(a->type == TYPE_STRING && b->type == TYPE_CHAR)
+            String_PshB(a->of.string, *b->of.character->value);
+        else
+        if(a->type == b->type)
+            switch(a->type)
             {
-                Queue* copy = Queue_Copy(b->of.queue);
-                Queue_Append(a->of.queue, copy);
-                Queue_Kill(copy);
+            case TYPE_QUEUE:
+                if(a == b)
+                {
+                    Queue* copy = Queue_Copy(b->of.queue);
+                    Queue_Append(a->of.queue, copy);
+                    Queue_Kill(copy);
+                }
+                else
+                    Queue_Append(a->of.queue, b->of.queue);
+                break;
+            case TYPE_MAP:
+                if(a == b)
+                {
+                    Map* copy = Map_Copy(b->of.map);
+                    Map_Append(a->of.map, copy);
+                    Map_Kill(copy);
+                }
+                else
+                    Map_Append(a->of.map, b->of.map);
+                break;
+            case TYPE_STRING:
+                if(a == b)
+                {
+                    String* copy = String_Copy(b->of.string);
+                    String_Append(a->of.string, copy);
+                }
+                else
+                    String_Appends(a->of.string, b->of.string->value);
+                break;
+            case TYPE_NUMBER:
+                a->of.number += b->of.number;
+                break;
+            case TYPE_FUNCTION:
+            case TYPE_CHAR:
+            case TYPE_BOOL:
+            case TYPE_NULL:
+            case TYPE_FILE:
+                VM_BadOperator(self, a->type, operator);
             }
-            else
-                Queue_Append(a->of.queue, b->of.queue);
-            break;
-        case TYPE_MAP:
-            if(a == b)
-            {
-                Map* copy = Map_Copy(b->of.map);
-                Map_Append(a->of.map, copy);
-                Map_Kill(copy);
-            }
-            else
-                Map_Append(a->of.map, b->of.map);
-            break;
-        case TYPE_STRING:
-            if(a == b)
-            {
-                String* copy = String_Copy(b->of.string);
-                String_Append(a->of.string, copy);
-            }
-            else
-                String_Appends(a->of.string, b->of.string->value);
-            break;
-        case TYPE_NUMBER:
-            a->of.number += b->of.number;
-            break;
-        case TYPE_FUNCTION:
-        case TYPE_CHAR:
-        case TYPE_BOOL:
-        case TYPE_NULL:
-        case TYPE_FILE:
-            VM_BadOperator(self, a->type, operator);
-        }
-    else
-        VM_TypeMatch(self, a->type, b->type, operator);
-    VM_Pop(self, 1);
+        else
+            VM_TypeMatch(self, a->type, b->type, operator);
+        VM_Pop(self, 1);
+    }
 }
 
 static void
@@ -4098,45 +4155,46 @@ VM_Sub(VM* self)
     char* operator = "-";
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type == TYPE_QUEUE
-    && b->type != TYPE_QUEUE)
-        Queue_PshF(a->of.queue, Value_Copy(b));
+    if(a->type == TYPE_QUEUE && b->type != TYPE_QUEUE)
+        VM_Psf(self);
     else
-    if(a->type == b->type)
-        switch(a->type)
-        {
-        case TYPE_QUEUE:
-            if(a == b)
+    {
+        if(a->type == b->type)
+            switch(a->type)
             {
-                Queue* copy = Queue_Copy(b->of.queue);
-                Queue_Prepend(a->of.queue, copy);
-                Queue_Kill(copy);
+            case TYPE_QUEUE:
+                if(a == b)
+                {
+                    Queue* copy = Queue_Copy(b->of.queue);
+                    Queue_Prepend(a->of.queue, copy);
+                    Queue_Kill(copy);
+                }
+                else
+                    Queue_Prepend(a->of.queue, b->of.queue);
+                break;
+            case TYPE_NUMBER:
+                a->of.number -= b->of.number;
+                break;
+            case TYPE_STRING:
+            {
+                double diff = strcmp(a->of.string->value, b->of.string->value);
+                Type_Kill(a->type, &a->of);
+                a->type = TYPE_NUMBER;
+                a->of.number = diff;
+                break;
             }
-            else
-                Queue_Prepend(a->of.queue, b->of.queue);
-            break;
-        case TYPE_NUMBER:
-            a->of.number -= b->of.number;
-            break;
-        case TYPE_STRING:
-        {
-            double diff = strcmp(a->of.string->value, b->of.string->value);
-            Type_Kill(a->type, &a->of);
-            a->type = TYPE_NUMBER;
-            a->of.number = diff;
-            break;
-        }
-        case TYPE_FUNCTION:
-        case TYPE_MAP:
-        case TYPE_CHAR:
-        case TYPE_BOOL:
-        case TYPE_NULL:
-        case TYPE_FILE:
-            VM_BadOperator(self, a->type, operator);
-        }
-    else
-        VM_TypeMatch(self, a->type, b->type, operator);
-    VM_Pop(self, 1);
+            case TYPE_FUNCTION:
+            case TYPE_MAP:
+            case TYPE_CHAR:
+            case TYPE_BOOL:
+            case TYPE_NULL:
+            case TYPE_FILE:
+                VM_BadOperator(self, a->type, operator);
+            }
+        else
+            VM_TypeMatch(self, a->type, b->type, operator);
+        VM_Pop(self, 1);
+    }
 }
 
 static void
@@ -4170,10 +4228,10 @@ VM_Vrt(VM* self)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_FUNCTION);
     VM_TypeExpect(self, b->type, TYPE_NUMBER);
-    if(a->of.function->size != b->of.number)
-        VM_Quit(self,
-                "expected %ld arguments for indirect function call `%s` but encountered %ld arguments", 
-                a->of.function->size, a->of.function->name->value, (int64_t) b->of.number);
+    int64_t args = b->of.number;
+    if(a->of.function->size != args)
+        VM_Quit(self, "expected %ld arguments for indirect function call `%s` but encountered %ld arguments", 
+                a->of.function->size, a->of.function->name->value, args);
     int64_t spds = b->of.number;
     int64_t address = a->of.function->address;
     VM_Pop(self, 2);
@@ -4424,30 +4482,6 @@ VM_Len(VM* self)
 }
 
 static void
-VM_Psb(VM* self)
-{
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_QUEUE);
-    if(b->type == TYPE_NULL)
-        VM_Quit(self, "nulls cannot be appended to queues");
-    Queue_PshB(a->of.queue, Value_Copy(b));
-    VM_Pop(self, 1);
-}
-
-static void
-VM_Psf(VM* self)
-{
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_QUEUE);
-    if(b->type == TYPE_NULL)
-        VM_Quit(self, "nulls cannot be prepended to queues");
-    Queue_PshF(a->of.queue, Value_Copy(b));
-    VM_Pop(self, 1);
-}
-
-static void
 VM_Ins(VM* self)
 {
     Value* a = Queue_Get(self->stack, self->stack->size - 3);
@@ -4457,12 +4491,11 @@ VM_Ins(VM* self)
     if(c->type == TYPE_NULL)
         VM_Quit(self, "nulls cannot be inserted into maps. See key `%s`", b->of.string->value);
     if(b->type == TYPE_CHAR)
-        VM_TypeBadIndex(self, a->type, b->type);
-    else
+        Value_PromoteChar(b);
     if(b->type == TYPE_STRING)
         Map_Set(a->of.map, String_Copy(b->of.string), Value_Copy(c));
     else
-        VM_TypeBad(self, b->type);
+        VM_Quit(self, "type `%s` was attempted to be used as a map key - only strings may be used as keys", Type_ToString(b->type));
     VM_Pop(self, 2);
 }
 
@@ -4478,9 +4511,10 @@ VM_Ref(VM* self)
 static Value*
 VM_IndexQueue(VM* self, Value* queue, Value* index)
 {
-    Value* value = Queue_Get(queue->of.queue, index->of.number);
+    int64_t ind = index->of.number;
+    Value* value = Queue_Get(queue->of.queue, ind);
     if(value == NULL)
-        VM_Quit(self, "queue element access out of bounds with index %ld", index->of.number);
+        VM_Quit(self, "queue element access out of bounds with index %ld", ind);
     Value_Inc(value);
     return value;
 }
@@ -4488,9 +4522,10 @@ VM_IndexQueue(VM* self, Value* queue, Value* index)
 static Value*
 VM_IndexString(VM* self, Value* queue, Value* index)
 {
-    Char* character = Char_Init(queue, index->of.number);
+    int64_t ind = index->of.number;
+    Char* character = Char_Init(queue, ind);
     if(character == NULL)
-        VM_Quit(self, "string character access out of bounds with index %ld", index->of.number);
+        VM_Quit(self, "string character access out of bounds with index %ld", ind);
     Value* value = Value_NewChar(character);
     Value_Inc(queue);
     return value;
@@ -4524,6 +4559,8 @@ VM_Get(VM* self)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     Value* value = NULL;
+    if(b->type == TYPE_CHAR)
+        Value_PromoteChar(b);
     if(b->type == TYPE_NUMBER)
         value = VM_Index(self, a, b);
     else
@@ -4547,13 +4584,12 @@ VM_Mod(VM* self)
     {
         if(b->of.number == 0)
             VM_Quit(self, "cannot divide by zero");
-        a->of.number = (int64_t) a->of.number % (int64_t) b->of.number;
+        a->of.number = fmod(a->of.number, b->of.number);
         VM_Pop(self, 1);
     }
     else
+    if(a->type == TYPE_STRING && b->type == TYPE_QUEUE)
     {
-        VM_TypeExpect(self, a->type, TYPE_STRING);
-        VM_TypeExpect(self, b->type, TYPE_QUEUE);
         String* formatted = String_Init("");
         int64_t index = 0;
         char* ref = a->of.string->value;
@@ -4586,6 +4622,8 @@ VM_Mod(VM* self)
         VM_Pop(self, 2);
         Queue_PshB(self->stack, Value_NewString(formatted));
     }
+    else
+        VM_Quit(self, "modulus operator (%) not supported with type %s and type %s", Type_ToString(a->type), Type_ToString(b->type));
 }
 
 static void
@@ -4604,18 +4642,19 @@ VM_Del(VM* self)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(b->type == TYPE_NUMBER)
     {
+        int64_t ind = b->of.number;
         if(a->type == TYPE_QUEUE)
         {
-            bool success = Queue_Del(a->of.queue, b->of.number);
+            bool success = Queue_Del(a->of.queue, ind);
             if(success == false)
-                VM_Quit(self, "queue element deletion out of bounds with index %ld", b->of.number);
+                VM_Quit(self, "queue element deletion out of bounds with index %ld", ind);
         }
         else
         if(a->type == TYPE_STRING)
         {
-            bool success = String_Del(a->of.string, b->of.number);
+            bool success = String_Del(a->of.string, ind);
             if(success == false)
-                VM_Quit(self, "string character deletion out of bounds with index %ld", b->of.number);
+                VM_Quit(self, "string character deletion out of bounds with index %ld", ind);
         }
         else
             VM_TypeBadIndex(self, a->type, b->type);
@@ -4628,7 +4667,7 @@ VM_Del(VM* self)
         Map_Del(a->of.map, b->of.string->value);
     }
     else
-        VM_TypeBad(self, a->type);
+        VM_Quit(self, "type `%s` was attempted to be used as a deletion key - only integer indices and strings may be used as deletion keys for queues and maps, respectively", Type_ToString(a->type));
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewNull());
 }
@@ -4713,12 +4752,6 @@ Queue_Index(Queue* self, int64_t from, void* value, Compare compare)
 }
 
 static void
-VM_BadSlice(VM* self, int64_t a, int64_t b)
-{
-    VM_Quit(self, "slice [%ld : %ld] not possible", a, b);
-}
-
-static void
 VM_Slc(VM* self)
 {
     Value* a = Queue_Get(self->stack, self->stack->size - 3);
@@ -4739,9 +4772,9 @@ VM_Slc(VM* self)
             if(y == -1)
                 y = a->of.string->size - 1;
             if(x > y || x < 0)
-                VM_BadSlice(self, x, y);
+                VM_Quit(self, "string slice [%ld : %ld] not possible", x, y);
             if(y > (int64_t) a->of.string->size)
-                VM_BadSlice(self, x, y);
+                VM_Quit(self, "string slice [%ld : %ld] not possible - right bound larger than string size %ld", x, y, (int64_t) a->of.string->size);
             int64_t size = y - x;
             String* sub = String_Init("");
             if(size > 0)
@@ -4761,14 +4794,16 @@ VM_Slc(VM* self)
                 x = a->of.queue->size - 1;
             if(y == -1)
                 y = a->of.queue->size - 1;
+            if(x > y || x < 0)
+                VM_Quit(self, "queue slice [%ld : %ld] not possible", x, y);
             if(y > (int64_t) a->of.queue->size)
-                VM_BadSlice(self, x, y);
+                VM_Quit(self, "queue slice [%ld : %ld] not possible - right boud larger than queue size %ld", x, y, (int64_t) a->of.queue->size);
             value = Value_NewQueue();
             for(int64_t i = x; i < y; i++)
                 Queue_PshB(value->of.queue, Value_Copy(Queue_Get(a->of.queue, i)));
         }
         else
-            VM_TypeBad(self, a->type);
+            VM_Quit(self, "type `%s` was attempted to be sliced - only maps, queues, and strings can be sliced", Type_ToString(a->type));
     }
     else
     if(b->type == TYPE_STRING)
@@ -4886,12 +4921,14 @@ VM_Run(VM* self, bool arbitrary)
         int64_t address = instruction >> 8;
         switch(oc)
         {
+        case OPCODE_ABS: VM_Abs(self); break;
         case OPCODE_ADD: VM_Add(self); break;
         case OPCODE_AND: VM_And(self); break;
         case OPCODE_ASR: VM_Asr(self); break;
         case OPCODE_BSR: VM_Bsr(self); break;
         case OPCODE_BRF: VM_Brf(self, address); break;
         case OPCODE_CAL: VM_Cal(self, address); break;
+        case OPCODE_CEL: VM_Cel(self); break;
         case OPCODE_CPY: VM_Cpy(self); break;
         case OPCODE_DEL: VM_Del(self); break;
         case OPCODE_DIV: VM_Div(self); break;

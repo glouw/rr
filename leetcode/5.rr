@@ -1,6 +1,7 @@
 # ------------------------------
 # Two Sum 
 # ------------------------------
+#
 # Given an array of integers, return indices of the two numbers
 # such that they add up to a specific target.
 # 
@@ -23,6 +24,7 @@ TwoSum(input, target)
 
 Main()
 {
+    Assert(TwoSum([], 1) == [-1, -1]);
     Assert(TwoSum([2, 7, 11, 15], 9) == [0, 1]);
     ret 0;
 }

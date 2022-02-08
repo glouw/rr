@@ -1,0 +1,45 @@
+# ------------------------------
+# Longest Substring Without Repeating Characters 
+# ------------------------------
+#
+# Given a string, find the length of the longest substring without
+# repeating characters.
+
+LongestSubString(string)
+{
+    longest := "";
+    sub := "";
+    chars := {};
+    foreach(x : string)
+    {
+        if(chars[x] == null)
+        {
+            sub += x;
+            chars[x] := true;
+        }
+        else
+        {
+            chars = {};
+            sub = x;
+            chars[x] := true;
+        }
+        if(Len(sub) > Len(longest))
+        {
+            longest = sub;
+        }
+    }
+    ret longest;
+}
+
+Main()
+{
+    Assert(LongestSubString("") == "");
+    Assert(LongestSubString("ffbb") == "fb");
+    Assert(LongestSubString("fbb") == "fb");
+    Assert(LongestSubString("fb") == "fb");
+    Assert(LongestSubString("fbc") == "fbc");
+    Assert(LongestSubString("abcabcbb") == "abc");
+    Assert(LongestSubString("bbbbb") == "b");
+    Assert(LongestSubString("pwwkew") == "wke");
+    ret 0;
+}

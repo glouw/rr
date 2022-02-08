@@ -46,6 +46,7 @@ Largest(width)
 
 Main()
 {
+    Assert(Largest(0) == 0);
     Assert(Largest(2) == 987);
     ret 0;
 }

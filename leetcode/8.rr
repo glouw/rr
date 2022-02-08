@@ -1,0 +1,48 @@
+# ------------------------------
+# Longest Palindromic Substring 
+# ------------------------------
+# Given a string s, find the longest palindromic substring in s.
+# You may assume that the maximum length of s is 1000.
+
+IsPalidrome(s)
+{
+    len := Len(s);
+    for(i := 0; i < len / 2; i += 1)
+    {
+        if(s[i] != s[len - i - 1])
+        {
+            ret false;
+        }
+    }
+    ret true;
+}
+
+Sub(s)
+{
+    temp := s;
+    longest := "";
+    while(Len(temp) > 0)
+    {
+        sub := "";
+        foreach(x : temp)
+        {
+            sub += x;
+            if(IsPalidrome(sub))
+            {
+                if(Len(sub) > Len(longest))
+                {
+                    longest = sub;
+                }
+            }
+        }
+        Del(temp, 0);
+    }
+    ret longest;
+}
+
+Main()
+{
+    Assert(Sub("babad") == "bab");
+    Assert(Sub("cbbd") == "bb");
+    ret 0;
+}
