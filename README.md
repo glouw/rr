@@ -1,19 +1,21 @@
 # The ROMAN II Programming Language
 
-Roman II is a dynamic programming language inspired by C and Python
-written in less than 5000 lines of GNU-C99.
+Roman II is a dynamic programming language inspired by C and Python.
 
 
 ```
 Fib(n)
 {
-    if(n == 0) {
+    if(n == 0)
+    {
         ret 0;
     }
-    elif((n == 1) || (n == 2)) {
+    elif((n == 1) || (n == 2))
+    {
         ret 1;
     }
-    else {
+    else
+    {
         ret Fib(n - 1) + Fib(n - 2);
     }
 }
@@ -39,165 +41,80 @@ roman2 Main.rr
 Flags passed to `roman2`:
 
 ```
--d: Output byte code and .data segment then terminate
+-d: Output bytecode and .data segment then terminate. Do not run the
+program. Example bytecode output of the above Fib example follows:
 ```
 
-## Types
-
-Roman II supports the following types:
-
-* number (double precision)
-* string
-* queue (arrays with O1 prepending and appending)
-* map (O1 insertion and deletion)
-* booleans
-* function pointers
-* files
-
-## Built in functions
-
-Roman II comes packed with the following functions:
-
 ```
-    Sort(queue, comparator)
-    Good(file)
-    Assert(boolean)
-    Keys(map)
-    Copy(value)
-    Open(file, mode)
-    Read(file, mode)
-    Refs(value)
-    Len(value)
-    Del(queue, index)
-    Floor(number)
-    Search(queue<sorted>, key, comparator)
-    File()
-    Line()
-    Exit(number)
-    Type(value)
-    Print(string)
-    String(value)
-    Time()
-    Srand(number)
-    Rand()
-    Write(file, string)
-```
+!start:
+	cal Main
+	end
+Fib:
+	loc 0
+	psh 0
+	eql
+	brf @l1
+	psh 0
+	sav
+	fls
+	jmp @l0
+@l1:
+	loc 0
+	psh 1
+	eql
+	cpy
+	loc 0
+	psh 2
+	eql
+	lor
+	brf @l2
+	psh 1
+	sav
+	fls
+	jmp @l0
+@l2:
+	loc 0
+	cpy
+	psh 1
+	sub
+	spd
+	cal Fib
+	lod
+	cpy
+	loc 0
+	cpy
+	psh 2
+	sub
+	spd
+	cal Fib
+	lod
+	add
+	sav
+	fls
+@l0:
+	pop 1
+	psh null
+	sav
+	ret
+Main:
+	psh 25
+	spd
+	cal Fib
+	lod
+	prt
+	pop 1
+	psh 0
+	sav
+	fls
+	psh null
+	sav
+	ret
 
-## A Quick Intro to Roman II
-
-`Main()` is the entry point and must return a number value between 0 to 254.
-255 is reserved for internal interpretor errors.
-
-```
-Main()
-{
-    ret 0
-}
-```
-
-Variables are declared pascal style:
-
-```
-Main()
-{
-    number := 0;
-    ret number;
-}
-```
-
-Variables form expressions:
-
-```
-Main()
-{
-    value := (1 + 3) / 2.5;
-    ret value;
-}
-```
-
-Expressions can be reused as functions:
-
-```
-Math(a, b)
-{
-    ret (a + b) / 2.5;
-}
-
-Main()
-{
-    ret Math(1, 3);
-}
-```
-
-Strings, numbers, booleans, maps, queues, and even `null` itself are refered to
-as values. Values are interchangeable; they coexist within data structures:
-
-```
-Main()
-{
-    values := [ 0, 1, "string", {"key" : true }, null ];
-    ret 0;
-}
-```
-
-Iterating a queue is done with a for loop:
-
-```
-Main()
-{
-    queue := [ 99, 88, 77 ];
-    for(i := 0; i < Len(queue); i += 1)
-    {
-        Print(queue[i]);
-    }
-    ret 0;
-}
-```
-
-Likewise iterating a map is done similarly with the Keys function:
-
-```
-Main()
-{
-    map := {
-        "A" : 1,
-        "B" : 2,
-        "C" : 3,
-    };
-    keys := Key(map);
-    for(i := 0; i < Len(keys); i += 1)
-    {
-        key := keys[i];
-        Print("{} : {}" % [key, map[key]]);
-    }
-    ret 0;
-}
-```
-
-String formatting can be expanded to print number width and decimal places:
-
-```
-Main()
-{
-    variable := 4.33;
-    formatted := {5.10}" % variable;
-    Print(formatted);
-}
-```
-
-Sorting queues requires use of a comparator function.
-
-```
-Comparator(a, b)
-{
-    ret a < b;
-}
-
-Main()
-{
-    a := [ 0, 9, 3, 1 ];
-    Sort(a, Compartor);
-    Print(a);
-    ret 0;
-}
+instructions 57 : labels 6
+.data:
+ 0 :  0 : 0.000000
+ 1 :  0 : 1.000000
+ 2 :  0 : 2.000000
+ 3 :  0 : null
+ 4 :  0 : 25.000000
 ```
