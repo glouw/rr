@@ -12,7 +12,6 @@
 #include <float.h>
 #include <math.h>
 #include <stdarg.h>
-#include <stdint.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -20,6 +19,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 #include <stdbool.h>
 
 #define QUEUE_BLOCK_SIZE (8)
@@ -182,16 +182,16 @@ typedef enum
     OPCODE_BSR,
     OPCODE_CAL,
     OPCODE_CEL,
-    OPCODE_CPY,
+    OPCODE_COP,
+    OPCODE_COS,
     OPCODE_DEL,
     OPCODE_DIV,
-    OPCODE_EXT,
     OPCODE_END,
     OPCODE_EQL,
+    OPCODE_EXT,
     OPCODE_FIL,
     OPCODE_FLR,
     OPCODE_FLS,
-    OPCODE_MOD,
     OPCODE_GET,
     OPCODE_GLB,
     OPCODE_GOD,
@@ -200,14 +200,16 @@ typedef enum
     OPCODE_INS,
     OPCODE_JMP,
     OPCODE_KEY,
-    OPCODE_LIN,
     OPCODE_LEN,
+    OPCODE_LIN,
     OPCODE_LOC,
     OPCODE_LOD,
+    OPCODE_LOG,
     OPCODE_LOR,
     OPCODE_LST,
     OPCODE_LTE,
     OPCODE_MEM,
+    OPCODE_MOD,
     OPCODE_MOV,
     OPCODE_MUL,
     OPCODE_NEQ,
@@ -219,15 +221,17 @@ typedef enum
     OPCODE_PSB,
     OPCODE_PSF,
     OPCODE_PSH,
+    OPCODE_RAN,
     OPCODE_RED,
     OPCODE_REF,
     OPCODE_RET,
-    OPCODE_RND,
     OPCODE_SAV,
+    OPCODE_SIN,
     OPCODE_SLC,
+    OPCODE_SOR,
     OPCODE_SPD,
+    OPCODE_SQR,
     OPCODE_SRD,
-    OPCODE_SRT,
     OPCODE_STR,
     OPCODE_SUB,
     OPCODE_TIM,
@@ -286,6 +290,8 @@ typedef struct
     int64_t size;
     int64_t pc;
     int64_t spds;
+    int64_t retno;
+    bool done;
 }
 VM;
 
@@ -335,7 +341,7 @@ CC_Factor(CC*);
 static void
 CC_Block(CC*, int64_t head, int64_t tail, int64_t scoping, bool loop);
 
-static int64_t
+static void
 VM_Run(VM*, bool arbitrary);
 
 static void*
@@ -394,6 +400,16 @@ Quit(const char* const message, ...)
     va_end(args);
     exit(0xFF);
 }
+
+typedef struct
+{
+    char* mnemonic;
+    char* handle;
+    int64_t (*instruct)(VM*, Map*);
+    void (*exec)(VM*, int64_t);
+    int64_t args;
+}
+Gen;
 
 static void
 String_Alloc(String* self, int64_t cap)
@@ -2461,7 +2477,7 @@ CC_Assign(CC* self)
 {
     CC_Match(self, ":=");
     CC_Expression(self);
-    CC_AssemB(self, String_Init("\tcpy"));
+    CC_AssemB(self, String_Init("\tcop"));
 }
 
 static void
@@ -2703,82 +2719,21 @@ CC_Direct(CC* self, bool negative)
     String_Kill(number);
 }
 
+
+static Gen*
+Gen_ByHandle(char* handle);
+
+static Gen*
+Gen_ByMnemonic(char* mnemonic);
+
 static void
 CC_DirectCalling(CC* self, String* ident, int64_t args)
 {
-    if(String_Equals(ident, "Len"))
-        CC_AssemB(self, String_Init("\tlen"));
-    else
-    if(String_Equals(ident, "Assert"))
-        CC_AssemB(self, String_Init("\tasr"));
-    else
-    if(String_Equals(ident, "Good"))
-        CC_AssemB(self, String_Init("\tgod"));
-    else
-    if(String_Equals(ident, "Keys"))
-        CC_AssemB(self, String_Init("\tkey"));
-    else
-    if(String_Equals(ident, "Search"))
-        CC_AssemB(self, String_Init("\tbsr"));
-    else
-    if(String_Equals(ident, "Sort"))
-        CC_AssemB(self, String_Init("\tsrt"));
-    else
-    if(String_Equals(ident, "Open"))
-        CC_AssemB(self, String_Init("\topn"));
-    else
-    if(String_Equals(ident, "Read"))
-        CC_AssemB(self, String_Init("\tred"));
-    else
-    if(String_Equals(ident, "Copy"))
-        CC_AssemB(self, String_Init("\tcpy"));
-    else
-    if(String_Equals(ident, "Write"))
-        CC_AssemB(self, String_Init("\twrt"));
-    else
-    if(String_Equals(ident, "Refs"))
-        CC_AssemB(self, String_Init("\tref"));
-    else
-    if(String_Equals(ident, "Line"))
-        CC_AssemB(self, String_Init("\tlin"));
-    else
-    if(String_Equals(ident, "File"))
-        CC_AssemB(self, String_Init("\tfil"));
-    else
-    if(String_Equals(ident, "Del"))
-        CC_AssemB(self, String_Init("\tdel"));
-    else
-    if(String_Equals(ident, "Floor"))
-        CC_AssemB(self, String_Init("\tflr"));
-    else
-    if(String_Equals(ident, "Ceil"))
-        CC_AssemB(self, String_Init("\tcel"));
-    else
-    if(String_Equals(ident, "Abs"))
-        CC_AssemB(self, String_Init("\tabs"));
-    else
-    if(String_Equals(ident, "Exit"))
-        CC_AssemB(self, String_Init("\text"));
-    else
-    if(String_Equals(ident, "Time"))
-        CC_AssemB(self, String_Init("\ttim"));
-    else
-    if(String_Equals(ident, "Type"))
-        CC_AssemB(self, String_Init("\ttyp"));
-    else
-    if(String_Equals(ident, "Print"))
-        CC_AssemB(self, String_Init("\tprt"));
-    else
-    if(String_Equals(ident, "String"))
-        CC_AssemB(self, String_Init("\tstr"));
-    else
-    if(String_Equals(ident, "Srand"))
-        CC_AssemB(self, String_Init("\tsrd"));
-    else
-    if(String_Equals(ident, "Rand"))
-        CC_AssemB(self, String_Init("\trnd"));
-    else
+    Gen* gen = Gen_ByHandle(ident->value);
+    if(gen == NULL || (gen && gen->args == -1))
         CC_Call(self, ident, args);
+    else
+        CC_AssemB(self, String_Format("\t%s", gen->mnemonic));
 }
 
 static void
@@ -2835,39 +2790,6 @@ CC_Identifier(CC* self)
         storage = CC_Referencing(self, ident);
     String_Kill(ident);
     return storage;
-}
-
-static void
-CC_ReserveFunctions(CC* self)
-{
-    struct { int64_t args; char* name; } items[] = {
-        { 2, "Sort"   },
-        { 1, "Good"   },
-        { 1, "Assert" },
-        { 1, "Keys"   },
-        { 1, "Copy"   },
-        { 2, "Open"   },
-        { 2, "Read"   },
-        { 1, "Refs"   },
-        { 1, "Len"    },
-        { 2, "Del"    },
-        { 1, "Floor"  },
-        { 1, "Ceil"   },
-        { 1, "Abs"    },
-        { 3, "Search" },
-        { 0, "File"   },
-        { 0, "Line"   },
-        { 1, "Exit"   },
-        { 1, "Type"   },
-        { 1, "Print"  },
-        { 1, "String" },
-        { 0, "Time"   },
-        { 1, "Srand"  },
-        { 0, "Rand"   },
-        { 2, "Write"  },
-    };
-    for(uint64_t i = 0; i < LEN(items); i++)
-        CC_Define(self, CLASS_FUNCTION, items[i].args, String_Init(items[i].name), String_Init("reserved"));
 }
 
 static void
@@ -2987,7 +2909,7 @@ CC_Term(CC* self)
             }
             else
             {
-                CC_AssemB(self, String_Init("\tcpy"));
+                CC_AssemB(self, String_Init("\tcop"));
                 CC_Factor(self);
                 if(String_Equals(operator, "*"))
                     CC_AssemB(self, String_Init("\tmul"));
@@ -3088,7 +3010,7 @@ CC_Expression(CC* self)
         else
         {
             storage = false;
-            CC_AssemB(self, String_Init("\tcpy"));
+            CC_AssemB(self, String_Init("\tcop"));
             CC_Term(self);
             if(String_Equals(operator, "+"))
                 CC_AssemB(self, String_Init("\tadd"));
@@ -3531,32 +3453,6 @@ VM_Quit(VM* self, const char* const message, ...)
     exit(0xFF);
 }
 
-static void
-VM_TypeExpect(VM* self, Type a, Type b)
-{
-    if(a != b)
-        VM_Quit(self, "encountered type %s but expected type %s", Type_ToString(a), Type_ToString(b));
-}
-
-static void
-VM_BadOperator(VM* self, Type a, const char* op)
-{
-    VM_Quit(self, "type %s not supported with operator `%s`", Type_ToString(a), op);
-}
-
-static void
-VM_TypeMatch(VM* self, Type a, Type b, const char* op)
-{
-    if(a != b)
-        VM_Quit(self, "type %s and type %s mismatch with operator `%s`", Type_ToString(a), Type_ToString(b), op);
-}
-
-static void
-VM_TypeBadIndex(VM* self, Type a, Type b)
-{
-    VM_Quit(self, "type %s cannot be indexed with type %s", Type_ToString(a), Type_ToString(b));
-}
-
 static VM*
 VM_Init(int64_t size, Queue* debug, Queue* addresses)
 {
@@ -3573,6 +3469,8 @@ VM_Init(int64_t size, Queue* debug, Queue* addresses)
     self->instructions = Malloc(size * sizeof(*self->instructions));
     self->pc = 0;
     self->spds = 0;
+    self->retno = 0;
+    self->done = false;
     return self;
 }
 
@@ -3731,190 +3629,11 @@ VM_Assemble(Queue* assembly, Queue* debug)
         if(stub->value[0] == '\t')
         {
             String* line = String_Init(stub->value + 1);
-            int64_t instruction = 0;
             char* mnemonic = strtok(line->value, " \n");
-            if(Equals(mnemonic, "abs"))
-                instruction = OPCODE_ABS;
-            else
-            if(Equals(mnemonic, "add"))
-                instruction = OPCODE_ADD;
-            else
-            if(Equals(mnemonic, "and"))
-                instruction = OPCODE_AND;
-            else
-            if(Equals(mnemonic, "asr"))
-                instruction = OPCODE_ASR;
-            else
-            if(Equals(mnemonic, "brf"))
-                instruction = VM_Indirect(OPCODE_BRF, labels, strtok(NULL, "\n"));
-            else
-            if(Equals(mnemonic, "bsr"))
-                instruction = OPCODE_BSR;
-            else
-            if(Equals(mnemonic, "cal"))
-                instruction = VM_Indirect(OPCODE_CAL, labels, strtok(NULL, "\n"));
-            else
-            if(Equals(mnemonic, "cel"))
-                instruction = OPCODE_CEL;
-            else
-            if(Equals(mnemonic, "cpy"))
-                instruction = OPCODE_CPY;
-            else
-            if(Equals(mnemonic, "del"))
-                instruction = OPCODE_DEL;
-            else
-            if(Equals(mnemonic, "div"))
-                instruction = OPCODE_DIV;
-            else
-            if(Equals(mnemonic, "end"))
-                instruction = OPCODE_END;
-            else
-            if(Equals(mnemonic, "eql"))
-                instruction = OPCODE_EQL;
-            else
-            if(Equals(mnemonic, "ext"))
-                instruction = OPCODE_EXT;
-            else
-            if(Equals(mnemonic, "fil"))
-                instruction = OPCODE_FIL;
-            else
-            if(Equals(mnemonic, "flr"))
-                instruction = OPCODE_FLR;
-            else
-            if(Equals(mnemonic, "fls"))
-                instruction = OPCODE_FLS;
-            else
-            if(Equals(mnemonic, "mod"))
-                instruction = OPCODE_MOD;
-            else
-            if(Equals(mnemonic, "get"))
-                instruction = OPCODE_GET;
-            else
-            if(Equals(mnemonic, "glb"))
-                instruction = VM_Direct(OPCODE_GLB, strtok(NULL, "\n"));
-            else
-            if(Equals(mnemonic, "god"))
-                instruction = OPCODE_GOD;
-            else
-            if(Equals(mnemonic, "grt"))
-                instruction = OPCODE_GRT;
-            else
-            if(Equals(mnemonic, "gte"))
-                instruction = OPCODE_GTE;
-            else
-            if(Equals(mnemonic, "ins"))
-                instruction = OPCODE_INS;
-            else
-            if(Equals(mnemonic, "jmp"))
-                instruction = VM_Indirect(OPCODE_JMP, labels, strtok(NULL, "\n"));
-            else
-            if(Equals(mnemonic, "key"))
-                instruction = OPCODE_KEY;
-            else
-            if(Equals(mnemonic, "len"))
-                instruction = OPCODE_LEN;
-            else
-            if(Equals(mnemonic, "lin"))
-                instruction = OPCODE_LIN;
-            else
-            if(Equals(mnemonic, "loc"))
-                instruction = VM_Direct(OPCODE_LOC, strtok(NULL, "\n"));
-            else
-            if(Equals(mnemonic, "lod"))
-                instruction = OPCODE_LOD;
-            else
-            if(Equals(mnemonic, "lor"))
-                instruction = OPCODE_LOR;
-            else
-            if(Equals(mnemonic, "lst"))
-                instruction = OPCODE_LST;
-            else
-            if(Equals(mnemonic, "lte"))
-                instruction = OPCODE_LTE;
-            else
-            if(Equals(mnemonic, "mem"))
-                instruction = OPCODE_MEM;
-            else
-            if(Equals(mnemonic, "mov"))
-                instruction = OPCODE_MOV;
-            else
-            if(Equals(mnemonic, "mul"))
-                instruction = OPCODE_MUL;
-            else
-            if(Equals(mnemonic, "neq"))
-                instruction = OPCODE_NEQ;
-            else
-            if(Equals(mnemonic, "not"))
-                instruction = OPCODE_NOT;
-            else
-            if(Equals(mnemonic, "opn"))
-                instruction = OPCODE_OPN;
-            else
-            if(Equals(mnemonic, "pop"))
-                instruction = VM_Direct(OPCODE_POP, strtok(NULL, "\n"));
-            else
-            if(Equals(mnemonic, "pow"))
-                instruction = OPCODE_POW;
-            else
-            if(Equals(mnemonic, "prt"))
-                instruction = OPCODE_PRT;
-            else
-            if(Equals(mnemonic, "psb"))
-                instruction = OPCODE_PSB;
-            else
-            if(Equals(mnemonic, "psf"))
-                instruction = OPCODE_PSF;
-            else
-            if(Equals(mnemonic, "psh"))
-                instruction = VM_Datum(self, labels, strtok(NULL, "\n"));
-            else
-            if(Equals(mnemonic, "red"))
-                instruction = OPCODE_RED;
-            else
-            if(Equals(mnemonic, "ref"))
-                instruction = OPCODE_REF;
-            else
-            if(Equals(mnemonic, "ret"))
-                instruction = OPCODE_RET;
-            else
-            if(Equals(mnemonic, "rnd"))
-                instruction = OPCODE_RND;
-            else
-            if(Equals(mnemonic, "sav"))
-                instruction = OPCODE_SAV;
-            else
-            if(Equals(mnemonic, "slc"))
-                instruction = OPCODE_SLC;
-            else
-            if(Equals(mnemonic, "spd"))
-                instruction = OPCODE_SPD;
-            else
-            if(Equals(mnemonic, "srd"))
-                instruction = OPCODE_SRD;
-            else
-            if(Equals(mnemonic, "str"))
-                instruction = OPCODE_STR;
-            else
-            if(Equals(mnemonic, "srt"))
-                instruction = OPCODE_SRT;
-            else
-            if(Equals(mnemonic, "sub"))
-                instruction = OPCODE_SUB;
-            else
-            if(Equals(mnemonic, "typ"))
-                instruction = OPCODE_TYP;
-            else
-            if(Equals(mnemonic, "tim"))
-                instruction = OPCODE_TIM;
-            else
-            if(Equals(mnemonic, "vrt"))
-                instruction = OPCODE_VRT;
-            else
-            if(Equals(mnemonic, "wrt"))
-                instruction = OPCODE_WRT;
-            else
+            Gen* gen = Gen_ByMnemonic(mnemonic);
+            if(gen == NULL)
                 Quit("assembler unknown mnemonic %s", mnemonic);
-            self->instructions[pc] = instruction;
+            self->instructions[pc] = gen->instruct(self, labels);
             pc += 1;
             String_Kill(line);
         }
@@ -3934,26 +3653,36 @@ VM_Cal(VM* self, int64_t address)
 }
 
 static void
-VM_Cpy(VM* self)
+VM_Cpy(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* back = Queue_Back(self->stack);
     Value* copy = Value_Copy(back);
     VM_Pop(self, 1);
     Queue_PshB(self->stack, copy);
 }
 
-static int64_t
-VM_End(VM* self)
+static void
+VM_TypeExpect(VM* self, Type a, Type b)
 {
-    VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
-    int64_t ret = self->ret->of.number;
-    Value_Kill(self->ret);
-    return ret;
+    if(a != b)
+        VM_Quit(self, "encountered type %s but expected type %s", Type_ToString(a), Type_ToString(b));
 }
 
 static void
-VM_Fls(VM* self)
+VM_End(VM* self, int64_t unused)
 {
+    (void) unused;
+    VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
+    self->retno = self->ret->of.number;
+    self->done = true;
+    Value_Kill(self->ret);
+}
+
+static void
+VM_Fls(VM* self, int64_t unused)
+{
+    (void) unused;
     Frame* frame = Queue_Back(self->frame);
     int64_t pops = self->stack->size - frame->sp;
     VM_Pop(self, pops);
@@ -3985,22 +3714,25 @@ VM_Jmp(VM* self, int64_t address)
 }
 
 static void
-VM_Ret(VM* self)
+VM_Ret(VM* self, int64_t unused)
 {
+    (void) unused;
     Frame* frame = Queue_Back(self->frame);
     self->pc = frame->pc;
     Queue_PopB(self->frame);
 }
 
 static void
-VM_Lod(VM* self)
+VM_Lod(VM* self, int64_t unused)
 {
+    (void) unused;
     Queue_PshB(self->stack, self->ret);
 }
 
 static void
-VM_Sav(VM* self)
+VM_Sav(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* value = Queue_Back(self->stack);
     Value_Inc(value);
     self->ret = value;
@@ -4015,8 +3747,9 @@ VM_Psh(VM* self, int64_t address)
 }
 
 static void
-VM_Mov(VM* self)
+VM_Mov(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
@@ -4035,38 +3768,68 @@ VM_Mov(VM* self)
 }
 
 static void
-VM_Flr(VM* self)
+VM_Math(VM* self, double (*fun)(double))
 {
     Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    double floored = floor(a->of.number);
+    double value = fun(a->of.number);
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewNumber(floored));
+    Queue_PshB(self->stack, Value_NewNumber(value));
 }
 
 static void
-VM_Abs(VM* self)
+VM_Abs(VM* self, int64_t unused)
 {
-    Value* a = Queue_Back(self->stack);
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    double absolute = fabs(a->of.number);
-    VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewNumber(absolute));
+    (void) unused;
+    VM_Math(self, fabs);
 }
 
 static void
-VM_Cel(VM* self)
+VM_Sin(VM* self, int64_t unused)
 {
-    Value* a = Queue_Back(self->stack);
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    double ceiled = ceil(a->of.number);
-    VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewNumber(ceiled));
+    (void) unused;
+    VM_Math(self, sin);
 }
 
 static void
-VM_Psb(VM* self)
+VM_Cos(VM* self, int64_t unused)
 {
+    (void) unused;
+    VM_Math(self, cos);
+}
+
+static void
+VM_Log(VM* self, int64_t unused)
+{
+    (void) unused;
+    VM_Math(self, log);
+}
+
+static void
+VM_Sqr(VM* self, int64_t unused)
+{
+    (void) unused;
+    VM_Math(self, sqrt);
+}
+
+static void
+VM_Cel(VM* self, int64_t unused)
+{
+    (void) unused;
+    VM_Math(self, ceil);
+}
+
+static void
+VM_Flr(VM* self, int64_t unused)
+{
+    (void) unused;
+    VM_Math(self, floor);
+}
+
+static void
+VM_Psb(VM* self, int64_t unused)
+{
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
@@ -4077,8 +3840,9 @@ VM_Psb(VM* self)
 }
 
 static void
-VM_Psf(VM* self)
+VM_Psf(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
@@ -4089,13 +3853,13 @@ VM_Psf(VM* self)
 }
 
 static void
-VM_Add(VM* self)
+VM_Add(VM* self, int64_t unused)
 {
-    char* operator = "+";
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type == TYPE_QUEUE && b->type != TYPE_QUEUE)
-        VM_Psb(self);
+        VM_Psb(self, unused);
     else
     {
         if(a->type == TYPE_STRING && b->type == TYPE_CHAR)
@@ -4141,22 +3905,23 @@ VM_Add(VM* self)
             case TYPE_BOOL:
             case TYPE_NULL:
             case TYPE_FILE:
-                VM_BadOperator(self, a->type, operator);
+                VM_Quit(self, "type %s not supported with operator `+`", Type_ToString(a->type));
             }
         else
-            VM_TypeMatch(self, a->type, b->type, operator);
+        if(a->type != b->type)
+            VM_Quit(self, "type mismatch");
         VM_Pop(self, 1);
     }
 }
 
 static void
-VM_Sub(VM* self)
+VM_Sub(VM* self, int64_t unused)
 {
-    char* operator = "-";
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type == TYPE_QUEUE && b->type != TYPE_QUEUE)
-        VM_Psf(self);
+        VM_Psf(self, unused);
     else
     {
         if(a->type == b->type)
@@ -4189,32 +3954,37 @@ VM_Sub(VM* self)
             case TYPE_BOOL:
             case TYPE_NULL:
             case TYPE_FILE:
-                VM_BadOperator(self, a->type, operator);
+                VM_Quit(self, "type %s not supported with operator `-`", Type_ToString(a->type));
             }
         else
-            VM_TypeMatch(self, a->type, b->type, operator);
+        if(a->type != b->type)
+            VM_Quit(self, "type mismatch");
         VM_Pop(self, 1);
     }
 }
 
 static void
-VM_Mul(VM* self)
+VM_Mul(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeMatch(self, a->type, b->type, "*");
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch");
     a->of.number *= b->of.number;
     VM_Pop(self, 1); 
 }
 
 static void
-VM_Div(VM* self)
+VM_Div(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeMatch(self, a->type, b->type, "/");
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch");
     if(b->of.number == 0)
         VM_Quit(self, "cannot divide by zero");
     a->of.number /= b->of.number;
@@ -4222,8 +3992,9 @@ VM_Div(VM* self)
 }
 
 static void
-VM_Vrt(VM* self)
+VM_Vrt(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_FUNCTION);
@@ -4256,7 +4027,7 @@ VM_BSearch(VM* self, Queue* queue, Value* key, Value* diff)
         Queue_PshB(self->stack, now);
         Queue_PshB(self->stack, diff);
         Queue_PshB(self->stack, Value_NewNumber(2));
-        VM_Vrt(self);
+        VM_Vrt(self, 0);
         VM_Run(self, true);
         VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
         int64_t cmp = self->ret->of.number;
@@ -4273,8 +4044,9 @@ VM_BSearch(VM* self, Queue* queue, Value* key, Value* diff)
 }
 
 static void
-VM_Bsr(VM* self)
+VM_Bsr(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 3);
     Value* b = Queue_Get(self->stack, self->stack->size - 2);
     Value* c = Queue_Get(self->stack, self->stack->size - 1);
@@ -4309,7 +4081,7 @@ VM_RangedSort(VM* self, Queue* queue, Value* compare, int64_t left, int64_t righ
         Queue_PshB(self->stack, b);
         Queue_PshB(self->stack, compare);
         Queue_PshB(self->stack, Value_NewNumber(2));
-        VM_Vrt(self);
+        VM_Vrt(self, 0);
         VM_Run(self, true);
         VM_TypeExpect(self, self->ret->type, TYPE_BOOL);
         if(self->ret->of.boolean)
@@ -4331,8 +4103,9 @@ VM_Sort(VM* self, Queue* queue, Value* compare)
 }
 
 static void
-VM_Srt(VM* self)
+VM_Sor(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
@@ -4343,74 +4116,87 @@ VM_Srt(VM* self)
 }
 
 static void
-VM_Lst(VM* self)
+VM_Lst(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeMatch(self, a->type, b->type, "<");
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch");
     bool boolean = Value_LessThan(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
-VM_Lte(VM* self)
+VM_Lte(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeMatch(self, a->type, b->type, "<=");
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch");
     bool boolean = Value_LessThanEqualTo(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
-VM_Grt(VM* self)
+VM_Grt(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeMatch(self, a->type, b->type, ">");
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch");
     bool boolean = Value_GreaterThan(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
-VM_Gte(VM* self)
+VM_Gte(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeMatch(self, a->type, b->type, ">=");
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch");
     bool boolean = Value_GreaterThanEqualTo(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
-VM_And(VM* self)
+VM_And(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeMatch(self, a->type, b->type, "&&");
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch");
     VM_TypeExpect(self, a->type, TYPE_BOOL);
     a->of.boolean = a->of.boolean && b->of.boolean;
     VM_Pop(self, 1);
 }
 
 static void
-VM_Lor(VM* self)
+VM_Lor(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeMatch(self, a->type, b->type, "||");
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch");
     VM_TypeExpect(self, a->type, TYPE_BOOL);
     a->of.boolean = a->of.boolean || b->of.boolean;
     VM_Pop(self, 1);
 }
 
 static void
-VM_Eql(VM* self)
+VM_Eql(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     bool boolean = Value_Equal(a, b);
@@ -4419,8 +4205,9 @@ VM_Eql(VM* self)
 }
 
 static void
-VM_Neq(VM* self)
+VM_Neq(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     bool boolean = !Value_Equal(a, b);
@@ -4429,14 +4216,16 @@ VM_Neq(VM* self)
 }
 
 static void
-VM_Spd(VM* self)
+VM_Spd(VM* self, int64_t unused)
 {
+    (void) unused;
     self->spds += 1;
 }
 
 static void
-VM_Not(VM* self)
+VM_Not(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* value = Queue_Back(self->stack);
     VM_TypeExpect(self, value->type, TYPE_BOOL);
     value->of.boolean = !value->of.boolean;
@@ -4453,8 +4242,9 @@ VM_Brf(VM* self, int64_t address)
 }
 
 static void
-VM_Prt(VM* self)
+VM_Prt(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* value = Queue_Back(self->stack);
     String* print = Value_Sprint(value, false, 0, FORMAT_WIDTH, FORMAT_PRECI);
     puts(print->value);
@@ -4464,8 +4254,9 @@ VM_Prt(VM* self)
 }
 
 static void
-VM_Str(VM* self)
+VM_Str(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* value = Queue_Back(self->stack);
     String* string = Value_Sprint(value, false, 0, FORMAT_WIDTH, FORMAT_PRECI);
     VM_Pop(self, 1);
@@ -4473,8 +4264,9 @@ VM_Str(VM* self)
 }
 
 static void
-VM_Len(VM* self)
+VM_Len(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* value = Queue_Back(self->stack);
     int64_t len = Value_Len(value);
     VM_Pop(self, 1);
@@ -4482,8 +4274,9 @@ VM_Len(VM* self)
 }
 
 static void
-VM_Ins(VM* self)
+VM_Ins(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 3);
     Value* b = Queue_Get(self->stack, self->stack->size - 2);
     Value* c = Queue_Get(self->stack, self->stack->size - 1);
@@ -4500,8 +4293,9 @@ VM_Ins(VM* self)
 }
 
 static void
-VM_Ref(VM* self)
+VM_Ref(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Back(self->stack);
     int64_t refs = a->refs;
     VM_Pop(self, 1);
@@ -4539,8 +4333,11 @@ VM_Index(VM* self, Value* storage, Value* index)
     else
     if(storage->type == TYPE_STRING)
         return VM_IndexString(self, storage, index);
-    VM_TypeBadIndex(self, storage->type, index->type);
-    return NULL;
+    else
+    {
+        VM_Quit(self, "type %s cannot be indexed with type %s", Type_ToString(storage->type), Type_ToString(index->type));
+        return NULL;
+    }
 }
 
 static Value*
@@ -4554,8 +4351,9 @@ VM_Lookup(VM* self, Value* map, Value* index)
 }
 
 static void
-VM_Get(VM* self)
+VM_Get(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     Value* value = NULL;
@@ -4567,7 +4365,7 @@ VM_Get(VM* self)
     if(b->type == TYPE_STRING)
         value = VM_Lookup(self, a, b);
     else
-        VM_TypeBadIndex(self, a->type, b->type);
+        VM_Quit(self, "type %s cannot be indexed", Type_ToString(b->type));
     VM_Pop(self, 2);
     if(value == NULL)
         Queue_PshB(self->stack, Value_NewNull());
@@ -4576,8 +4374,9 @@ VM_Get(VM* self)
 }
 
 static void
-VM_Mod(VM* self)
+VM_Mod(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type == TYPE_NUMBER && b->type == TYPE_NUMBER)
@@ -4627,8 +4426,9 @@ VM_Mod(VM* self)
 }
 
 static void
-VM_Typ(VM* self)
+VM_Typ(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Back(self->stack);
     Type type = a->type;
     VM_Pop(self, 1);
@@ -4636,8 +4436,9 @@ VM_Typ(VM* self)
 }
 
 static void
-VM_Del(VM* self)
+VM_Del(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(b->type == TYPE_NUMBER)
@@ -4657,24 +4458,25 @@ VM_Del(VM* self)
                 VM_Quit(self, "string character deletion out of bounds with index %ld", ind);
         }
         else
-            VM_TypeBadIndex(self, a->type, b->type);
+            VM_Quit(self, "type %s cannot be indexed for deletion", Type_ToString(a->type));
     }
     else
     if(b->type == TYPE_STRING)
     {
         if(a->type != TYPE_MAP)
-            VM_TypeBadIndex(self, a->type, b->type);
+            VM_Quit(self, "maps can only be index with string keys");
         Map_Del(a->of.map, b->of.string->value);
     }
     else
-        VM_Quit(self, "type `%s` was attempted to be used as a deletion key - only integer indices and strings may be used as deletion keys for queues and maps, respectively", Type_ToString(a->type));
+        VM_Quit(self, "type `%s` cannot be used as a deletion index", Type_ToString(b->type));
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewNull());
 }
 
 static void
-VM_Mem(VM* self)
+VM_Mem(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     bool boolean = a == b;
@@ -4683,8 +4485,9 @@ VM_Mem(VM* self)
 }
 
 static void
-VM_Opn(VM* self)
+VM_Opn(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_STRING);
@@ -4695,19 +4498,22 @@ VM_Opn(VM* self)
 }
 
 static void
-VM_Pow(VM* self)
+VM_Pow(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeMatch(self, a->type, b->type, "**");
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch");
     a->of.number = pow(a->of.number, b->of.number);
     VM_Pop(self, 1);
 }
 
 static void
-VM_Red(VM* self)
+VM_Red(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_FILE);
@@ -4729,8 +4535,9 @@ VM_Red(VM* self)
 }
 
 static void
-VM_Wrt(VM* self)
+VM_Wrt(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_FILE);
@@ -4752,8 +4559,9 @@ Queue_Index(Queue* self, int64_t from, void* value, Compare compare)
 }
 
 static void
-VM_Slc(VM* self)
+VM_Slc(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 3);
     Value* b = Queue_Get(self->stack, self->stack->size - 2);
     Value* c = Queue_Get(self->stack, self->stack->size - 1);
@@ -4797,7 +4605,7 @@ VM_Slc(VM* self)
             if(x > y || x < 0)
                 VM_Quit(self, "queue slice [%ld : %ld] not possible", x, y);
             if(y > (int64_t) a->of.queue->size)
-                VM_Quit(self, "queue slice [%ld : %ld] not possible - right boud larger than queue size %ld", x, y, (int64_t) a->of.queue->size);
+                VM_Quit(self, "queue slice [%ld : %ld] not possible - right bound larger than queue size %ld", x, y, (int64_t) a->of.queue->size);
             value = Value_NewQueue();
             for(int64_t i = x; i < y; i++)
                 Queue_PshB(value->of.queue, Value_Copy(Queue_Get(a->of.queue, i)));
@@ -4826,14 +4634,15 @@ VM_Slc(VM* self)
         Value_Kill(keys);
     }
     else
-        VM_TypeBadIndex(self, a->type, b->type);
+        VM_Quit(self, "type %s cannot be indexed for array slicing", Type_ToString(b->type));
     VM_Pop(self, 3);
     Queue_PshB(self->stack, value);
 }
 
 static void
-VM_God(VM* self)
+VM_God(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_FILE);
     bool boolean = a->of.file->file != NULL;
@@ -4842,8 +4651,9 @@ VM_God(VM* self)
 }
 
 static void
-VM_Key(VM* self)
+VM_Key(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_MAP);
     Value* queue = Map_Key(a->of.map);
@@ -4852,8 +4662,9 @@ VM_Key(VM* self)
 }
 
 static void
-VM_Ext(VM* self)
+VM_Ext(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     exit(a->of.number);
@@ -4862,15 +4673,17 @@ VM_Ext(VM* self)
 }
 
 static void
-VM_Tim(VM* self)
+VM_Tim(VM* self, int64_t unused)
 {
+    (void) unused;
     double us = Microseconds();
     Queue_PshB(self->stack, Value_NewNumber(us));
 }
 
 static void
-VM_Srd(VM* self)
+VM_Srd(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     srand(a->of.number);
@@ -4879,29 +4692,33 @@ VM_Srd(VM* self)
 }
 
 static void
-VM_Rnd(VM* self)
+VM_Ran(VM* self, int64_t unused)
 {
+    (void) unused;
     double number = rand();
     Queue_PshB(self->stack, Value_NewNumber(number));
 }
 
 static void
-VM_Lin(VM* self)
+VM_Lin(VM* self, int64_t unused)
 {
+    (void) unused;
     Debug* debug = Queue_Get(self->debug, self->pc);
     Queue_PshB(self->stack, Value_NewNumber(debug->line));
 }
 
 static void
-VM_Fil(VM* self)
+VM_Fil(VM* self, int64_t unused)
 {
+    (void) unused;
     Debug* debug = Queue_Get(self->debug, self->pc);
     Queue_PshB(self->stack, Value_NewString(String_Init(debug->file)));
 }
 
 static void
-VM_Asr(VM* self)
+VM_Asr(VM* self, int64_t unused)
 {
+    (void) unused;
     Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_BOOL);
     if(a->of.boolean == false)
@@ -4910,81 +4727,203 @@ VM_Asr(VM* self)
     Queue_PshB(self->stack, Value_NewNull());
 }
 
-static int64_t
+static int64_t Oc_Abs(VM* a, Map* b) { (void) a, (void) b; return OPCODE_ABS; }
+static int64_t Oc_Add(VM* a, Map* b) { (void) a, (void) b; return OPCODE_ADD; }
+static int64_t Oc_And(VM* a, Map* b) { (void) a, (void) b; return OPCODE_AND; }
+static int64_t Oc_Asr(VM* a, Map* b) { (void) a, (void) b; return OPCODE_ASR; }
+static int64_t Oc_Brf(VM* a, Map* b) { (void) a, (void) b; return VM_Indirect(OPCODE_BRF, b, strtok(NULL, "\n")); }
+static int64_t Oc_Bsr(VM* a, Map* b) { (void) a, (void) b; return OPCODE_BSR; }
+static int64_t Oc_Cal(VM* a, Map* b) { (void) a, (void) b; return VM_Indirect(OPCODE_CAL, b, strtok(NULL, "\n")); }
+static int64_t Oc_Cel(VM* a, Map* b) { (void) a, (void) b; return OPCODE_CEL; }
+static int64_t Oc_Cos(VM* a, Map* b) { (void) a, (void) b; return OPCODE_COS; }
+static int64_t Oc_Cpy(VM* a, Map* b) { (void) a, (void) b; return OPCODE_COP; }
+static int64_t Oc_Del(VM* a, Map* b) { (void) a, (void) b; return OPCODE_DEL; }
+static int64_t Oc_Div(VM* a, Map* b) { (void) a, (void) b; return OPCODE_DIV; }
+static int64_t Oc_End(VM* a, Map* b) { (void) a, (void) b; return OPCODE_END; }
+static int64_t Oc_Eql(VM* a, Map* b) { (void) a, (void) b; return OPCODE_EQL; }
+static int64_t Oc_Ext(VM* a, Map* b) { (void) a, (void) b; return OPCODE_EXT; }
+static int64_t Oc_Fil(VM* a, Map* b) { (void) a, (void) b; return OPCODE_FIL; }
+static int64_t Oc_Flr(VM* a, Map* b) { (void) a, (void) b; return OPCODE_FLR; }
+static int64_t Oc_Fls(VM* a, Map* b) { (void) a, (void) b; return OPCODE_FLS; }
+static int64_t Oc_Get(VM* a, Map* b) { (void) a, (void) b; return OPCODE_GET; }
+static int64_t Oc_Glb(VM* a, Map* b) { (void) a, (void) b; return VM_Direct(OPCODE_GLB, strtok(NULL, "\n")); }
+static int64_t Oc_God(VM* a, Map* b) { (void) a, (void) b; return OPCODE_GOD; }
+static int64_t Oc_Grt(VM* a, Map* b) { (void) a, (void) b; return OPCODE_GRT; }
+static int64_t Oc_Gte(VM* a, Map* b) { (void) a, (void) b; return OPCODE_GTE; }
+static int64_t Oc_Ins(VM* a, Map* b) { (void) a, (void) b; return OPCODE_INS; }
+static int64_t Oc_Jmp(VM* a, Map* b) { (void) a, (void) b; return VM_Indirect(OPCODE_JMP, b, strtok(NULL, "\n")); }
+static int64_t Oc_Key(VM* a, Map* b) { (void) a, (void) b; return OPCODE_KEY; }
+static int64_t Oc_Len(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LEN; }
+static int64_t Oc_Lin(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LIN; }
+static int64_t Oc_Loc(VM* a, Map* b) { (void) a, (void) b; return VM_Direct(OPCODE_LOC, strtok(NULL, "\n")); }
+static int64_t Oc_Lod(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LOD; }
+static int64_t Oc_Log(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LOG; }
+static int64_t Oc_Lor(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LOR; }
+static int64_t Oc_Lst(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LST; }
+static int64_t Oc_Lte(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LTE; }
+static int64_t Oc_Mem(VM* a, Map* b) { (void) a, (void) b; return OPCODE_MEM; }
+static int64_t Oc_Mod(VM* a, Map* b) { (void) a, (void) b; return OPCODE_MOD; }
+static int64_t Oc_Mov(VM* a, Map* b) { (void) a, (void) b; return OPCODE_MOV; }
+static int64_t Oc_Mul(VM* a, Map* b) { (void) a, (void) b; return OPCODE_MUL; }
+static int64_t Oc_Neq(VM* a, Map* b) { (void) a, (void) b; return OPCODE_NEQ; }
+static int64_t Oc_Not(VM* a, Map* b) { (void) a, (void) b; return OPCODE_NOT; }
+static int64_t Oc_Opn(VM* a, Map* b) { (void) a, (void) b; return OPCODE_OPN; }
+static int64_t Oc_Pop(VM* a, Map* b) { (void) a, (void) b; return VM_Direct(OPCODE_POP, strtok(NULL, "\n")); }
+static int64_t Oc_Pow(VM* a, Map* b) { (void) a, (void) b; return OPCODE_POW; }
+static int64_t Oc_Prt(VM* a, Map* b) { (void) a, (void) b; return OPCODE_PRT; }
+static int64_t Oc_Psb(VM* a, Map* b) { (void) a, (void) b; return OPCODE_PSB; }
+static int64_t Oc_Psf(VM* a, Map* b) { (void) a, (void) b; return OPCODE_PSF; }
+static int64_t Oc_Psh(VM* a, Map* b) { (void) a, (void) b; return VM_Datum(a, b, strtok(NULL, "\n")); }
+static int64_t Oc_Ran(VM* a, Map* b) { (void) a, (void) b; return OPCODE_RAN; }
+static int64_t Oc_Red(VM* a, Map* b) { (void) a, (void) b; return OPCODE_RED; }
+static int64_t Oc_Ref(VM* a, Map* b) { (void) a, (void) b; return OPCODE_REF; }
+static int64_t Oc_Ret(VM* a, Map* b) { (void) a, (void) b; return OPCODE_RET; }
+static int64_t Oc_Sav(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SAV; }
+static int64_t Oc_Sin(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SIN; }
+static int64_t Oc_Slc(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SLC; }
+static int64_t Oc_Sor(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SOR; }
+static int64_t Oc_Spd(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SPD; }
+static int64_t Oc_Sqr(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SQR; }
+static int64_t Oc_Srd(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SRD; }
+static int64_t Oc_Str(VM* a, Map* b) { (void) a, (void) b; return OPCODE_STR; }
+static int64_t Oc_Sub(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SUB; }
+static int64_t Oc_Tim(VM* a, Map* b) { (void) a, (void) b; return OPCODE_TIM; }
+static int64_t Oc_Typ(VM* a, Map* b) { (void) a, (void) b; return OPCODE_TYP; }
+static int64_t Oc_Vrt(VM* a, Map* b) { (void) a, (void) b; return OPCODE_VRT; }
+static int64_t Oc_Wrt(VM* a, Map* b) { (void) a, (void) b; return OPCODE_WRT; }
+
+static const Gen Gens[] = {
+    [OPCODE_ABS] = { "abs", "Abs",     Oc_Abs, VM_Abs,  1, },
+    [OPCODE_ADD] = { "add", "Add",     Oc_Add, VM_Add, -1, }, // -1 implies that the handle is not available from .rr scripts.
+    [OPCODE_AND] = { "and", "And",     Oc_And, VM_And, -1, },
+    [OPCODE_ASR] = { "asr", "Assert",  Oc_Asr, VM_Asr,  1, },
+    [OPCODE_BRF] = { "brf", "Brf",     Oc_Brf, VM_Brf, -1, },
+    [OPCODE_BSR] = { "bsr", "Bsearch", Oc_Bsr, VM_Bsr,  3, },
+    [OPCODE_CAL] = { "cal", "Cal",     Oc_Cal, VM_Cal, -1, },
+    [OPCODE_CEL] = { "cel", "Ceil",    Oc_Cel, VM_Cel,  1, },
+    [OPCODE_COP] = { "cop", "Copy",    Oc_Cpy, VM_Cpy,  1, },
+    [OPCODE_COS] = { "cos", "Cos",     Oc_Cos, VM_Cos,  1, },
+    [OPCODE_DEL] = { "del", "Del",     Oc_Del, VM_Del,  2, },
+    [OPCODE_DIV] = { "div", "Div",     Oc_Div, VM_Div, -1, },
+    [OPCODE_END] = { "end", "End",     Oc_End, VM_End, -1, },
+    [OPCODE_EQL] = { "eql", "Eql",     Oc_Eql, VM_Eql, -1, },
+    [OPCODE_EXT] = { "ext", "Exit",    Oc_Ext, VM_Ext,  1, },
+    [OPCODE_FIL] = { "fil", "File",    Oc_Fil, VM_Fil, -1, },
+    [OPCODE_FLR] = { "flr", "Floor",   Oc_Flr, VM_Flr,  1, },
+    [OPCODE_FLS] = { "fls", "Fls",     Oc_Fls, VM_Fls, -1, },
+    [OPCODE_GET] = { "get", "Get",     Oc_Get, VM_Get, -1, },
+    [OPCODE_GLB] = { "glb", "Glb",     Oc_Glb, VM_Glb, -1, },
+    [OPCODE_GOD] = { "god", "God",     Oc_God, VM_God, -1, },
+    [OPCODE_GRT] = { "grt", "Grt",     Oc_Grt, VM_Grt, -1, },
+    [OPCODE_GTE] = { "gte", "Gte",     Oc_Gte, VM_Gte, -1, },
+    [OPCODE_INS] = { "ins", "Ins",     Oc_Ins, VM_Ins, -1, },
+    [OPCODE_JMP] = { "jmp", "Jmp",     Oc_Jmp, VM_Jmp, -1, },
+    [OPCODE_KEY] = { "key", "Keys",    Oc_Key, VM_Key,  1, },
+    [OPCODE_LEN] = { "len", "Len",     Oc_Len, VM_Len,  1, },
+    [OPCODE_LIN] = { "lin", "Line",    Oc_Lin, VM_Lin,  0, },
+    [OPCODE_LOC] = { "loc", "Loc",     Oc_Loc, VM_Loc, -1, },
+    [OPCODE_LOD] = { "lod", "Lod",     Oc_Lod, VM_Lod, -1, },
+    [OPCODE_LOG] = { "log", "Log",     Oc_Log, VM_Log,  1, },
+    [OPCODE_LOR] = { "lor", "Lor",     Oc_Lor, VM_Lor, -1, },
+    [OPCODE_LST] = { "lst", "Lst",     Oc_Lst, VM_Lst, -1, },
+    [OPCODE_LTE] = { "lte", "Lte",     Oc_Lte, VM_Lte, -1, },
+    [OPCODE_MEM] = { "mem", "Mem",     Oc_Mem, VM_Mem, -1, },
+    [OPCODE_MOD] = { "mod", "Mod",     Oc_Mod, VM_Mod, -1, },
+    [OPCODE_MOV] = { "mov", "Mov",     Oc_Mov, VM_Mov, -1, },
+    [OPCODE_MUL] = { "mul", "Mul",     Oc_Mul, VM_Mul, -1, },
+    [OPCODE_NEQ] = { "neq", "Neq",     Oc_Neq, VM_Neq, -1, },
+    [OPCODE_NOT] = { "not", "Not",     Oc_Not, VM_Not, -1, },
+    [OPCODE_OPN] = { "opn", "Open",    Oc_Opn, VM_Opn,  2, },
+    [OPCODE_POP] = { "pop", "Pop",     Oc_Pop, VM_Pop, -1, },
+    [OPCODE_POW] = { "pow", "Pow",     Oc_Pow, VM_Pow,  1, },
+    [OPCODE_PRT] = { "prt", "Print",   Oc_Prt, VM_Prt,  1, },
+    [OPCODE_PSB] = { "psb", "Psb",     Oc_Psb, VM_Psb, -1, },
+    [OPCODE_PSF] = { "psf", "Psf",     Oc_Psf, VM_Psf, -1, },
+    [OPCODE_PSH] = { "psh", "Psh",     Oc_Psh, VM_Psh, -1, },
+    [OPCODE_RAN] = { "ran", "Rand",    Oc_Ran, VM_Ran,  0, },
+    [OPCODE_RED] = { "red", "Read",    Oc_Red, VM_Red,  2, },
+    [OPCODE_REF] = { "ref", "Refs",    Oc_Ref, VM_Ref,  1, },
+    [OPCODE_RET] = { "ret", "Ret",     Oc_Ret, VM_Ret, -1, },
+    [OPCODE_SAV] = { "sav", "Sav",     Oc_Sav, VM_Sav, -1, },
+    [OPCODE_SIN] = { "sin", "Sin",     Oc_Sin, VM_Sin,  1, },
+    [OPCODE_SLC] = { "slc", "Slc",     Oc_Slc, VM_Slc, -1, },
+    [OPCODE_SOR] = { "sor", "Sort",    Oc_Sor, VM_Sor,  2, },
+    [OPCODE_SPD] = { "spd", "Spd",     Oc_Spd, VM_Spd, -1, },
+    [OPCODE_SQR] = { "sqr", "Sqrt",    Oc_Sqr, VM_Sqr,  1, },
+    [OPCODE_SRD] = { "srd", "Srand",   Oc_Srd, VM_Srd,  1, },
+    [OPCODE_STR] = { "str", "String",  Oc_Str, VM_Str,  1, },
+    [OPCODE_SUB] = { "sub", "Sub",     Oc_Sub, VM_Sub, -1, },
+    [OPCODE_TIM] = { "tim", "Time",    Oc_Tim, VM_Tim,  0, },
+    [OPCODE_TYP] = { "typ", "Type",    Oc_Typ, VM_Typ,  1, },
+    [OPCODE_VRT] = { "vrt", "Vrt",     Oc_Vrt, VM_Vrt, -1, },
+    [OPCODE_WRT] = { "wrt", "Write",   Oc_Wrt, VM_Wrt,  2, },
+};
+
+static void
+Gen_AssertOrder(void)
+{
+    for(uint64_t i = 0; i < LEN(Gens) - 1; i++)
+    {
+        assert(strcmp(Gens[i + 0].mnemonic,
+                      Gens[i + 1].mnemonic) < 0);
+        assert(strcmp(Gens[i + 0].handle,
+                      Gens[i + 1].handle) < 0);
+    }
+}
+
+static int
+Gen_CompareHandle(const void* a, const void* b)
+{
+    const Gen* aa = a;
+    const Gen* bb = b;
+    return strcmp(aa->handle, bb->handle);
+}
+
+static int
+Gen_CompareMnemonic(const void* a, const void* b)
+{
+    const Gen* aa = a;
+    const Gen* bb = b;
+    return strcmp(aa->mnemonic, bb->mnemonic);
+}
+
+static Gen*
+Gen_ByHandle(char* handle)
+{
+    Gen key = { .handle = handle };
+    return bsearch(&key, Gens, LEN(Gens), sizeof(Gens[0]), Gen_CompareHandle);
+}
+
+static Gen*
+Gen_ByMnemonic(char* mnemonic)
+{
+    Gen key = { .mnemonic = mnemonic };
+    return bsearch(&key, Gens, LEN(Gens), sizeof(Gens[0]), Gen_CompareMnemonic);
+}
+
+static void
+CC_ReserveFunctions(CC* self)
+{
+    for(uint64_t i = 0; i < LEN(Gens); i++)
+    {
+        Gen gen = Gens[i];
+        if(gen.args != -1)
+            CC_Define(self, CLASS_FUNCTION, gen.args, String_Init(gen.handle), String_Init("reserved"));
+    }
+}
+
+static void
 VM_Run(VM* self, bool arbitrary)
 {
-    while(true)
+    while(self->done == false)
     {
         uint64_t instruction = self->instructions[self->pc];
         self->pc += 1;
         Opcode oc = instruction & 0xFF;
-        int64_t address = instruction >> 8;
-        switch(oc)
-        {
-        case OPCODE_ABS: VM_Abs(self); break;
-        case OPCODE_ADD: VM_Add(self); break;
-        case OPCODE_AND: VM_And(self); break;
-        case OPCODE_ASR: VM_Asr(self); break;
-        case OPCODE_BSR: VM_Bsr(self); break;
-        case OPCODE_BRF: VM_Brf(self, address); break;
-        case OPCODE_CAL: VM_Cal(self, address); break;
-        case OPCODE_CEL: VM_Cel(self); break;
-        case OPCODE_CPY: VM_Cpy(self); break;
-        case OPCODE_DEL: VM_Del(self); break;
-        case OPCODE_DIV: VM_Div(self); break;
-        case OPCODE_END: return VM_End(self);
-        case OPCODE_EQL: VM_Eql(self); break;
-        case OPCODE_EXT: VM_Ext(self); break;
-        case OPCODE_FIL: VM_Fil(self); break;
-        case OPCODE_FLR: VM_Flr(self); break;
-        case OPCODE_FLS: VM_Fls(self); break;
-        case OPCODE_MOD: VM_Mod(self); break;
-        case OPCODE_GET: VM_Get(self); break;
-        case OPCODE_GLB: VM_Glb(self, address); break;
-        case OPCODE_GOD: VM_God(self); break;
-        case OPCODE_GRT: VM_Grt(self); break;
-        case OPCODE_GTE: VM_Gte(self); break;
-        case OPCODE_INS: VM_Ins(self); break;
-        case OPCODE_JMP: VM_Jmp(self, address); break;
-        case OPCODE_KEY: VM_Key(self); break;
-        case OPCODE_LIN: VM_Lin(self); break;
-        case OPCODE_LEN: VM_Len(self); break;
-        case OPCODE_LOC: VM_Loc(self, address); break;
-        case OPCODE_LOD: VM_Lod(self); break;
-        case OPCODE_LOR: VM_Lor(self); break;
-        case OPCODE_LST: VM_Lst(self); break;
-        case OPCODE_LTE: VM_Lte(self); break;
-        case OPCODE_MEM: VM_Mem(self); break;
-        case OPCODE_MOV: VM_Mov(self); break;
-        case OPCODE_MUL: VM_Mul(self); break;
-        case OPCODE_NEQ: VM_Neq(self); break;
-        case OPCODE_NOT: VM_Not(self); break;
-        case OPCODE_OPN: VM_Opn(self); break;
-        case OPCODE_POW: VM_Pow(self); break;
-        case OPCODE_POP: VM_Pop(self, address); break;
-        case OPCODE_PRT: VM_Prt(self); break;
-        case OPCODE_PSB: VM_Psb(self); break;
-        case OPCODE_PSF: VM_Psf(self); break;
-        case OPCODE_PSH: VM_Psh(self, address); break;
-        case OPCODE_RED: VM_Red(self); break;
-        case OPCODE_REF: VM_Ref(self); break;
-        case OPCODE_RET: VM_Ret(self); break;
-        case OPCODE_RND: VM_Rnd(self); break;
-        case OPCODE_SAV: VM_Sav(self); break;
-        case OPCODE_SLC: VM_Slc(self); break;
-        case OPCODE_SPD: VM_Spd(self); break;
-        case OPCODE_SRD: VM_Srd(self); break;
-        case OPCODE_STR: VM_Str(self); break;
-        case OPCODE_SRT: VM_Srt(self); break;
-        case OPCODE_SUB: VM_Sub(self); break;
-        case OPCODE_TIM: VM_Tim(self); break;
-        case OPCODE_TYP: VM_Typ(self); break;
-        case OPCODE_VRT: VM_Vrt(self); break;
-        case OPCODE_WRT: VM_Wrt(self); break;
-        }
+        Gens[oc].exec(self, instruction >> 8);
         if(arbitrary)
             if(oc == OPCODE_RET || oc == OPCODE_FLS)
-                return 0;
+                break;
     }
 }
 
@@ -5023,10 +4962,10 @@ Args_Help(void)
 int
 main(int argc, char* argv[])
 {
+    Gen_AssertOrder();
     Args args = Args_Parse(argc, argv);
     if(args.entry)
     {
-        int64_t ret = 0;
         String* entry = String_Init(args.entry);
         CC* cc = CC_Init();
         CC_ReserveFunctions(cc);
@@ -5039,12 +4978,13 @@ main(int argc, char* argv[])
             VM_Data(vm);
         }
         else
-            ret = VM_Run(vm, false);
+            VM_Run(vm, false);
+        int64_t retno = vm->retno;
         VM_AssertRefCounts(vm);
         VM_Kill(vm);
         CC_Kill(cc);
         String_Kill(entry);
-        return ret;
+        return retno;
     }
     else
     if(args.help)

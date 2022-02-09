@@ -21,7 +21,7 @@ Main()
         { "key": "f", "value" : 6 },
     ];
     Sort(a, Compare);
-    b := Search(a, { "key" : key }, Diff);
+    b := Bsearch(a, { "key" : key }, Diff);
     Assert(b.value == want);
     ret 0;
 }
