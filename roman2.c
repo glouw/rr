@@ -23,12 +23,9 @@
 #include <stdbool.h>
 
 #define QUEUE_BLOCK_SIZE (8)
-#define MAP_UNPRIMED (-1)
 #define STR_CAP_SIZE (16)
-#define MODULE_BUFFER_SIZE (512)
+#define MODULE_BUFFER_SIZE (8192)
 #define LEN(a) (sizeof(a) / sizeof(*a))
-#define FORMAT_WIDTH (0)
-#define FORMAT_PRECI (2)
 
 typedef int64_t
 (*Diff)(void*, void*);
@@ -318,19 +315,19 @@ typedef struct
 Debug;
 
 static String*
-Value_Sprint(Value* self, bool newline, int64_t indents, int64_t width, int64_t precision);
+Value_Sprint(Value*, bool newline, int64_t indents, int64_t width, int64_t precision);
 
 static Value*
 Value_NewQueue(void);
 
 static bool
-Value_LessThan(Value* a, Value* b);
+Value_LessThan(Value*, Value*);
 
 static Value*
-Value_NewString(String* string);
+Value_NewString(String*);
 
 static void
-Value_Kill(Value* self);
+Value_Kill(Value*);
 
 static void
 CC_Expression(CC*);
@@ -1099,7 +1096,7 @@ Queue_Print(Queue* self, int64_t indents)
         {
             String_Append(print, String_Indent(indents + 1));
             String_Append(print, String_Format("[%ld] = ", i));
-            String_Append(print, Value_Sprint(Queue_Get(self, i), false, indents + 1, FORMAT_WIDTH, FORMAT_PRECI));
+            String_Append(print, Value_Sprint(Queue_Get(self, i), false, indents + 1, -1, -1));
             if(i < size - 1)
                 String_Appends(print, ",");
             String_Appends(print, "\n");
@@ -1186,7 +1183,7 @@ Map_Primes[] = {
 static int64_t
 Map_Buckets(Map* self)
 {
-    if(self->prime_index == MAP_UNPRIMED)
+    if(self->prime_index == -1)
         return 0; 
     return Map_Primes[self->prime_index];
 }
@@ -1205,7 +1202,7 @@ Map_Init(Kill kill, Copy copy)
     self->copy = copy;
     self->bucket = NULL;
     self->size = 0;
-    self->prime_index = MAP_UNPRIMED;
+    self->prime_index = -1;
     self->load_factor = 0.7f;
     self->rand1 = rand();
     self->rand2 = rand();
@@ -1291,7 +1288,7 @@ Map_Full(Map* self)
 static void
 Map_Emplace(Map* self, String* key, Node* node)
 {
-    if(self->prime_index == MAP_UNPRIMED)
+    if(self->prime_index == -1)
         Map_Alloc(self, 0);
     else
     if(Map_Resizable(self) && Map_Full(self))
@@ -1436,7 +1433,7 @@ Map_Print(Map* self, int64_t indents)
             {
                 String_Append(print, String_Indent(indents + 1));
                 String_Append(print, String_Format("\"%s\" : ", bucket->key->value));
-                String_Append(print, Value_Sprint(bucket->value, false, indents + 1, FORMAT_WIDTH, FORMAT_PRECI));
+                String_Append(print, Value_Sprint(bucket->value, false, indents + 1, -1, -1));
                 if(i < self->size - 1)
                     String_Appends(print, ",");
                 String_Appends(print, "\n");
@@ -1827,6 +1824,10 @@ Value_NewNull(void)
 static String*
 Value_Sprint(Value* self, bool newline, int64_t indents, int64_t width, int64_t precision)
 {
+    if(width == -1)
+        width = 0;
+    if(precision == -1)
+        precision = 3;
     String* print = String_Init("");
     switch(self->type)
     {
@@ -2827,34 +2828,32 @@ CC_Factor(CC* self)
     else
     if(CC_String_IsIdent(next) || self->prime)
         storage = CC_Identifier(self);
-    else
-    if(next == '-')
+    else switch(next)
+    {
+    case '-':
         CC_DirectNeg(self);
-    else
-    if(next == '+')
+        break;
+    case '+':
         CC_DirectPos(self);
-    else
-    if(next == '(')
+        break;
+    case '(':
         CC_Force(self);
-    else
-    if(next == '{')
+        break;
+    case '{':
         CC_Map(self);
-    else
-    if(next == '[')
+        break;
+    case '[':
         CC_Queue(self);
-    else
-    if(next == '"')
+        break;
+    case '"':
         CC_String(self);
-    else
+        break;
+    default:
         CC_Quit(self, "an unknown factor starting with `%c` was encountered", next);
+        break;
+    }
     storage &= CC_Resolve(self);
     return storage;
-}
-
-static void
-CC_BadStorage(CC* self, char* operator)
-{
-    CC_Quit(self, "the left hand side of operator `%s` must be storage", operator);
 }
 
 static bool
@@ -2871,7 +2870,7 @@ CC_Term(CC* self)
         if(String_Equals(operator, "*="))
         {
             if(!storage)
-                CC_BadStorage(self, operator->value);
+                CC_Quit(self, "the left hand side of operator `*=` must be storage");
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tmul"));
         }
@@ -2879,7 +2878,7 @@ CC_Term(CC* self)
         if(String_Equals(operator, "/="))
         {
             if(!storage)
-                CC_BadStorage(self, operator->value);
+                CC_Quit(self, "the left hand side of operator `/=` must be storage");
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tdiv"));
         }
@@ -2887,7 +2886,7 @@ CC_Term(CC* self)
         if(String_Equals(operator, "%="))
         {
             if(!storage)
-                CC_BadStorage(self, operator->value);
+                CC_Quit(self, "the left hand side of operator `%=` must be storage");
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tmod"));
         }
@@ -2895,7 +2894,7 @@ CC_Term(CC* self)
         if(String_Equals(operator, "**="))
         {
             if(!storage)
-                CC_BadStorage(self, operator->value);
+                CC_Quit(self, "the left hand side of operator `**=` must be storage");
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tpow"));
         }
@@ -2926,7 +2925,7 @@ CC_Term(CC* self)
                 if(String_Equals(operator, "**"))
                     CC_AssemB(self, String_Init("\tpow"));
                 else
-                    CC_Quit(self, "operator `%s` is not supported for factors", operator->value);
+                    CC_Quit(self, "operator `%s` note supported", operator->value);
             }
         }
         String_Kill(operator);
@@ -2951,7 +2950,7 @@ CC_Expression(CC* self)
         if(String_Equals(operator, "="))
         {
             if(!storage)
-                CC_BadStorage(self, operator->value);
+                CC_Quit(self, "the left hand side of operator `=` must be storage");
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tmov"));
         }
@@ -2959,7 +2958,7 @@ CC_Expression(CC* self)
         if(String_Equals(operator, "+="))
         {
             if(!storage)
-                CC_BadStorage(self, operator->value);
+                CC_Quit(self, "the left hand side of operator `+=` must be storage");
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tadd"));
         }
@@ -2967,7 +2966,7 @@ CC_Expression(CC* self)
         if(String_Equals(operator, "-="))
         {
             if(!storage)
-                CC_BadStorage(self, operator->value);
+                CC_Quit(self, "the left hand side of operator `-=` must be storage");
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tsub"));
         }
@@ -3021,7 +3020,7 @@ CC_Expression(CC* self)
             if(String_Equals(operator, "&&"))
                 CC_AssemB(self, String_Init("\tand"));
             else
-                CC_Quit(self, "operator `%s` is not supported for terms", operator->value);
+                CC_Quit(self, "operator `%s` not supported", operator->value);
         }
         String_Kill(operator);
     }
@@ -3500,14 +3499,14 @@ VM_Data(VM* self)
 }
 
 static void
-VM_AssertRefCounts(VM* self)
+VM_AssertRefs(VM* self)
 {
     for(int64_t i = 0; i < self->data->size; i++)
     {
         Value* value = Queue_Get(self->data, i);
         if(value->refs > 0)
         {
-            String* print = Value_Sprint(value, true, 0, FORMAT_WIDTH, FORMAT_PRECI);
+            String* print = Value_Sprint(value, true, 0, -1, -1);
             VM_Quit(self, "the .data segment value `%s` contained %ld references at the time of exit", print->value, value->refs);
         }
     }
@@ -3534,7 +3533,7 @@ VM_ConvertEscs(VM* self, char* chars)
             int64_t esc = chars[i];
             ch = CC_String_EscToByte(esc);
             if(ch == -1)
-                VM_Quit(self, "an unknown escape character 0x%02X was encountered\n", esc);
+                VM_Quit(self, "an unknown escape character `0x%02X` was encountered\n", esc);
         }
         String_PshB(string, ch);
     }
@@ -3768,11 +3767,11 @@ VM_Mov(VM* self, int64_t unused)
 }
 
 static void
-VM_Math(VM* self, double (*fun)(double))
+VM_Math(VM* self, double (*math)(double))
 {
     Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    double value = fun(a->of.number);
+    double value = math(a->of.number);
     VM_Pop(self, 1);
     Queue_PshB(self->stack, Value_NewNumber(value));
 }
@@ -3909,7 +3908,7 @@ VM_Add(VM* self, int64_t unused)
             }
         else
         if(a->type != b->type)
-            VM_Quit(self, "type mismatch");
+            VM_Quit(self, "type mismatch with operator `+`");
         VM_Pop(self, 1);
     }
 }
@@ -3958,7 +3957,7 @@ VM_Sub(VM* self, int64_t unused)
             }
         else
         if(a->type != b->type)
-            VM_Quit(self, "type mismatch");
+            VM_Quit(self, "type mismatch with operator `-`");
         VM_Pop(self, 1);
     }
 }
@@ -3971,7 +3970,7 @@ VM_Mul(VM* self, int64_t unused)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     if(a->type != b->type)
-        VM_Quit(self, "type mismatch");
+        VM_Quit(self, "type mismatch with operator `*`");
     a->of.number *= b->of.number;
     VM_Pop(self, 1); 
 }
@@ -3984,7 +3983,7 @@ VM_Div(VM* self, int64_t unused)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     if(a->type != b->type)
-        VM_Quit(self, "type mismatch");
+        VM_Quit(self, "type mismatch with operator `/`");
     if(b->of.number == 0)
         VM_Quit(self, "cannot divide by zero");
     a->of.number /= b->of.number;
@@ -4000,9 +3999,12 @@ VM_Vrt(VM* self, int64_t unused)
     VM_TypeExpect(self, a->type, TYPE_FUNCTION);
     VM_TypeExpect(self, b->type, TYPE_NUMBER);
     int64_t args = b->of.number;
-    if(a->of.function->size != args)
-        VM_Quit(self, "expected %ld arguments for indirect function call `%s` but encountered %ld arguments", 
-                a->of.function->size, a->of.function->name->value, args);
+    int64_t size = a->of.function->size;
+    if(size != args)
+    {  
+        char* name = a->of.function->name->value;
+        VM_Quit(self, "expected %ld arguments for indirect function call `%s` but encountered %ld arguments", size, name, args);
+    }
     int64_t spds = b->of.number;
     int64_t address = a->of.function->address;
     VM_Pop(self, 2);
@@ -4098,7 +4100,7 @@ VM_Sort(VM* self, Queue* queue, Value* compare)
 {
     VM_TypeExpect(self, compare->type, TYPE_FUNCTION);
     if(compare->of.function->size != 2)
-        VM_Quit(self, "expected 2 arguments for sort's comparator but encountered %ld arguments", compare->of.function->size);
+        VM_Quit(self, "expected 2 arguments for Sort's comparator but encountered %ld arguments", compare->of.function->size);
     VM_RangedSort(self, queue, compare, 0, queue->size - 1);
 }
 
@@ -4122,7 +4124,7 @@ VM_Lst(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type != b->type)
-        VM_Quit(self, "type mismatch");
+        VM_Quit(self, "type mismatch with operator `<`");
     bool boolean = Value_LessThan(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
@@ -4135,7 +4137,7 @@ VM_Lte(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type != b->type)
-        VM_Quit(self, "type mismatch");
+        VM_Quit(self, "type mismatch with operator `<=`");
     bool boolean = Value_LessThanEqualTo(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
@@ -4148,7 +4150,7 @@ VM_Grt(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type != b->type)
-        VM_Quit(self, "type mismatch");
+        VM_Quit(self, "type mismatch with operator `>`");
     bool boolean = Value_GreaterThan(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
@@ -4161,7 +4163,7 @@ VM_Gte(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type != b->type)
-        VM_Quit(self, "type mismatch");
+        VM_Quit(self, "type mismatch with operator `>=`");
     bool boolean = Value_GreaterThanEqualTo(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
@@ -4174,7 +4176,7 @@ VM_And(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type != b->type)
-        VM_Quit(self, "type mismatch");
+        VM_Quit(self, "type mismatch with operator `&&`");
     VM_TypeExpect(self, a->type, TYPE_BOOL);
     a->of.boolean = a->of.boolean && b->of.boolean;
     VM_Pop(self, 1);
@@ -4187,7 +4189,7 @@ VM_Lor(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type != b->type)
-        VM_Quit(self, "type mismatch");
+        VM_Quit(self, "type mismatch with operator `||`");
     VM_TypeExpect(self, a->type, TYPE_BOOL);
     a->of.boolean = a->of.boolean || b->of.boolean;
     VM_Pop(self, 1);
@@ -4246,7 +4248,7 @@ VM_Prt(VM* self, int64_t unused)
 {
     (void) unused;
     Value* value = Queue_Back(self->stack);
-    String* print = Value_Sprint(value, false, 0, FORMAT_WIDTH, FORMAT_PRECI);
+    String* print = Value_Sprint(value, false, 0, -1, -1);
     puts(print->value);
     VM_Pop(self, 1);
     Queue_PshB(self->stack, Value_NewNumber(print->size));
@@ -4258,7 +4260,7 @@ VM_Str(VM* self, int64_t unused)
 {
     (void) unused;
     Value* value = Queue_Back(self->stack);
-    String* string = Value_Sprint(value, false, 0, FORMAT_WIDTH, FORMAT_PRECI);
+    String* string = Value_Sprint(value, false, 0, -1, -1);
     VM_Pop(self, 1);
     Queue_PshB(self->stack, Value_NewString(string));
 }
@@ -4406,8 +4408,8 @@ VM_Mod(VM* self, int64_t unused)
                         String_PshB(buffer, *c);
                         c += 1;
                     }
-                    int64_t iw = FORMAT_WIDTH;
-                    int64_t ip = FORMAT_PRECI;
+                    int64_t iw = -1;
+                    int64_t ip = -1;
                     if(sscanf(buffer->value, "%ld.%ld", &iw, &ip) == 0)
                         sscanf(buffer->value, ".%ld", &ip);
                     Value* value = Queue_Get(b->of.queue, index);
@@ -4422,7 +4424,7 @@ VM_Mod(VM* self, int64_t unused)
         Queue_PshB(self->stack, Value_NewString(formatted));
     }
     else
-        VM_Quit(self, "modulus operator (%) not supported with type %s and type %s", Type_ToString(a->type), Type_ToString(b->type));
+        VM_Quit(self, "type %s and type %s not supported with modulus `%` operator", Type_ToString(a->type), Type_ToString(b->type));
 }
 
 static void
@@ -4468,7 +4470,7 @@ VM_Del(VM* self, int64_t unused)
         Map_Del(a->of.map, b->of.string->value);
     }
     else
-        VM_Quit(self, "type `%s` cannot be used as a deletion index", Type_ToString(b->type));
+        VM_Quit(self, "type %s cannot be used as a deletion index", Type_ToString(b->type));
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewNull());
 }
@@ -4505,7 +4507,7 @@ VM_Pow(VM* self, int64_t unused)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     if(a->type != b->type)
-        VM_Quit(self, "type mismatch");
+        VM_Quit(self, "type mismatch with operator `**`");
     a->of.number = pow(a->of.number, b->of.number);
     VM_Pop(self, 1);
 }
@@ -4575,14 +4577,15 @@ VM_Slc(VM* self, int64_t unused)
             VM_TypeExpect(self, a->type, TYPE_STRING);
             VM_TypeExpect(self, b->type, TYPE_NUMBER);
             VM_TypeExpect(self, c->type, TYPE_NUMBER);
+            int64_t len = a->of.string->size;
             if(x == -1)
-                x = a->of.string->size - 1;
+                x = len - 1;
             if(y == -1)
-                y = a->of.string->size - 1;
+                y = len - 1;
             if(x > y || x < 0)
                 VM_Quit(self, "string slice [%ld : %ld] not possible", x, y);
-            if(y > (int64_t) a->of.string->size)
-                VM_Quit(self, "string slice [%ld : %ld] not possible - right bound larger than string size %ld", x, y, (int64_t) a->of.string->size);
+            if(y > len)
+                VM_Quit(self, "string slice [%ld : %ld] not possible - right bound larger than string of size %ld", x, y, len);
             int64_t size = y - x;
             String* sub = String_Init("");
             if(size > 0)
@@ -4598,20 +4601,21 @@ VM_Slc(VM* self, int64_t unused)
             VM_TypeExpect(self, a->type, TYPE_QUEUE);
             VM_TypeExpect(self, b->type, TYPE_NUMBER);
             VM_TypeExpect(self, c->type, TYPE_NUMBER);
+            int64_t len = a->of.queue->size;
             if(x == -1)
-                x = a->of.queue->size - 1;
+                x = len - 1;
             if(y == -1)
-                y = a->of.queue->size - 1;
+                y = len - 1;
             if(x > y || x < 0)
                 VM_Quit(self, "queue slice [%ld : %ld] not possible", x, y);
-            if(y > (int64_t) a->of.queue->size)
-                VM_Quit(self, "queue slice [%ld : %ld] not possible - right bound larger than queue size %ld", x, y, (int64_t) a->of.queue->size);
+            if(y > len)
+                VM_Quit(self, "queue slice [%ld : %ld] not possible - right bound larger than queue of size %ld", x, y, len);
             value = Value_NewQueue();
             for(int64_t i = x; i < y; i++)
                 Queue_PshB(value->of.queue, Value_Copy(Queue_Get(a->of.queue, i)));
         }
         else
-            VM_Quit(self, "type `%s` was attempted to be sliced - only maps, queues, and strings can be sliced", Type_ToString(a->type));
+            VM_Quit(self, "type %s was attempted to be sliced - only maps, queues, and strings can be sliced", Type_ToString(a->type));
     }
     else
     if(b->type == TYPE_STRING)
@@ -4864,10 +4868,8 @@ Gen_AssertOrder(void)
 {
     for(uint64_t i = 0; i < LEN(Gens) - 1; i++)
     {
-        assert(strcmp(Gens[i + 0].mnemonic,
-                      Gens[i + 1].mnemonic) < 0);
-        assert(strcmp(Gens[i + 0].handle,
-                      Gens[i + 1].handle) < 0);
+        assert(strcmp(Gens[i + 0].mnemonic, Gens[i + 1].mnemonic) < 0);
+        assert(strcmp(Gens[i + 0].handle, Gens[i + 1].handle) < 0);
     }
 }
 
@@ -4891,14 +4893,14 @@ static Gen*
 Gen_ByHandle(char* handle)
 {
     Gen key = { .handle = handle };
-    return bsearch(&key, Gens, LEN(Gens), sizeof(Gens[0]), Gen_CompareHandle);
+    return bsearch(&key, Gens, LEN(Gens), sizeof(Gen), Gen_CompareHandle);
 }
 
 static Gen*
 Gen_ByMnemonic(char* mnemonic)
 {
     Gen key = { .mnemonic = mnemonic };
-    return bsearch(&key, Gens, LEN(Gens), sizeof(Gens[0]), Gen_CompareMnemonic);
+    return bsearch(&key, Gens, LEN(Gens), sizeof(Gen), Gen_CompareMnemonic);
 }
 
 static void
@@ -4980,7 +4982,7 @@ main(int argc, char* argv[])
         else
             VM_Run(vm, false);
         int64_t retno = vm->retno;
-        VM_AssertRefCounts(vm);
+        VM_AssertRefs(vm);
         VM_Kill(vm);
         CC_Kill(cc);
         String_Kill(entry);
