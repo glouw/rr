@@ -169,83 +169,87 @@ typedef enum
 }
 Class;
 
+#define OPCODES \
+    X(Abs) \
+    X(Aco) \
+    X(Add) \
+    X(All) \
+    X(And) \
+    X(Any) \
+    X(Asi) \
+    X(Asr) \
+    X(Ata) \
+    X(Brf) \
+    X(Bsr) \
+    X(Cal) \
+    X(Cel) \
+    X(Cop) \
+    X(Cos) \
+    X(Del) \
+    X(Div) \
+    X(End) \
+    X(Eql) \
+    X(Ext) \
+    X(Fil) \
+    X(Flr) \
+    X(Fls) \
+    X(Get) \
+    X(Glb) \
+    X(God) \
+    X(Grt) \
+    X(Gte) \
+    X(Idv) \
+    X(Imd) \
+    X(Ins) \
+    X(Jmp) \
+    X(Key) \
+    X(Len) \
+    X(Lin) \
+    X(Loc) \
+    X(Lod) \
+    X(Log) \
+    X(Lor) \
+    X(Lst) \
+    X(Lte) \
+    X(Max) \
+    X(Mem) \
+    X(Min) \
+    X(Mod) \
+    X(Mov) \
+    X(Mul) \
+    X(Neq) \
+    X(Not) \
+    X(Opn) \
+    X(Pop) \
+    X(Pow) \
+    X(Prt) \
+    X(Psb) \
+    X(Psf) \
+    X(Psh) \
+    X(Qso) \
+    X(Ran) \
+    X(Red) \
+    X(Ref) \
+    X(Ret) \
+    X(Sav) \
+    X(Sin) \
+    X(Slc) \
+    X(Spd) \
+    X(Sqr) \
+    X(Srd) \
+    X(Str) \
+    X(Sub) \
+    X(Tan) \
+    X(Tim) \
+    X(Typ) \
+    X(Vrt) \
+    X(Wrt)
+
 typedef enum
 {
-    OPCODE_Abs,
-    OPCODE_Aco,
-    OPCODE_Add,
-    OPCODE_All,
-    OPCODE_And,
-    OPCODE_Any,
-    OPCODE_Asi,
-    OPCODE_Asr,
-    OPCODE_Ata,
-    OPCODE_Brf,
-    OPCODE_Bsr,
-    OPCODE_Cal,
-    OPCODE_Cel,
-    OPCODE_Cop,
-    OPCODE_Cos,
-    OPCODE_Del,
-    OPCODE_Div,
-    OPCODE_End,
-    OPCODE_Eql,
-    OPCODE_Ext,
-    OPCODE_Fil,
-    OPCODE_Flr,
-    OPCODE_Fls,
-    OPCODE_Get,
-    OPCODE_Glb,
-    OPCODE_God,
-    OPCODE_Grt,
-    OPCODE_Gte,
-    OPCODE_Idv,
-    OPCODE_Imd,
-    OPCODE_Ins,
-    OPCODE_Jmp,
-    OPCODE_Key,
-    OPCODE_Len,
-    OPCODE_Lin,
-    OPCODE_Loc,
-    OPCODE_Lod,
-    OPCODE_Log,
-    OPCODE_Lor,
-    OPCODE_Lst,
-    OPCODE_Lte,
-    OPCODE_Max,
-    OPCODE_Mem,
-    OPCODE_Min,
-    OPCODE_Mod,
-    OPCODE_Mov,
-    OPCODE_Mul,
-    OPCODE_Neq,
-    OPCODE_Not,
-    OPCODE_Opn,
-    OPCODE_Pop,
-    OPCODE_Pow,
-    OPCODE_Prt,
-    OPCODE_Psb,
-    OPCODE_Psf,
-    OPCODE_Psh,
-    OPCODE_Qso,
-    OPCODE_Ran,
-    OPCODE_Red,
-    OPCODE_Ref,
-    OPCODE_Ret,
-    OPCODE_Sav,
-    OPCODE_Sin,
-    OPCODE_Slc,
-    OPCODE_Spd,
-    OPCODE_Sqr,
-    OPCODE_Srd,
-    OPCODE_Str,
-    OPCODE_Sub,
-    OPCODE_Tan,
-    OPCODE_Tim,
-    OPCODE_Typ,
-    OPCODE_Vrt,
-    OPCODE_Wrt,
-    OPCODE_COUNT,
+#define X(name) OPCODE_##name,
+OPCODES
+#undef X
 }
 Opcode;
 
@@ -325,6 +329,22 @@ typedef struct
 }
 Debug;
 
+typedef struct
+{
+    char* mnemonic;
+    Opcode opcode;
+    void (*exec)(VM*, int64_t);
+}
+Gen;
+
+typedef struct
+{
+    char* name;
+    char* mnemonic;
+    int64_t args;
+}
+Handle;
+
 static String*
 Value_Sprint(Value*, bool newline, int64_t indents, int64_t width, int64_t precision);
 
@@ -351,6 +371,9 @@ CC_Block(CC*, int64_t head, int64_t tail, int64_t scoping, bool loop);
 
 static void
 VM_Run(VM*, bool arbitrary);
+
+static Gen*
+Gen_Find(char* mnemonic);
 
 static void*
 Malloc(int64_t size)
@@ -408,16 +431,6 @@ Quit(const char* const message, ...)
     va_end(args);
     exit(0xFF);
 }
-
-typedef struct
-{
-    char* mnemonic;
-    char* handle;
-    Opcode opcode;
-    void (*exec)(VM*, int64_t);
-    int64_t args;
-}
-Gen;
 
 static void
 String_Alloc(String* self, int64_t cap)
@@ -2319,7 +2332,7 @@ CC_RealPath(CC* self, String* file)
 }
 
 static void
-CC_IncludeModule(CC* self, String* file)
+CC_Including(CC* self, String* file)
 {
     char* real = CC_RealPath(self, file);
     if(Map_Exists(self->included, real))
@@ -2372,12 +2385,72 @@ Module_Name(CC* self, char* postfix)
     return name;
 }
 
+static
+Handle Handles[] = {
+    { "Abs",     "Abs", 1 },
+    { "Acos",    "Aco", 1 },
+    { "All",     "All", 1 },
+    { "Any",     "Any", 1 },
+    { "Asin",    "Asi", 1 },
+    { "Assert",  "Asr", 1 },
+    { "Atan",    "Ata", 1 },
+    { "Bsearch", "Bsr", 3 },
+    { "Ceil",    "Cel", 1 },
+    { "Copy",    "Cop", 1 },
+    { "Cos",     "Cos", 1 },
+    { "Del",     "Del", 2 },
+    { "Exit",    "Ext", 1 },
+    { "Floor",   "Flr", 1 },
+    { "Keys",    "Key", 1 },
+    { "Len",     "Len", 1 },
+    { "Line",    "Lin", 0 },
+    { "Log",     "Log", 1 },
+    { "Max",     "Max", 2 },
+    { "Min",     "Min", 2 },
+    { "Open",    "Opn", 2 },
+    { "Pow",     "Pow", 1 },
+    { "Print",   "Prt", 1 },
+    { "Qsort",   "Qso", 2 },
+    { "Rand",    "Ran", 0 },
+    { "Read",    "Red", 2 },
+    { "Refs",    "Ref", 1 },
+    { "Sin",     "Sin", 1 },
+    { "Sqrt",    "Sqr", 1 },
+    { "Srand",   "Srd", 1 },
+    { "String",  "Str", 1 },
+    { "Tan",     "Tan", 1 },
+    { "Time",    "Tim", 0 },
+    { "Type",    "Typ", 1 },
+    { "Write",   "Wrt", 2 },
+};
+
+static int
+Handle_Compare(const void* a, const void* b)
+{
+    const Handle* aa = a;
+    const Handle* bb = b;
+    return strcmp(aa->name, bb->name);
+}
+
+static void
+Handle_Sort(void)
+{
+    qsort(Handles, LEN(Handles), sizeof(Handle), Handle_Compare);
+}
+
+static Handle*
+Handle_Find(char* name)
+{
+    Handle key = { .name = name };
+    return bsearch(&key, Handles, LEN(Handles), sizeof(Handle), Handle_Compare);
+}
+
 static void
 CC_Include(CC* self)
 {
     String* name = Module_Name(self, ".rr");
     CC_Match(self, ";");
-    CC_IncludeModule(self, name);
+    CC_Including(self, name);
     String_Kill(name);
 }
 
@@ -2413,9 +2486,7 @@ CC_Define(CC* self, Class class, int64_t stack, String* ident, String* path)
     Meta* new = Meta_Init(class, stack, path);
     if(old)
     {
-        // Only function prototypes can be upgraded to functions.
-        if(old->class == CLASS_FUNCTION_PROTOTYPE
-        && new->class == CLASS_FUNCTION)
+        if(old->class == CLASS_FUNCTION_PROTOTYPE && new->class == CLASS_FUNCTION)
         {
             if(new->stack != old->stack)
                 CC_Quit(self, "function %s with %ld argument(s) was previously defined in file `%s` as a function prototype with %ld argument(s)", ident->value, new->stack, old->path->value, old->stack);
@@ -2731,21 +2802,14 @@ CC_Direct(CC* self, bool negative)
     String_Kill(number);
 }
 
-
-static Gen*
-Gen_ByHandle(char* handle);
-
-static Gen*
-Gen_ByMnemonic(char* mnemonic);
-
 static void
 CC_DirectCalling(CC* self, String* ident, int64_t args)
 {
-    Gen* gen = Gen_ByHandle(ident->value);
-    if(gen == NULL || (gen && gen->args == -1))
+    Handle* handle = Handle_Find(ident->value);
+    if(handle == NULL || (handle && handle->args == -1))
         CC_Call(self, ident, args);
     else
-        CC_AssemB(self, String_Format("\t%s", gen->mnemonic));
+        CC_AssemB(self, String_Format("\t%s", handle->mnemonic));
 }
 
 static void
@@ -3683,7 +3747,7 @@ VM_Assemble(Queue* assembly, Queue* debug)
         {
             String* line = String_Init(stub->value + 1);
             char* mnemonic = strtok(line->value, " \n");
-            Gen* gen = Gen_ByMnemonic(mnemonic);
+            Gen* gen = Gen_Find(mnemonic);
             if(gen == NULL)
                 Quit("assembler unknown mnemonic %s", mnemonic);
             self->instructions[pc] = VM_Redirect(self, labels, gen->opcode);
@@ -4851,110 +4915,14 @@ VM_Asr(VM* self, int64_t unused)
     Queue_PshB(self->stack, Value_NewNull());
 }
 
-#define GEN(oc, handle, args) [OPCODE_##oc] = { #oc, handle, OPCODE_##oc, VM_##oc, args }
-static const Gen Gens[] = { // Order here does not matter, thankfuly.
-    GEN(Abs, "Abs",      1),
-    GEN(Aco, "Acos",     1),
-    GEN(Add, "Add",     -1),
-    GEN(All, "All",      1),
-    GEN(And, "And",     -1),
-    GEN(Any, "Any",      1),
-    GEN(Asi, "Asin",     1),
-    GEN(Asr, "Assert",   1),
-    GEN(Ata, "Atan",     1),
-    GEN(Brf, "Brf",     -1),
-    GEN(Bsr, "Bsearch",  3),
-    GEN(Cal, "Cal",     -1),
-    GEN(Cel, "Ceil",     1),
-    GEN(Cop, "Copy",     1),
-    GEN(Cos, "Cos",      1),
-    GEN(Del, "Del",      2),
-    GEN(Div, "Div",     -1),
-    GEN(End, "End",     -1),
-    GEN(Eql, "Eql",     -1),
-    GEN(Ext, "Exit",     1),
-    GEN(Fil, "File",    -1),
-    GEN(Flr, "Floor",    1),
-    GEN(Fls, "Fls",     -1),
-    GEN(Get, "Get",     -1),
-    GEN(Glb, "Glb",     -1),
-    GEN(God, "God",     -1),
-    GEN(Grt, "Grt",     -1),
-    GEN(Gte, "Gte",     -1),
-    GEN(Idv, "Idv",     -1),
-    GEN(Imd, "Imd",     -1),
-    GEN(Ins, "Ins",     -1),
-    GEN(Jmp, "Jmp",     -1),
-    GEN(Key, "Keys",     1),
-    GEN(Len, "Len",      1),
-    GEN(Lin, "Line",     0),
-    GEN(Loc, "Loc",     -1),
-    GEN(Lod, "Lod",     -1),
-    GEN(Log, "Log",      1),
-    GEN(Lor, "Lor",     -1),
-    GEN(Lst, "Lst",     -1),
-    GEN(Lte, "Lte",     -1),
-    GEN(Max, "Max",      2),
-    GEN(Mem, "Mem",     -1),
-    GEN(Mod, "Mod",     -1),
-    GEN(Mov, "Mov",     -1),
-    GEN(Min, "Min",      2),
-    GEN(Mul, "Mul",     -1),
-    GEN(Neq, "Neq",     -1),
-    GEN(Not, "Not",     -1),
-    GEN(Opn, "Open",     2),
-    GEN(Pop, "Pop",     -1),
-    GEN(Pow, "Pow",      1),
-    GEN(Prt, "Print",    1),
-    GEN(Psb, "Psb",     -1),
-    GEN(Psf, "Psf",     -1),
-    GEN(Psh, "Psh",     -1),
-    GEN(Qso, "Qsort",    2),
-    GEN(Ran, "Rand",     0),
-    GEN(Red, "Read",     2),
-    GEN(Ref, "Refs",     1),
-    GEN(Ret, "Ret",     -1),
-    GEN(Sav, "Sav",     -1),
-    GEN(Sin, "Sin",      1),
-    GEN(Slc, "Slc",     -1),
-    GEN(Spd, "Spd",     -1),
-    GEN(Sqr, "Sqrt",     1),
-    GEN(Srd, "Srand",    1),
-    GEN(Str, "String",   1),
-    GEN(Sub, "Sub",     -1),
-    GEN(Tan, "Tan",      1),
-    GEN(Tim, "Time",     0),
-    GEN(Typ, "Type",     1),
-    GEN(Vrt, "Vrt",     -1),
-    GEN(Wrt, "Write",    2),
+static const Gen Gens[] = {
+#define X(name) { #name, OPCODE_##name, VM_##name },
+OPCODES
+#undef X
 };
-#undef GEN
-
-static void
-Gen_AssertOrder(void)
-{
-    for(uint64_t i = 0; i < LEN(Gens) - 1; i++)
-    {
-        Gen x = Gens[i + 0];
-        Gen y = Gens[i + 1];
-        assert(strcmp(x.mnemonic, y.mnemonic) < 0);
-        assert(strcmp(x.handle, y.handle) < 0);
-    }
-    assert(LEN(Gens) == OPCODE_COUNT);
-    for(uint64_t i = 0; i < OPCODE_COUNT; i++)
-        assert(Gens[i].opcode == i);
-}
 
 static int
-Gen_CompareHandle(const void* a, const void* b)
-{
-    const Gen* aa = a;
-    const Gen* bb = b;
-    return strcmp(aa->handle, bb->handle);
-}
-
-static int
-Gen_CompareMnemonic(const void* a, const void* b)
+Gen_Compare(const void* a, const void* b)
 {
     const Gen* aa = a;
     const Gen* bb = b;
@@ -4962,27 +4930,19 @@ Gen_CompareMnemonic(const void* a, const void* b)
 }
 
 static Gen*
-Gen_ByHandle(char* handle)
-{
-    Gen key = { .handle = handle };
-    return bsearch(&key, Gens, LEN(Gens), sizeof(Gen), Gen_CompareHandle);
-}
-
-static Gen*
-Gen_ByMnemonic(char* mnemonic)
+Gen_Find(char* mnemonic)
 {
     Gen key = { .mnemonic = mnemonic };
-    return bsearch(&key, Gens, LEN(Gens), sizeof(Gen), Gen_CompareMnemonic);
+    return bsearch(&key, Gens, LEN(Gens), sizeof(Gen), Gen_Compare);
 }
 
 static void
-CC_ReserveFunctions(CC* self)
+CC_Reserve(CC* self)
 {
-    for(uint64_t i = 0; i < LEN(Gens); i++)
+    for(uint64_t i = 0; i < LEN(Handles); i++)
     {
-        Gen gen = Gens[i];
-        if(gen.args != -1)
-            CC_Define(self, CLASS_FUNCTION, gen.args, String_Init(gen.handle), String_Init("reserved"));
+        Handle handle = Handles[i];
+        CC_Define(self, CLASS_FUNCTION, handle.args, String_Init(handle.name), String_Init("reserved"));
     }
 }
 
@@ -5036,14 +4996,14 @@ Args_Help(void)
 int
 main(int argc, char* argv[])
 {
-    Gen_AssertOrder();
+    Handle_Sort();
     Args args = Args_Parse(argc, argv);
     if(args.entry)
     {
         String* entry = String_Init(args.entry);
         CC* cc = CC_Init();
-        CC_ReserveFunctions(cc);
-        CC_IncludeModule(cc, entry);
+        CC_Reserve(cc);
+        CC_Including(cc, entry);
         CC_Parse(cc);
         VM* vm = VM_Assemble(cc->assembly, cc->debug);
         if(args.dump)

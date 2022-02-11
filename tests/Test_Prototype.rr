@@ -1,0 +1,12 @@
+Add(a, b);
+
+Main()
+{
+    Assert(Add(1, 2) == 3);
+    ret 0;
+}
+
+Add(a, b)
+{
+    ret a + b;
+}
