@@ -7,7 +7,7 @@ Main()
 {
     a := [ 9, 3, 5, 1, 0, 3 ];
     b := [ 0, 1, 3, 3, 5, 9 ];
-    Sort(a, Compare);
+    Qsort(a, Compare);
     Print(a);
     Print(b);
     Assert(a == b);

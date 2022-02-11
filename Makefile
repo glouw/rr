@@ -1,4 +1,4 @@
-DEBUG = 0
+DEBUG = 1
 
 ifeq (1,$(DEBUG))
 CFLAGS = -O0 -g -fsanitize=address -fsanitize=undefined
@@ -7,7 +7,7 @@ CFLAGS = -O3 -march=native
 endif
 
 WFLAGS = -Wall -Wextra -Wpedantic -Wshadow
-CC = gcc -std=gnu99 -pedantic
+CC = gcc -std=gnu11 -pedantic
 LIBS = -lm
 
 TITLE = roman2

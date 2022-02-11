@@ -1,0 +1,123 @@
+# ------------------------------
+# Regular Expression Matching 
+# ------------------------------
+#
+# Implement regular expression matching with support for '.' and '*'.
+# 
+# '.' Matches any single character.
+# '*' Matches zero or more of the preceding element.
+
+ToQueue(string)
+{
+    queue := [];
+    foreach(x : string)
+    {
+        queue += x;
+    }
+    ret queue;
+}
+
+Pop(queue)
+{
+    value := queue[0];
+    Del(queue, 0);
+    ret value;
+}
+
+IsMatch(string, regex)
+{
+    last := {
+        "found" : false
+        "value" : ""
+    };
+    r := ToQueue(regex);
+    s := ToQueue(string);
+    while(Len(r) > 0)
+    {  
+        # Match all.
+        if(r[0] == ".")
+        {
+            while(true)
+            {
+                if(Len(r) == 0)
+                {
+                    break;
+                }
+                if(r[0] != ".")
+                {
+                    break;
+                }
+                if(Len(s) == 0)
+                {
+                    ret false;
+                }
+                last.found = true;
+                Pop(r);
+                last.value = Pop(s);
+            }
+        }
+        # Match wildcard.
+        elif(r[0] == "*")
+        {
+            if(last.found == false)
+            {
+                ret false;
+            }
+            else
+            {
+                Pop(r);
+                while(Len(s) > 0)
+                {
+                    if(s[0] == last.value)
+                    {
+                        Pop(s);
+                    }
+                }
+            }
+        }
+        # Match exact.
+        else
+        {
+            if(Len(r) == 0)
+            {
+                ret false;
+            }
+            if(Len(s) == 0)
+            {
+                ret false;
+            }
+            if(r[0] != s[0])
+            {
+                ret false;
+            }
+            last.found = true;
+            Pop(r);
+            last.value = Pop(s);
+        }
+    }
+    if(Len(s) == 0)
+    {
+        ret true;
+    }
+    # String remainder indicates a match was not found.
+    else
+    {
+        ret false;
+    }
+}
+
+Main()
+{
+    Assert(IsMatch("asdf", "....") == true);
+    Assert(IsMatch("asdf", "...") == false);
+    Assert(IsMatch("asdf", "........") == false);
+    Assert(IsMatch("asdf", "...f") == true);
+    Assert(IsMatch("aaaa", "a.*") == true);
+    Assert(IsMatch("aaaa", "*") == false);
+    Assert(IsMatch("", "*") == false);
+    Assert(IsMatch("", "") == true);
+    Assert(IsMatch("", ".") == false);
+    Assert(IsMatch("", "a") == false);
+    Assert(IsMatch("a", "") == false);
+    ret 0;
+}

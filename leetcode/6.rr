@@ -13,18 +13,6 @@
 # You may assume the two numbers do not contain any leading zero,
 # except the number 0 itself.
 
-Max(a, b)
-{
-    if(a > b)
-    {
-        ret a;
-    }
-    else
-    {
-        ret b;
-    }
-}
-
 BigNumSum(a, b)
 {
     c := [];

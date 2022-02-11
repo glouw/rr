@@ -171,70 +171,81 @@ Class;
 
 typedef enum
 {
-    OPCODE_ABS,
-    OPCODE_ADD,
-    OPCODE_AND,
-    OPCODE_ASR,
-    OPCODE_BRF,
-    OPCODE_BSR,
-    OPCODE_CAL,
-    OPCODE_CEL,
-    OPCODE_COP,
-    OPCODE_COS,
-    OPCODE_DEL,
-    OPCODE_DIV,
-    OPCODE_END,
-    OPCODE_EQL,
-    OPCODE_EXT,
-    OPCODE_FIL,
-    OPCODE_FLR,
-    OPCODE_FLS,
-    OPCODE_GET,
-    OPCODE_GLB,
-    OPCODE_GOD,
-    OPCODE_GRT,
-    OPCODE_GTE,
-    OPCODE_INS,
-    OPCODE_JMP,
-    OPCODE_KEY,
-    OPCODE_LEN,
-    OPCODE_LIN,
-    OPCODE_LOC,
-    OPCODE_LOD,
-    OPCODE_LOG,
-    OPCODE_LOR,
-    OPCODE_LST,
-    OPCODE_LTE,
-    OPCODE_MEM,
-    OPCODE_MOD,
-    OPCODE_MOV,
-    OPCODE_MUL,
-    OPCODE_NEQ,
-    OPCODE_NOT,
-    OPCODE_OPN,
-    OPCODE_POP,
-    OPCODE_POW,
-    OPCODE_PRT,
-    OPCODE_PSB,
-    OPCODE_PSF,
-    OPCODE_PSH,
-    OPCODE_RAN,
-    OPCODE_RED,
-    OPCODE_REF,
-    OPCODE_RET,
-    OPCODE_SAV,
-    OPCODE_SIN,
-    OPCODE_SLC,
-    OPCODE_SOR,
-    OPCODE_SPD,
-    OPCODE_SQR,
-    OPCODE_SRD,
-    OPCODE_STR,
-    OPCODE_SUB,
-    OPCODE_TIM,
-    OPCODE_TYP,
-    OPCODE_VRT,
-    OPCODE_WRT,
+    OPCODE_Abs,
+    OPCODE_Aco,
+    OPCODE_Add,
+    OPCODE_All,
+    OPCODE_And,
+    OPCODE_Any,
+    OPCODE_Asi,
+    OPCODE_Asr,
+    OPCODE_Ata,
+    OPCODE_Brf,
+    OPCODE_Bsr,
+    OPCODE_Cal,
+    OPCODE_Cel,
+    OPCODE_Cop,
+    OPCODE_Cos,
+    OPCODE_Del,
+    OPCODE_Div,
+    OPCODE_End,
+    OPCODE_Eql,
+    OPCODE_Ext,
+    OPCODE_Fil,
+    OPCODE_Flr,
+    OPCODE_Fls,
+    OPCODE_Get,
+    OPCODE_Glb,
+    OPCODE_God,
+    OPCODE_Grt,
+    OPCODE_Gte,
+    OPCODE_Idv,
+    OPCODE_Imd,
+    OPCODE_Ins,
+    OPCODE_Jmp,
+    OPCODE_Key,
+    OPCODE_Len,
+    OPCODE_Lin,
+    OPCODE_Loc,
+    OPCODE_Lod,
+    OPCODE_Log,
+    OPCODE_Lor,
+    OPCODE_Lst,
+    OPCODE_Lte,
+    OPCODE_Max,
+    OPCODE_Mem,
+    OPCODE_Min,
+    OPCODE_Mod,
+    OPCODE_Mov,
+    OPCODE_Mul,
+    OPCODE_Neq,
+    OPCODE_Not,
+    OPCODE_Opn,
+    OPCODE_Pop,
+    OPCODE_Pow,
+    OPCODE_Prt,
+    OPCODE_Psb,
+    OPCODE_Psf,
+    OPCODE_Psh,
+    OPCODE_Qso,
+    OPCODE_Ran,
+    OPCODE_Red,
+    OPCODE_Ref,
+    OPCODE_Ret,
+    OPCODE_Sav,
+    OPCODE_Sin,
+    OPCODE_Slc,
+    OPCODE_Spd,
+    OPCODE_Sqr,
+    OPCODE_Srd,
+    OPCODE_Str,
+    OPCODE_Sub,
+    OPCODE_Tan,
+    OPCODE_Tim,
+    OPCODE_Typ,
+    OPCODE_Vrt,
+    OPCODE_Wrt,
+    OPCODE_COUNT,
 }
 Opcode;
 
@@ -402,7 +413,7 @@ typedef struct
 {
     char* mnemonic;
     char* handle;
-    int64_t (*instruct)(VM*, Map*);
+    Opcode opcode;
     void (*exec)(VM*, int64_t);
     int64_t args;
 }
@@ -2463,7 +2474,7 @@ void
 CC_Pops(CC* self, int64_t count)
 {
     if(count > 0)
-        CC_AssemB(self, String_Format("\tpop %ld", count));
+        CC_AssemB(self, String_Format("\tPop %ld", count));
 }
 
 static void
@@ -2478,7 +2489,7 @@ CC_Assign(CC* self)
 {
     CC_Match(self, ":=");
     CC_Expression(self);
-    CC_AssemB(self, String_Init("\tcop"));
+    CC_AssemB(self, String_Init("\tCop"));
 }
 
 static void
@@ -2504,7 +2515,7 @@ CC_Global(CC* self, String* ident)
     CC_Assign(self);
     CC_Match(self, ";");
     CC_Define(self, CLASS_VARIABLE_GLOBAL, self->globals, ident, String_Copy(CC_CurrentFile(self)));
-    CC_AssemB(self, String_Init("\tret"));
+    CC_AssemB(self, String_Init("\tRet"));
     self->globals += 1;
     return label;
 }
@@ -2574,17 +2585,17 @@ CC_Ref(CC* self, String* ident)
 {
     Meta* meta = CC_Expect(self, ident, CC_IsVariable);
     if(meta->class == CLASS_VARIABLE_GLOBAL)
-        CC_AssemB(self, String_Format("\tglb %ld", meta->stack));
+        CC_AssemB(self, String_Format("\tGlb %ld", meta->stack));
     else
     if(meta->class == CLASS_VARIABLE_LOCAL)
-        CC_AssemB(self, String_Format("\tloc %ld", meta->stack));
+        CC_AssemB(self, String_Format("\tLoc %ld", meta->stack));
 }
 
 static void
 CC_String(CC* self)
 {
     String* string = CC_StringStream(self);
-    CC_AssemB(self, String_Format("\tpsh \"%s\"", string->value));
+    CC_AssemB(self, String_Format("\tPsh \"%s\"", string->value));
     String_Kill(string);
 }
 
@@ -2614,20 +2625,20 @@ CC_Resolve(CC* self)
         {
             CC_Match(self, ".");
             String* ident = CC_Ident(self);
-            CC_AssemB(self, String_Format("\tpsh \"%s\"", ident->value));
+            CC_AssemB(self, String_Format("\tPsh \"%s\"", ident->value));
             String_Kill(ident);
         }
         if(CC_Next(self) == ':')
         {
             CC_Assign(self);
-            CC_AssemB(self, String_Init("\tins"));
+            CC_AssemB(self, String_Init("\tIns"));
         }
         else
         {
             if(slice)
-                CC_AssemB(self, String_Init("\tslc"));
+                CC_AssemB(self, String_Init("\tSlc"));
             else
-                CC_AssemB(self, String_Init("\tget"));
+                CC_AssemB(self, String_Init("\tGet"));
         }
     }
     return storage;
@@ -2653,24 +2664,24 @@ static void
 CC_Call(CC* self, String* ident, int64_t args)
 {
     for(int64_t i = 0; i < args; i++)
-        CC_AssemB(self, String_Init("\tspd"));
-    CC_AssemB(self, String_Format("\tcal %s", ident->value));
-    CC_AssemB(self, String_Init("\tlod"));
+        CC_AssemB(self, String_Init("\tSpd"));
+    CC_AssemB(self, String_Format("\tCal %s", ident->value));
+    CC_AssemB(self, String_Init("\tLod"));
 }
 
 static void
 CC_IndirectCalling(CC* self, String* ident, int64_t args)
 {
     CC_Ref(self, ident);
-    CC_AssemB(self, String_Format("\tpsh %ld", args));
-    CC_AssemB(self, String_Init("\tvrt"));
-    CC_AssemB(self, String_Init("\tlod"));
+    CC_AssemB(self, String_Format("\tPsh %ld", args));
+    CC_AssemB(self, String_Init("\tVrt"));
+    CC_AssemB(self, String_Init("\tLod"));
 }
 
 static void
 CC_Map(CC* self)
 {
-    CC_AssemB(self, String_Init("\tpsh {}"));
+    CC_AssemB(self, String_Init("\tPsh {}"));
     CC_Match(self, "{");
     while(CC_Next(self) != '}')
     {
@@ -2681,8 +2692,8 @@ CC_Map(CC* self)
             CC_Expression(self);
         }
         else
-            CC_AssemB(self, String_Init("\tpsh true"));
-        CC_AssemB(self, String_Init("\tins"));
+            CC_AssemB(self, String_Init("\tPsh true"));
+        CC_AssemB(self, String_Init("\tIns"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
     }
@@ -2692,12 +2703,12 @@ CC_Map(CC* self)
 static void
 CC_Queue(CC* self)
 {
-    CC_AssemB(self, String_Init("\tpsh []"));
+    CC_AssemB(self, String_Init("\tPsh []"));
     CC_Match(self, "[");
     while(CC_Next(self) != ']')
     {
         CC_Expression(self);
-        CC_AssemB(self, String_Init("\tpsb"));
+        CC_AssemB(self, String_Init("\tPsb"));
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
     }
@@ -2709,14 +2720,14 @@ CC_Not(CC* self)
 {
     CC_Match(self, "!");
     CC_Factor(self);
-    CC_AssemB(self, String_Init("\tnot"));
+    CC_AssemB(self, String_Init("\tNot"));
 }
 
 static void
 CC_Direct(CC* self, bool negative)
 {
     String* number = CC_Number(self);
-    CC_AssemB(self, String_Format("\tpsh %s%s", negative ? "-" : "", number->value));
+    CC_AssemB(self, String_Format("\tPsh %s%s", negative ? "-" : "", number->value));
     String_Kill(number);
 }
 
@@ -2761,7 +2772,7 @@ CC_Referencing(CC* self, String* ident)
 {
     Meta* meta = CC_Meta(self, ident);
     if(CC_IsFunction(meta->class))
-        CC_AssemB(self, String_Format("\tpsh @%s,%ld", ident->value, meta->stack));
+        CC_AssemB(self, String_Format("\tPsh @%s,%ld", ident->value, meta->stack));
     else
     {
         CC_Ref(self, ident);
@@ -2780,10 +2791,10 @@ CC_Identifier(CC* self)
     else
         ident = CC_Ident(self);
     if(String_IsBoolean(ident))
-        CC_AssemB(self, String_Format("\tpsh %s", ident->value));
+        CC_AssemB(self, String_Format("\tPsh %s", ident->value));
     else
     if(String_IsNull(ident))
-        CC_AssemB(self, String_Format("\tpsh %s", ident->value));
+        CC_AssemB(self, String_Format("\tPsh %s", ident->value));
     else
     if(CC_Next(self) == '(')
         CC_Calling(self, ident);
@@ -2872,7 +2883,23 @@ CC_Term(CC* self)
             if(!storage)
                 CC_Quit(self, "the left hand side of operator `*=` must be storage");
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tmul"));
+            CC_AssemB(self, String_Init("\tMul"));
+        }
+        else
+        if(String_Equals(operator, "%%="))
+        {
+            if(!storage)
+                CC_Quit(self, "the left hand side of operator `%%=` must be storage");
+            CC_Expression(self);
+            CC_AssemB(self, String_Init("\tImd"));
+        }
+        else
+        if(String_Equals(operator, "//="))
+        {
+            if(!storage)
+                CC_Quit(self, "the left hand side of operator `//=` must be storage");
+            CC_Expression(self);
+            CC_AssemB(self, String_Init("\tIdv"));
         }
         else
         if(String_Equals(operator, "/="))
@@ -2880,7 +2907,7 @@ CC_Term(CC* self)
             if(!storage)
                 CC_Quit(self, "the left hand side of operator `/=` must be storage");
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tdiv"));
+            CC_AssemB(self, String_Init("\tDiv"));
         }
         else
         if(String_Equals(operator, "%="))
@@ -2888,7 +2915,7 @@ CC_Term(CC* self)
             if(!storage)
                 CC_Quit(self, "the left hand side of operator `%=` must be storage");
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tmod"));
+            CC_AssemB(self, String_Init("\tMod"));
         }
         else
         if(String_Equals(operator, "**="))
@@ -2896,7 +2923,7 @@ CC_Term(CC* self)
             if(!storage)
                 CC_Quit(self, "the left hand side of operator `**=` must be storage");
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tpow"));
+            CC_AssemB(self, String_Init("\tPow"));
         }
         else
         {
@@ -2904,26 +2931,32 @@ CC_Term(CC* self)
             if(String_Equals(operator, "?"))
             {
                 CC_Factor(self);
-                CC_AssemB(self, String_Init("\tmem"));
+                CC_AssemB(self, String_Init("\tMem"));
             }
             else
             {
-                CC_AssemB(self, String_Init("\tcop"));
+                CC_AssemB(self, String_Init("\tCop"));
                 CC_Factor(self);
                 if(String_Equals(operator, "*"))
-                    CC_AssemB(self, String_Init("\tmul"));
+                    CC_AssemB(self, String_Init("\tMul"));
                 else
                 if(String_Equals(operator, "/"))
-                    CC_AssemB(self, String_Init("\tdiv"));
+                    CC_AssemB(self, String_Init("\tDiv"));
+                else
+                if(String_Equals(operator, "//"))
+                    CC_AssemB(self, String_Init("\tIdv"));
                 else
                 if(String_Equals(operator, "%"))
-                    CC_AssemB(self, String_Init("\tmod"));
+                    CC_AssemB(self, String_Init("\tMod"));
+                else
+                if(String_Equals(operator, "%%"))
+                    CC_AssemB(self, String_Init("\tImd"));
                 else
                 if(String_Equals(operator, "||"))
-                    CC_AssemB(self, String_Init("\tlor"));
+                    CC_AssemB(self, String_Init("\tLor"));
                 else
                 if(String_Equals(operator, "**"))
-                    CC_AssemB(self, String_Init("\tpow"));
+                    CC_AssemB(self, String_Init("\tPow"));
                 else
                     CC_Quit(self, "operator `%s` note supported", operator->value);
             }
@@ -2952,7 +2985,7 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_Quit(self, "the left hand side of operator `=` must be storage");
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tmov"));
+            CC_AssemB(self, String_Init("\tMov"));
         }
         else
         if(String_Equals(operator, "+="))
@@ -2960,7 +2993,7 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_Quit(self, "the left hand side of operator `+=` must be storage");
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tadd"));
+            CC_AssemB(self, String_Init("\tAdd"));
         }
         else
         if(String_Equals(operator, "-="))
@@ -2968,57 +3001,57 @@ CC_Expression(CC* self)
             if(!storage)
                 CC_Quit(self, "the left hand side of operator `-=` must be storage");
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tsub"));
+            CC_AssemB(self, String_Init("\tSub"));
         }
         else
         if(String_Equals(operator, "=="))
         {
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\teql"));
+            CC_AssemB(self, String_Init("\tEql"));
         }
         else
         if(String_Equals(operator, "!="))
         {
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tneq"));
+            CC_AssemB(self, String_Init("\tNeq"));
         }
         else
         if(String_Equals(operator, ">"))
         {
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tgrt"));
+            CC_AssemB(self, String_Init("\tGrt"));
         }
         else
         if(String_Equals(operator, "<"))
         {
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tlst"));
+            CC_AssemB(self, String_Init("\tLst"));
         }
         else
         if(String_Equals(operator, ">="))
         {
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tgte"));
+            CC_AssemB(self, String_Init("\tGte"));
         }
         else
         if(String_Equals(operator, "<="))
         {
             CC_Expression(self);
-            CC_AssemB(self, String_Init("\tlte"));
+            CC_AssemB(self, String_Init("\tLte"));
         }
         else
         {
             storage = false;
-            CC_AssemB(self, String_Init("\tcop"));
+            CC_AssemB(self, String_Init("\tCop"));
             CC_Term(self);
             if(String_Equals(operator, "+"))
-                CC_AssemB(self, String_Init("\tadd"));
+                CC_AssemB(self, String_Init("\tAdd"));
             else
             if(String_Equals(operator, "-"))
-                CC_AssemB(self, String_Init("\tsub"));
+                CC_AssemB(self, String_Init("\tSub"));
             else
             if(String_Equals(operator, "&&"))
-                CC_AssemB(self, String_Init("\tand"));
+                CC_AssemB(self, String_Init("\tAnd"));
             else
                 CC_Quit(self, "operator `%s` not supported", operator->value);
         }
@@ -3041,9 +3074,9 @@ CC_Branch(CC* self, int64_t head, int64_t tail, int64_t end, int64_t scoping, bo
     CC_Match(self, "(");
     CC_Expression(self);
     CC_Match(self, ")");
-    CC_AssemB(self, String_Format("\tbrf @l%ld", next));
+    CC_AssemB(self, String_Format("\tBrf @l%ld", next));
     CC_Block(self, head, tail, scoping, loop);
-    CC_AssemB(self, String_Format("\tjmp @l%ld", end));
+    CC_AssemB(self, String_Format("\tJmp @l%ld", end));
     CC_AssemB(self, String_Format("@l%ld:", next));
 }
 
@@ -3078,10 +3111,10 @@ CC_While(CC* self, int64_t scoping)
     CC_AssemB(self, String_Format("@l%ld:", A));
     CC_Match(self, "(");
     CC_Expression(self);
-    CC_AssemB(self, String_Format("\tbrf @l%ld", B));
+    CC_AssemB(self, String_Format("\tBrf @l%ld", B));
     CC_Match(self, ")");
     CC_Block(self, A, B, scoping, true);
-    CC_AssemB(self, String_Format("\tjmp @l%ld", A));
+    CC_AssemB(self, String_Format("\tJmp @l%ld", A));
     CC_AssemB(self, String_Format("@l%ld:", B));
 }
 
@@ -3101,30 +3134,30 @@ CC_Foreach(CC* self, int64_t scoping)
     String* index = String_Format("!index_%s", ident->value);
     CC_Local(self, queue);
     Queue_PshB(init, String_Copy(queue));
-    CC_AssemB(self, String_Init("\tpsh 0"));
+    CC_AssemB(self, String_Init("\tPsh 0"));
     CC_Local(self, index);
     Queue_PshB(init, String_Copy(index));
-    CC_AssemB(self, String_Init("\tpsh null")); // Reference type - temp storage
+    CC_AssemB(self, String_Init("\tPsh null")); // Reference type - temp storage
     CC_Local(self, ident);
     Queue_PshB(init, String_Copy(ident));
     CC_AssemB(self, String_Format("@l%ld:", A));
     CC_Ref(self, queue);
-    CC_AssemB(self, String_Init("\tlen"));
+    CC_AssemB(self, String_Init("\tLen"));
     CC_Ref(self, index);
-    CC_AssemB(self, String_Init("\teql"));
-    CC_AssemB(self, String_Init("\tnot"));
-    CC_AssemB(self, String_Format("\tbrf @l%ld", B));
-    CC_AssemB(self, String_Init("\tpop 1")); // Pops the temp storage
+    CC_AssemB(self, String_Init("\tEql"));
+    CC_AssemB(self, String_Init("\tNot"));
+    CC_AssemB(self, String_Format("\tBrf @l%ld", B));
+    CC_AssemB(self, String_Init("\tPop 1")); // Pops the temp storage
     CC_Ref(self, queue);
     CC_Ref(self, index);
-    CC_AssemB(self, String_Init("\tget"));
+    CC_AssemB(self, String_Init("\tGet"));
     CC_Block(self, C, B, scoping, true);
     CC_AssemB(self, String_Format("@l%ld:", C));
     CC_Ref(self, index);
-    CC_AssemB(self, String_Init("\tpsh 1"));
-    CC_AssemB(self, String_Init("\tadd"));
-    CC_AssemB(self, String_Init("\tpop 1"));
-    CC_AssemB(self, String_Format("\tjmp @l%ld", A));
+    CC_AssemB(self, String_Init("\tPsh 1"));
+    CC_AssemB(self, String_Init("\tAdd"));
+    CC_AssemB(self, String_Init("\tPop 1"));
+    CC_AssemB(self, String_Format("\tJmp @l%ld", A));
     CC_AssemB(self, String_Format("@l%ld:", B));
     CC_PopScope(self, init);
 }
@@ -3144,15 +3177,15 @@ CC_For(CC* self, int64_t scoping)
     CC_AssemB(self, String_Format("@l%ld:", A));
     CC_Expression(self);
     CC_Match(self, ";");
-    CC_AssemB(self, String_Format("\tbrf @l%ld", D));
-    CC_AssemB(self, String_Format("\tjmp @l%ld", C));
+    CC_AssemB(self, String_Format("\tBrf @l%ld", D));
+    CC_AssemB(self, String_Format("\tJmp @l%ld", C));
     CC_AssemB(self, String_Format("@l%ld:", B));
     CC_ConsumeExpression(self);
     CC_Match(self, ")");
-    CC_AssemB(self, String_Format("\tjmp @l%ld", A));
+    CC_AssemB(self, String_Format("\tJmp @l%ld", A));
     CC_AssemB(self, String_Format("@l%ld:", C));
     CC_Block(self, B, D, scoping, true);
-    CC_AssemB(self, String_Format("\tjmp @l%ld", B));
+    CC_AssemB(self, String_Format("\tJmp @l%ld", B));
     CC_AssemB(self, String_Format("@l%ld:", D));
     CC_PopScope(self, init);
 }
@@ -3161,11 +3194,11 @@ static void
 CC_Ret(CC* self)
 {
     if(CC_Next(self) == ';')
-        CC_AssemB(self, String_Init("\tpsh null"));
+        CC_AssemB(self, String_Init("\tPsh null"));
     else
         CC_Expression(self);
-    CC_AssemB(self, String_Init("\tsav"));
-    CC_AssemB(self, String_Init("\tfls"));
+    CC_AssemB(self, String_Init("\tSav"));
+    CC_AssemB(self, String_Init("\tFls"));
     CC_Match(self, ";");
 }
 
@@ -3211,7 +3244,7 @@ CC_Block(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
                 {
                     CC_Match(self, ";");
                     CC_Pops(self, scoping + scope->size);
-                    CC_AssemB(self, String_Format("\tjmp @l%ld", head));
+                    CC_AssemB(self, String_Format("\tJmp @l%ld", head));
                 }
                 else
                     CC_Quit(self, "the keyword continue can only be used within while, for, or foreach loops");
@@ -3223,7 +3256,7 @@ CC_Block(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
                 {
                     CC_Match(self, ";");
                     CC_Pops(self, scoping + scope->size);
-                    CC_AssemB(self, String_Format("\tjmp @l%ld", tail));
+                    CC_AssemB(self, String_Format("\tJmp @l%ld", tail));
                 }
                 else
                     CC_Quit(self, "the keyword break can only be used within while, for, or foreach loops");
@@ -3271,9 +3304,9 @@ CC_Function(CC* self, String* ident)
         CC_AssemB(self, String_Format("%s:", ident->value));
         CC_Block(self, 0, 0, 0, false);
         CC_PopScope(self, params);
-        CC_AssemB(self, String_Init("\tpsh null"));
-        CC_AssemB(self, String_Init("\tsav"));
-        CC_AssemB(self, String_Init("\tret"));
+        CC_AssemB(self, String_Init("\tPsh null"));
+        CC_AssemB(self, String_Init("\tSav"));
+        CC_AssemB(self, String_Init("\tRet"));
     }
     else
         CC_FunctionPrototype(self, params, ident);
@@ -3289,10 +3322,10 @@ CC_Spool(CC* self, Queue* start)
     for(int64_t i = 0; i < start->size; i++)
     {
         String* label = Queue_Get(start, i);
-        Queue_PshB(spool, String_Format("\tcal %s", label->value));
+        Queue_PshB(spool, String_Format("\tCal %s", label->value));
     }
-    Queue_PshB(spool, String_Format("\tcal %s", main->value));
-    Queue_PshB(spool, String_Format("\tend"));
+    Queue_PshB(spool, String_Format("\tCal %s", main->value));
+    Queue_PshB(spool, String_Init("\tEnd"));
     int64_t i = spool->size;
     while(i != 0)
     {
@@ -3596,7 +3629,7 @@ static int64_t
 VM_Datum(VM* self, Map* labels, char* operand)
 {
     int64_t index = VM_Store(self, labels, operand);
-    return (index << 8) | OPCODE_PSH;
+    return (index << 8) | OPCODE_Psh;
 }
 
 static int64_t
@@ -3612,6 +3645,27 @@ static int64_t
 VM_Direct(Opcode oc, char* number)
 {
     return (String_ToUll(number) << 8) | oc;
+}
+
+static int64_t
+VM_Redirect(VM* self, Map* labels, Opcode opcode)
+{
+    switch(opcode)
+    {
+    case OPCODE_Psh:
+        return VM_Datum(self, labels, strtok(NULL, "\n"));
+    case OPCODE_Brf:
+    case OPCODE_Cal:
+    case OPCODE_Jmp:
+        return VM_Indirect(opcode, labels, strtok(NULL, "\n"));
+    case OPCODE_Glb:
+    case OPCODE_Loc:
+    case OPCODE_Pop:
+        return VM_Direct(opcode, strtok(NULL, "\n"));
+    default:
+        break;
+    }
+    return opcode;
 }
 
 static VM*
@@ -3632,7 +3686,7 @@ VM_Assemble(Queue* assembly, Queue* debug)
             Gen* gen = Gen_ByMnemonic(mnemonic);
             if(gen == NULL)
                 Quit("assembler unknown mnemonic %s", mnemonic);
-            self->instructions[pc] = gen->instruct(self, labels);
+            self->instructions[pc] = VM_Redirect(self, labels, gen->opcode);
             pc += 1;
             String_Kill(line);
         }
@@ -3652,7 +3706,7 @@ VM_Cal(VM* self, int64_t address)
 }
 
 static void
-VM_Cpy(VM* self, int64_t unused)
+VM_Cop(VM* self, int64_t unused)
 {
     (void) unused;
     Value* back = Queue_Back(self->stack);
@@ -3776,54 +3830,17 @@ VM_Math(VM* self, double (*math)(double))
     Queue_PshB(self->stack, Value_NewNumber(value));
 }
 
-static void
-VM_Abs(VM* self, int64_t unused)
-{
-    (void) unused;
-    VM_Math(self, fabs);
-}
-
-static void
-VM_Sin(VM* self, int64_t unused)
-{
-    (void) unused;
-    VM_Math(self, sin);
-}
-
-static void
-VM_Cos(VM* self, int64_t unused)
-{
-    (void) unused;
-    VM_Math(self, cos);
-}
-
-static void
-VM_Log(VM* self, int64_t unused)
-{
-    (void) unused;
-    VM_Math(self, log);
-}
-
-static void
-VM_Sqr(VM* self, int64_t unused)
-{
-    (void) unused;
-    VM_Math(self, sqrt);
-}
-
-static void
-VM_Cel(VM* self, int64_t unused)
-{
-    (void) unused;
-    VM_Math(self, ceil);
-}
-
-static void
-VM_Flr(VM* self, int64_t unused)
-{
-    (void) unused;
-    VM_Math(self, floor);
-}
+static void VM_Abs(VM* self, int64_t unused) { (void) unused; VM_Math(self, fabs);  }
+static void VM_Tan(VM* self, int64_t unused) { (void) unused; VM_Math(self, tan);   }
+static void VM_Sin(VM* self, int64_t unused) { (void) unused; VM_Math(self, sin);   }
+static void VM_Cos(VM* self, int64_t unused) { (void) unused; VM_Math(self, cos);   }
+static void VM_Ata(VM* self, int64_t unused) { (void) unused; VM_Math(self, atan);  }
+static void VM_Asi(VM* self, int64_t unused) { (void) unused; VM_Math(self, asin);  }
+static void VM_Aco(VM* self, int64_t unused) { (void) unused; VM_Math(self, acos);  }
+static void VM_Log(VM* self, int64_t unused) { (void) unused; VM_Math(self, log);   }
+static void VM_Sqr(VM* self, int64_t unused) { (void) unused; VM_Math(self, sqrt);  }
+static void VM_Cel(VM* self, int64_t unused) { (void) unused; VM_Math(self, ceil);  }
+static void VM_Flr(VM* self, int64_t unused) { (void) unused; VM_Math(self, floor); }
 
 static void
 VM_Psb(VM* self, int64_t unused)
@@ -3991,6 +4008,36 @@ VM_Div(VM* self, int64_t unused)
 }
 
 static void
+VM_Idv(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch with operator `//`");
+    if(b->of.number == 0)
+        VM_Quit(self, "cannot divide by zero");
+    a->of.number = (int64_t) a->of.number / (int64_t) b->of.number;
+    VM_Pop(self, 1);
+}
+
+static void
+VM_Imd(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    if(a->type != b->type)
+        VM_Quit(self, "type mismatch with operator `%%`");
+    if(b->of.number == 0)
+        VM_Quit(self, "cannot divide by zero");
+    a->of.number = (int64_t) a->of.number % (int64_t) b->of.number;
+    VM_Pop(self, 1);
+}
+
+static void
 VM_Vrt(VM* self, int64_t unused)
 {
     (void) unused;
@@ -4105,7 +4152,7 @@ VM_Sort(VM* self, Queue* queue, Value* compare)
 }
 
 static void
-VM_Sor(VM* self, int64_t unused)
+VM_Qso(VM* self, int64_t unused)
 {
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
@@ -4115,6 +4162,57 @@ VM_Sor(VM* self, int64_t unused)
     VM_Sort(self, a->of.queue, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewNull());
+}
+
+static void
+VM_All(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* a = Queue_Back(self->stack);;
+    VM_TypeExpect(self, a->type, TYPE_QUEUE);
+    bool boolean = true;
+    for(int64_t i = 0; i < a->of.queue->size; i++)
+    {
+        Value* value = Queue_Get(a->of.queue, i);
+        if(value->type == TYPE_BOOL)
+        {
+            if(value->of.boolean == false)
+            {
+                boolean = false;
+                break;
+            }
+        }
+        else
+        {
+            boolean = false;
+            break;
+        }
+    }
+    VM_Pop(self, 1);
+    Queue_PshB(self->stack, Value_NewBool(boolean));
+}
+
+static void
+VM_Any(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* a = Queue_Back(self->stack);;
+    VM_TypeExpect(self, a->type, TYPE_QUEUE);
+    bool boolean = false;
+    for(int64_t i = 0; i < a->of.queue->size; i++)
+    {
+        Value* value = Queue_Get(a->of.queue, i);
+        if(value->type == TYPE_BOOL)
+        {
+            if(value->of.boolean == true)
+            {
+                boolean = true;
+                break;
+            }
+        }
+    }
+    VM_Pop(self, 1);
+    Queue_PshB(self->stack, Value_NewBool(boolean));
 }
 
 static void
@@ -4215,6 +4313,28 @@ VM_Neq(VM* self, int64_t unused)
     bool boolean = !Value_Equal(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
+}
+
+static void
+VM_Max(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    Value* copy = Value_Copy(Value_GreaterThan(a, b) ? a : b);
+    VM_Pop(self, 2);
+    Queue_PshB(self->stack, copy);
+}
+
+static void
+VM_Min(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    Value* copy = Value_Copy(Value_LessThan(a, b) ? a : b);
+    VM_Pop(self, 2);
+    Queue_PshB(self->stack, copy);
 }
 
 static void
@@ -4731,146 +4851,98 @@ VM_Asr(VM* self, int64_t unused)
     Queue_PshB(self->stack, Value_NewNull());
 }
 
-static int64_t Oc_Abs(VM* a, Map* b) { (void) a, (void) b; return OPCODE_ABS; }
-static int64_t Oc_Add(VM* a, Map* b) { (void) a, (void) b; return OPCODE_ADD; }
-static int64_t Oc_And(VM* a, Map* b) { (void) a, (void) b; return OPCODE_AND; }
-static int64_t Oc_Asr(VM* a, Map* b) { (void) a, (void) b; return OPCODE_ASR; }
-static int64_t Oc_Brf(VM* a, Map* b) { (void) a, (void) b; return VM_Indirect(OPCODE_BRF, b, strtok(NULL, "\n")); }
-static int64_t Oc_Bsr(VM* a, Map* b) { (void) a, (void) b; return OPCODE_BSR; }
-static int64_t Oc_Cal(VM* a, Map* b) { (void) a, (void) b; return VM_Indirect(OPCODE_CAL, b, strtok(NULL, "\n")); }
-static int64_t Oc_Cel(VM* a, Map* b) { (void) a, (void) b; return OPCODE_CEL; }
-static int64_t Oc_Cos(VM* a, Map* b) { (void) a, (void) b; return OPCODE_COS; }
-static int64_t Oc_Cpy(VM* a, Map* b) { (void) a, (void) b; return OPCODE_COP; }
-static int64_t Oc_Del(VM* a, Map* b) { (void) a, (void) b; return OPCODE_DEL; }
-static int64_t Oc_Div(VM* a, Map* b) { (void) a, (void) b; return OPCODE_DIV; }
-static int64_t Oc_End(VM* a, Map* b) { (void) a, (void) b; return OPCODE_END; }
-static int64_t Oc_Eql(VM* a, Map* b) { (void) a, (void) b; return OPCODE_EQL; }
-static int64_t Oc_Ext(VM* a, Map* b) { (void) a, (void) b; return OPCODE_EXT; }
-static int64_t Oc_Fil(VM* a, Map* b) { (void) a, (void) b; return OPCODE_FIL; }
-static int64_t Oc_Flr(VM* a, Map* b) { (void) a, (void) b; return OPCODE_FLR; }
-static int64_t Oc_Fls(VM* a, Map* b) { (void) a, (void) b; return OPCODE_FLS; }
-static int64_t Oc_Get(VM* a, Map* b) { (void) a, (void) b; return OPCODE_GET; }
-static int64_t Oc_Glb(VM* a, Map* b) { (void) a, (void) b; return VM_Direct(OPCODE_GLB, strtok(NULL, "\n")); }
-static int64_t Oc_God(VM* a, Map* b) { (void) a, (void) b; return OPCODE_GOD; }
-static int64_t Oc_Grt(VM* a, Map* b) { (void) a, (void) b; return OPCODE_GRT; }
-static int64_t Oc_Gte(VM* a, Map* b) { (void) a, (void) b; return OPCODE_GTE; }
-static int64_t Oc_Ins(VM* a, Map* b) { (void) a, (void) b; return OPCODE_INS; }
-static int64_t Oc_Jmp(VM* a, Map* b) { (void) a, (void) b; return VM_Indirect(OPCODE_JMP, b, strtok(NULL, "\n")); }
-static int64_t Oc_Key(VM* a, Map* b) { (void) a, (void) b; return OPCODE_KEY; }
-static int64_t Oc_Len(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LEN; }
-static int64_t Oc_Lin(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LIN; }
-static int64_t Oc_Loc(VM* a, Map* b) { (void) a, (void) b; return VM_Direct(OPCODE_LOC, strtok(NULL, "\n")); }
-static int64_t Oc_Lod(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LOD; }
-static int64_t Oc_Log(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LOG; }
-static int64_t Oc_Lor(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LOR; }
-static int64_t Oc_Lst(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LST; }
-static int64_t Oc_Lte(VM* a, Map* b) { (void) a, (void) b; return OPCODE_LTE; }
-static int64_t Oc_Mem(VM* a, Map* b) { (void) a, (void) b; return OPCODE_MEM; }
-static int64_t Oc_Mod(VM* a, Map* b) { (void) a, (void) b; return OPCODE_MOD; }
-static int64_t Oc_Mov(VM* a, Map* b) { (void) a, (void) b; return OPCODE_MOV; }
-static int64_t Oc_Mul(VM* a, Map* b) { (void) a, (void) b; return OPCODE_MUL; }
-static int64_t Oc_Neq(VM* a, Map* b) { (void) a, (void) b; return OPCODE_NEQ; }
-static int64_t Oc_Not(VM* a, Map* b) { (void) a, (void) b; return OPCODE_NOT; }
-static int64_t Oc_Opn(VM* a, Map* b) { (void) a, (void) b; return OPCODE_OPN; }
-static int64_t Oc_Pop(VM* a, Map* b) { (void) a, (void) b; return VM_Direct(OPCODE_POP, strtok(NULL, "\n")); }
-static int64_t Oc_Pow(VM* a, Map* b) { (void) a, (void) b; return OPCODE_POW; }
-static int64_t Oc_Prt(VM* a, Map* b) { (void) a, (void) b; return OPCODE_PRT; }
-static int64_t Oc_Psb(VM* a, Map* b) { (void) a, (void) b; return OPCODE_PSB; }
-static int64_t Oc_Psf(VM* a, Map* b) { (void) a, (void) b; return OPCODE_PSF; }
-static int64_t Oc_Psh(VM* a, Map* b) { (void) a, (void) b; return VM_Datum(a, b, strtok(NULL, "\n")); }
-static int64_t Oc_Ran(VM* a, Map* b) { (void) a, (void) b; return OPCODE_RAN; }
-static int64_t Oc_Red(VM* a, Map* b) { (void) a, (void) b; return OPCODE_RED; }
-static int64_t Oc_Ref(VM* a, Map* b) { (void) a, (void) b; return OPCODE_REF; }
-static int64_t Oc_Ret(VM* a, Map* b) { (void) a, (void) b; return OPCODE_RET; }
-static int64_t Oc_Sav(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SAV; }
-static int64_t Oc_Sin(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SIN; }
-static int64_t Oc_Slc(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SLC; }
-static int64_t Oc_Sor(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SOR; }
-static int64_t Oc_Spd(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SPD; }
-static int64_t Oc_Sqr(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SQR; }
-static int64_t Oc_Srd(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SRD; }
-static int64_t Oc_Str(VM* a, Map* b) { (void) a, (void) b; return OPCODE_STR; }
-static int64_t Oc_Sub(VM* a, Map* b) { (void) a, (void) b; return OPCODE_SUB; }
-static int64_t Oc_Tim(VM* a, Map* b) { (void) a, (void) b; return OPCODE_TIM; }
-static int64_t Oc_Typ(VM* a, Map* b) { (void) a, (void) b; return OPCODE_TYP; }
-static int64_t Oc_Vrt(VM* a, Map* b) { (void) a, (void) b; return OPCODE_VRT; }
-static int64_t Oc_Wrt(VM* a, Map* b) { (void) a, (void) b; return OPCODE_WRT; }
-
-static const Gen Gens[] = {
-    [OPCODE_ABS] = { "abs", "Abs",     Oc_Abs, VM_Abs,  1, },
-    [OPCODE_ADD] = { "add", "Add",     Oc_Add, VM_Add, -1, }, // -1 implies that the handle is not available from .rr scripts.
-    [OPCODE_AND] = { "and", "And",     Oc_And, VM_And, -1, },
-    [OPCODE_ASR] = { "asr", "Assert",  Oc_Asr, VM_Asr,  1, },
-    [OPCODE_BRF] = { "brf", "Brf",     Oc_Brf, VM_Brf, -1, },
-    [OPCODE_BSR] = { "bsr", "Bsearch", Oc_Bsr, VM_Bsr,  3, },
-    [OPCODE_CAL] = { "cal", "Cal",     Oc_Cal, VM_Cal, -1, },
-    [OPCODE_CEL] = { "cel", "Ceil",    Oc_Cel, VM_Cel,  1, },
-    [OPCODE_COP] = { "cop", "Copy",    Oc_Cpy, VM_Cpy,  1, },
-    [OPCODE_COS] = { "cos", "Cos",     Oc_Cos, VM_Cos,  1, },
-    [OPCODE_DEL] = { "del", "Del",     Oc_Del, VM_Del,  2, },
-    [OPCODE_DIV] = { "div", "Div",     Oc_Div, VM_Div, -1, },
-    [OPCODE_END] = { "end", "End",     Oc_End, VM_End, -1, },
-    [OPCODE_EQL] = { "eql", "Eql",     Oc_Eql, VM_Eql, -1, },
-    [OPCODE_EXT] = { "ext", "Exit",    Oc_Ext, VM_Ext,  1, },
-    [OPCODE_FIL] = { "fil", "File",    Oc_Fil, VM_Fil, -1, },
-    [OPCODE_FLR] = { "flr", "Floor",   Oc_Flr, VM_Flr,  1, },
-    [OPCODE_FLS] = { "fls", "Fls",     Oc_Fls, VM_Fls, -1, },
-    [OPCODE_GET] = { "get", "Get",     Oc_Get, VM_Get, -1, },
-    [OPCODE_GLB] = { "glb", "Glb",     Oc_Glb, VM_Glb, -1, },
-    [OPCODE_GOD] = { "god", "God",     Oc_God, VM_God, -1, },
-    [OPCODE_GRT] = { "grt", "Grt",     Oc_Grt, VM_Grt, -1, },
-    [OPCODE_GTE] = { "gte", "Gte",     Oc_Gte, VM_Gte, -1, },
-    [OPCODE_INS] = { "ins", "Ins",     Oc_Ins, VM_Ins, -1, },
-    [OPCODE_JMP] = { "jmp", "Jmp",     Oc_Jmp, VM_Jmp, -1, },
-    [OPCODE_KEY] = { "key", "Keys",    Oc_Key, VM_Key,  1, },
-    [OPCODE_LEN] = { "len", "Len",     Oc_Len, VM_Len,  1, },
-    [OPCODE_LIN] = { "lin", "Line",    Oc_Lin, VM_Lin,  0, },
-    [OPCODE_LOC] = { "loc", "Loc",     Oc_Loc, VM_Loc, -1, },
-    [OPCODE_LOD] = { "lod", "Lod",     Oc_Lod, VM_Lod, -1, },
-    [OPCODE_LOG] = { "log", "Log",     Oc_Log, VM_Log,  1, },
-    [OPCODE_LOR] = { "lor", "Lor",     Oc_Lor, VM_Lor, -1, },
-    [OPCODE_LST] = { "lst", "Lst",     Oc_Lst, VM_Lst, -1, },
-    [OPCODE_LTE] = { "lte", "Lte",     Oc_Lte, VM_Lte, -1, },
-    [OPCODE_MEM] = { "mem", "Mem",     Oc_Mem, VM_Mem, -1, },
-    [OPCODE_MOD] = { "mod", "Mod",     Oc_Mod, VM_Mod, -1, },
-    [OPCODE_MOV] = { "mov", "Mov",     Oc_Mov, VM_Mov, -1, },
-    [OPCODE_MUL] = { "mul", "Mul",     Oc_Mul, VM_Mul, -1, },
-    [OPCODE_NEQ] = { "neq", "Neq",     Oc_Neq, VM_Neq, -1, },
-    [OPCODE_NOT] = { "not", "Not",     Oc_Not, VM_Not, -1, },
-    [OPCODE_OPN] = { "opn", "Open",    Oc_Opn, VM_Opn,  2, },
-    [OPCODE_POP] = { "pop", "Pop",     Oc_Pop, VM_Pop, -1, },
-    [OPCODE_POW] = { "pow", "Pow",     Oc_Pow, VM_Pow,  1, },
-    [OPCODE_PRT] = { "prt", "Print",   Oc_Prt, VM_Prt,  1, },
-    [OPCODE_PSB] = { "psb", "Psb",     Oc_Psb, VM_Psb, -1, },
-    [OPCODE_PSF] = { "psf", "Psf",     Oc_Psf, VM_Psf, -1, },
-    [OPCODE_PSH] = { "psh", "Psh",     Oc_Psh, VM_Psh, -1, },
-    [OPCODE_RAN] = { "ran", "Rand",    Oc_Ran, VM_Ran,  0, },
-    [OPCODE_RED] = { "red", "Read",    Oc_Red, VM_Red,  2, },
-    [OPCODE_REF] = { "ref", "Refs",    Oc_Ref, VM_Ref,  1, },
-    [OPCODE_RET] = { "ret", "Ret",     Oc_Ret, VM_Ret, -1, },
-    [OPCODE_SAV] = { "sav", "Sav",     Oc_Sav, VM_Sav, -1, },
-    [OPCODE_SIN] = { "sin", "Sin",     Oc_Sin, VM_Sin,  1, },
-    [OPCODE_SLC] = { "slc", "Slc",     Oc_Slc, VM_Slc, -1, },
-    [OPCODE_SOR] = { "sor", "Sort",    Oc_Sor, VM_Sor,  2, },
-    [OPCODE_SPD] = { "spd", "Spd",     Oc_Spd, VM_Spd, -1, },
-    [OPCODE_SQR] = { "sqr", "Sqrt",    Oc_Sqr, VM_Sqr,  1, },
-    [OPCODE_SRD] = { "srd", "Srand",   Oc_Srd, VM_Srd,  1, },
-    [OPCODE_STR] = { "str", "String",  Oc_Str, VM_Str,  1, },
-    [OPCODE_SUB] = { "sub", "Sub",     Oc_Sub, VM_Sub, -1, },
-    [OPCODE_TIM] = { "tim", "Time",    Oc_Tim, VM_Tim,  0, },
-    [OPCODE_TYP] = { "typ", "Type",    Oc_Typ, VM_Typ,  1, },
-    [OPCODE_VRT] = { "vrt", "Vrt",     Oc_Vrt, VM_Vrt, -1, },
-    [OPCODE_WRT] = { "wrt", "Write",   Oc_Wrt, VM_Wrt,  2, },
+#define GEN(oc, handle, args) [OPCODE_##oc] = { #oc, handle, OPCODE_##oc, VM_##oc, args }
+static const Gen Gens[] = { // Order here does not matter, thankfuly.
+    GEN(Abs, "Abs",      1),
+    GEN(Aco, "Acos",     1),
+    GEN(Add, "Add",     -1),
+    GEN(All, "All",      1),
+    GEN(And, "And",     -1),
+    GEN(Any, "Any",      1),
+    GEN(Asi, "Asin",     1),
+    GEN(Asr, "Assert",   1),
+    GEN(Ata, "Atan",     1),
+    GEN(Brf, "Brf",     -1),
+    GEN(Bsr, "Bsearch",  3),
+    GEN(Cal, "Cal",     -1),
+    GEN(Cel, "Ceil",     1),
+    GEN(Cop, "Copy",     1),
+    GEN(Cos, "Cos",      1),
+    GEN(Del, "Del",      2),
+    GEN(Div, "Div",     -1),
+    GEN(End, "End",     -1),
+    GEN(Eql, "Eql",     -1),
+    GEN(Ext, "Exit",     1),
+    GEN(Fil, "File",    -1),
+    GEN(Flr, "Floor",    1),
+    GEN(Fls, "Fls",     -1),
+    GEN(Get, "Get",     -1),
+    GEN(Glb, "Glb",     -1),
+    GEN(God, "God",     -1),
+    GEN(Grt, "Grt",     -1),
+    GEN(Gte, "Gte",     -1),
+    GEN(Idv, "Idv",     -1),
+    GEN(Imd, "Imd",     -1),
+    GEN(Ins, "Ins",     -1),
+    GEN(Jmp, "Jmp",     -1),
+    GEN(Key, "Keys",     1),
+    GEN(Len, "Len",      1),
+    GEN(Lin, "Line",     0),
+    GEN(Loc, "Loc",     -1),
+    GEN(Lod, "Lod",     -1),
+    GEN(Log, "Log",      1),
+    GEN(Lor, "Lor",     -1),
+    GEN(Lst, "Lst",     -1),
+    GEN(Lte, "Lte",     -1),
+    GEN(Max, "Max",      2),
+    GEN(Mem, "Mem",     -1),
+    GEN(Mod, "Mod",     -1),
+    GEN(Mov, "Mov",     -1),
+    GEN(Min, "Min",      2),
+    GEN(Mul, "Mul",     -1),
+    GEN(Neq, "Neq",     -1),
+    GEN(Not, "Not",     -1),
+    GEN(Opn, "Open",     2),
+    GEN(Pop, "Pop",     -1),
+    GEN(Pow, "Pow",      1),
+    GEN(Prt, "Print",    1),
+    GEN(Psb, "Psb",     -1),
+    GEN(Psf, "Psf",     -1),
+    GEN(Psh, "Psh",     -1),
+    GEN(Qso, "Qsort",    2),
+    GEN(Ran, "Rand",     0),
+    GEN(Red, "Read",     2),
+    GEN(Ref, "Refs",     1),
+    GEN(Ret, "Ret",     -1),
+    GEN(Sav, "Sav",     -1),
+    GEN(Sin, "Sin",      1),
+    GEN(Slc, "Slc",     -1),
+    GEN(Spd, "Spd",     -1),
+    GEN(Sqr, "Sqrt",     1),
+    GEN(Srd, "Srand",    1),
+    GEN(Str, "String",   1),
+    GEN(Sub, "Sub",     -1),
+    GEN(Tan, "Tan",      1),
+    GEN(Tim, "Time",     0),
+    GEN(Typ, "Type",     1),
+    GEN(Vrt, "Vrt",     -1),
+    GEN(Wrt, "Write",    2),
 };
+#undef GEN
 
 static void
 Gen_AssertOrder(void)
 {
     for(uint64_t i = 0; i < LEN(Gens) - 1; i++)
     {
-        assert(strcmp(Gens[i + 0].mnemonic, Gens[i + 1].mnemonic) < 0);
-        assert(strcmp(Gens[i + 0].handle, Gens[i + 1].handle) < 0);
+        Gen x = Gens[i + 0];
+        Gen y = Gens[i + 1];
+        assert(strcmp(x.mnemonic, y.mnemonic) < 0);
+        assert(strcmp(x.handle, y.handle) < 0);
     }
+    assert(LEN(Gens) == OPCODE_COUNT);
+    for(uint64_t i = 0; i < OPCODE_COUNT; i++)
+        assert(Gens[i].opcode == i);
 }
 
 static int
@@ -4924,7 +4996,7 @@ VM_Run(VM* self, bool arbitrary)
         Opcode oc = instruction & 0xFF;
         Gens[oc].exec(self, instruction >> 8);
         if(arbitrary)
-            if(oc == OPCODE_RET || oc == OPCODE_FLS)
+            if(oc == OPCODE_Ret || oc == OPCODE_Fls)
                 break;
     }
 }
