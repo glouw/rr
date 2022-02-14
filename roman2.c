@@ -179,10 +179,10 @@ Class;
 #define OPCODES \
     X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Brf) X(Bsr) X(Cal) X(Cel) \
     X(Cop) X(Cos) X(Del) X(Div) X(Drf) X(End) X(Eql) X(Ext) X(Fil) X(Flr) X(Fls) X(Get) X(Glb) \
-    X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) X(Jmp) X(Key) X(Len) X(Lin) X(Loc) X(Lod) \
-    X(Log) X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) X(Not) \
-    X(Opn) X(Pop) X(Pow) X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) X(Red) X(Ref) X(Ret) X(Sav) \
-    X(Sin) X(Slc) X(Spd) X(Sqr) X(Srd) X(Str) X(Sub) X(Tan) X(Tim) X(Typ) X(Vrt) X(Wrt)
+    X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) X(Jmp) X(Key) X(Len) X(Lin) X(Loc) X(Lod) X(Log) \
+    X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) X(Not) X(Opn) X(Pop) \
+    X(Pow) X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) X(Red) X(Ref) X(Ret) X(Sav) X(Sin) \
+    X(Slc) X(Spd) X(Sqr) X(Srd) X(Str) X(Sub) X(Tan) X(Tim) X(Trv) X(Typ) X(Vrt) X(Wrt)
 
 typedef enum
 {
@@ -232,7 +232,7 @@ typedef struct
     Queue* data;
     Queue* stack;
     Queue* frame;
-    Queue* debug; // NOTE: Owned by CC.
+    Queue* debug; // NOTE: OWNED BY CC.
     Queue* addresses;
     Map* data_dups;
     Map* track;
@@ -1468,7 +1468,7 @@ static void Value_Inc(Value* self) { self->refs += 1; }
 static void
 Pointer_Kill(Pointer* self)
 {
-    Value_Dec(self->value);
+    Value_Kill(self->value);
     Free(self);
 }
 
@@ -1559,7 +1559,8 @@ Type_Copy(Value* copy, Value* self)
         copy->of.string = String_Copy(self->of.string);
         break;
     case TYPE_CHAR:
-        copy->type = TYPE_STRING; // Chars promote to strings on copy.
+        // CHARS PROMOTE TO STRINGS ON COPY.
+        copy->type = TYPE_STRING;
         copy->of.string = String_FromChar(*self->of.character->value);
         break;
     case TYPE_NUMBER:
@@ -1809,7 +1810,7 @@ Value_Sprint(Value* self, bool newline, int64_t indents, int64_t width, int64_t 
     if(width == -1)
         width = 0;
     if(precision == -1)
-        precision = 3;
+        precision = 5;
     String* print = String_Init("");
     switch(self->type)
     {
@@ -2449,10 +2450,12 @@ CC_Define(CC* self, Class class, int64_t stack, String* ident, String* path)
         if(old->class == CLASS_FUNCTION_PROTOTYPE && new->class == CLASS_FUNCTION)
         {
             if(new->stack != old->stack)
-                CC_Quit(self, "function %s with %ld argument(s) was previously defined in file `%s` as a function prototype with %ld argument(s)", ident->value, new->stack, old->path->value, old->stack);
+                CC_Quit(self, "function %s with %ld argument(s) was previously defined in file %s as a function prototype with %ld argument(s)",
+                        ident->value, new->stack, old->path->value, old->stack);
         }
         else
-            CC_Quit(self, "%s %s was already defined in file `%s` as a %s", Class_ToString(new->class), ident->value, old->path->value, Class_ToString(old->class));
+            CC_Quit(self, "%s %s was already defined in file %s as a %s",
+                    Class_ToString(new->class), ident->value, old->path->value, Class_ToString(old->class));
     }
     Map_Set(self->identifiers, ident, new);
 }
@@ -2577,7 +2580,8 @@ CC_DefineParams(CC* self, Queue* params)
     for(int64_t i = 0; i < params->size; i++)
     {
         String* ident = String_Copy(Queue_Get(params, i));
-        CC_Local(self, ident); // Reference type.
+        // ARGUMENTS ARE PASSED TO FUNCTIONS AS REFERENCE TYPES.
+        CC_Local(self, ident);
     }
 }
 
@@ -2632,6 +2636,8 @@ static void
 CC_Pointer(CC* self)
 {
     CC_Match(self, "&");
+    if(CC_Next(self) == '&')
+        CC_Quit(self, "multiple address-of operators & encountered");
     CC_Factor(self);
     CC_AssemB(self, String_Init("\tPtr"));
 }
@@ -2642,51 +2648,6 @@ CC_String(CC* self)
     String* string = CC_StringStream(self);
     CC_AssemB(self, String_Format("\tPsh \"%s\"", string->value));
     String_Kill(string);
-}
-
-static bool
-CC_Resolve(CC* self)
-{
-    bool storage = true;
-    while(CC_Next(self) == '['
-       || CC_Next(self) == '.')
-    {
-        bool slice = false;
-        if(CC_Next(self) == '[')
-        {
-            CC_Match(self, "[");
-            CC_Expression(self);
-            if(CC_Next(self) == ':')
-            {
-                CC_Match(self, ":");
-                CC_Expression(self);
-                slice = true;
-                storage = false;
-            }
-            CC_Match(self, "]");
-        }
-        else
-        if(CC_Next(self) == '.')
-        {
-            CC_Match(self, ".");
-            String* ident = CC_Ident(self);
-            CC_AssemB(self, String_Format("\tPsh \"%s\"", ident->value));
-            String_Kill(ident);
-        }
-        if(CC_Next(self) == ':')
-        {
-            CC_Assign(self);
-            CC_AssemB(self, String_Init("\tIns"));
-        }
-        else
-        {
-            if(slice)
-                CC_AssemB(self, String_Init("\tSlc"));
-            else
-                CC_AssemB(self, String_Init("\tGet"));
-        }
-    }
-    return storage;
 }
 
 static int64_t
@@ -2706,20 +2667,74 @@ CC_Args(CC* self)
 }
 
 static void
+CC_Vrt(CC* self)
+{
+    int64_t size = CC_Args(self);
+    CC_AssemB(self, String_Format("\tPsh %ld", size));
+    CC_AssemB(self, String_Init("\tVrt"));
+    CC_AssemB(self, String_Init("\tTrv"));
+}
+
+static bool
+CC_Resolve(CC* self)
+{
+    bool storage = true;
+    while(CC_Next(self) == '['
+       || CC_Next(self) == '.'
+       || CC_Next(self) == '(')
+    {
+        if(CC_Next(self) == '(')
+        {
+            CC_Vrt(self);
+            storage = false;
+        }
+        else
+        {
+            bool slice = false;
+            if(CC_Next(self) == '[')
+            {
+                CC_Match(self, "[");
+                CC_Expression(self);
+                if(CC_Next(self) == ':')
+                {
+                    CC_Match(self, ":");
+                    CC_Expression(self);
+                    slice = true;
+                    storage = false;
+                }
+                CC_Match(self, "]");
+            }
+            else
+            if(CC_Next(self) == '.')
+            {
+                CC_Match(self, ".");
+                String* ident = CC_Ident(self);
+                CC_AssemB(self, String_Format("\tPsh \"%s\"", ident->value));
+                String_Kill(ident);
+            }
+            if(CC_Next(self) == ':')
+            {
+                CC_Assign(self);
+                CC_AssemB(self, String_Init("\tIns"));
+            }
+            else
+            {
+                if(slice)
+                    CC_AssemB(self, String_Init("\tSlc"));
+                else
+                    CC_AssemB(self, String_Init("\tGet"));
+            }
+        }
+    }
+    return storage;
+}
+
+static void
 CC_Call(CC* self, String* ident, int64_t args)
 {
     for(int64_t i = 0; i < args; i++)
         CC_AssemB(self, String_Init("\tSpd"));
     CC_AssemB(self, String_Format("\tCal %s", ident->value));
-    CC_AssemB(self, String_Init("\tLod"));
-}
-
-static void
-CC_IndirectCalling(CC* self, String* ident, int64_t args)
-{
-    CC_Ref(self, ident);
-    CC_AssemB(self, String_Format("\tPsh %ld", args));
-    CC_AssemB(self, String_Init("\tVrt"));
     CC_AssemB(self, String_Init("\tLod"));
 }
 
@@ -2769,11 +2784,14 @@ CC_Direct(CC* self, bool negative)
 }
 
 static void
-CC_DirectCalling(CC* self, String* ident, int64_t args)
+CC_DirectCalling(CC* self, String* ident, Meta* meta)
 {
+    int64_t size = CC_Args(self);
+    if(size != meta->stack)
+        CC_Quit(self, "calling function %s required %ld arguments but got %ld arguments", ident->value, meta->stack, size);
     Handle* handle = Handle_Find(ident->value);
     if(handle == NULL || (handle && handle->args == -1))
-        CC_Call(self, ident, args);
+        CC_Call(self, ident, size);
     else
         CC_AssemB(self, String_Format("\t%s", handle->mnemonic));
 }
@@ -2782,17 +2800,14 @@ static void
 CC_Calling(CC* self, String* ident)
 {
     Meta* meta = CC_Meta(self, ident);
-    int64_t args = CC_Args(self);
     if(CC_IsFunction(meta->class))
-    {
-        if(args != meta->stack)
-            CC_Quit(self, "calling function %s required %ld arguments but got %ld arguments", ident->value, meta->stack, args);
-        else
-            CC_DirectCalling(self, ident, args);
-    }
+        CC_DirectCalling(self, ident, meta);
     else
     if(CC_IsVariable(meta->class))
-        CC_IndirectCalling(self, ident, args);
+    {
+        // LEAVE A REFERENCE VALUE ON THE STACK FOR CC_RESOLVE TO HANDLE.
+        CC_Ref(self, ident);
+    }
     else
         CC_Quit(self, "identifier %s is not callable", ident->value);
 }
@@ -2901,6 +2916,7 @@ CC_Factor(CC* self)
         CC_String(self);
         break;
     case '*':
+        storage = true;
         CC_Deref(self);
         break;
     case '&':
@@ -2922,6 +2938,13 @@ CC_Not(CC* self)
     CC_AssemB(self, String_Init("\tNot"));
 }
 
+static void
+CC_StorageCheck(CC* self, String* operator, bool storage)
+{
+    if(storage == false)
+        CC_Quit(self, "the left hand sideof operator %s must be storage", operator->value);
+}
+
 static bool
 CC_Term(CC* self)
 {
@@ -2935,48 +2958,42 @@ CC_Term(CC* self)
         String* operator = CC_Operator(self);
         if(String_Equals(operator, "*="))
         {
-            if(!storage)
-                CC_Quit(self, "the left hand side of operator `*=` must be storage");
+            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tMul"));
         }
         else
         if(String_Equals(operator, "%%="))
         {
-            if(!storage)
-                CC_Quit(self, "the left hand side of operator `%%=` must be storage");
+            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tImd"));
         }
         else
         if(String_Equals(operator, "//="))
         {
-            if(!storage)
-                CC_Quit(self, "the left hand side of operator `//=` must be storage");
+            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tIdv"));
         }
         else
         if(String_Equals(operator, "/="))
         {
-            if(!storage)
-                CC_Quit(self, "the left hand side of operator `/=` must be storage");
+            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tDiv"));
         }
         else
         if(String_Equals(operator, "%="))
         {
-            if(!storage)
-                CC_Quit(self, "the left hand side of operator `%=` must be storage");
+            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tMod"));
         }
         else
         if(String_Equals(operator, "**="))
         {
-            if(!storage)
-                CC_Quit(self, "the left hand side of operator `**=` must be storage");
+            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tPow"));
         }
@@ -3013,7 +3030,7 @@ CC_Term(CC* self)
                 if(String_Equals(operator, "**"))
                     CC_AssemB(self, String_Init("\tPow"));
                 else
-                    CC_Quit(self, "operator `%s` note supported", operator->value);
+                    CC_Quit(self, "operator %s not supported", operator->value);
             }
         }
         String_Kill(operator);
@@ -3037,24 +3054,21 @@ CC_Expression(CC* self)
         String* operator = CC_Operator(self);
         if(String_Equals(operator, "="))
         {
-            if(!storage)
-                CC_Quit(self, "the left hand side of operator `=` must be storage");
+            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tMov"));
         }
         else
         if(String_Equals(operator, "+="))
         {
-            if(!storage)
-                CC_Quit(self, "the left hand side of operator `+=` must be storage");
+            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tAdd"));
         }
         else
         if(String_Equals(operator, "-="))
         {
-            if(!storage)
-                CC_Quit(self, "the left hand side of operator `-=` must be storage");
+            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tSub"));
         }
@@ -3108,7 +3122,7 @@ CC_Expression(CC* self)
             if(String_Equals(operator, "&&"))
                 CC_AssemB(self, String_Init("\tAnd"));
             else
-                CC_Quit(self, "operator `%s` not supported", operator->value);
+                CC_Quit(self, "operator %s not supported", operator->value);
         }
         String_Kill(operator);
     }
@@ -3184,20 +3198,25 @@ CC_Foreach(CC* self, int64_t scoping)
     int64_t C = CC_Label(self);
     Queue* init = Queue_Init((Kill) String_Kill, (Copy) NULL);
     CC_Match(self, "(");
-    String* ident = CC_Ident(self);
+    String* item = CC_Ident(self);
     CC_Match(self, ":");
     CC_Expression(self);
     CC_Match(self, ")");
-    String* queue = String_Format("!queue_%s", ident->value);
-    String* index = String_Format("!index_%s", ident->value);
+
+    String* queue = String_Format("!queue_%s", item->value);
     CC_Local(self, queue);
     Queue_PshB(init, String_Copy(queue));
     CC_AssemB(self, String_Init("\tPsh 0"));
+
+    String* index = String_Format("!index_%s", item->value);
     CC_Local(self, index);
     Queue_PshB(init, String_Copy(index));
-    CC_AssemB(self, String_Init("\tPsh null")); // Reference type - temp storage
-    CC_Local(self, ident);
-    Queue_PshB(init, String_Copy(ident));
+
+    // NULL VALUE SERVES AS TEMPORARY STORAGE HOLDER FOR ITERATOR REFERENCE TYPE.
+    CC_AssemB(self, String_Init("\tPsh null"));
+
+    CC_Local(self, item);
+    Queue_PshB(init, String_Copy(item));
     CC_AssemB(self, String_Format("@l%ld:", A));
     CC_Ref(self, queue);
     CC_AssemB(self, String_Init("\tLen"));
@@ -3205,7 +3224,11 @@ CC_Foreach(CC* self, int64_t scoping)
     CC_AssemB(self, String_Init("\tEql"));
     CC_AssemB(self, String_Init("\tNot"));
     CC_AssemB(self, String_Format("\tBrf @l%ld", B));
-    CC_AssemB(self, String_Init("\tPop 1")); // Pops the temp storage
+
+    // THIS POP REMOVES THE UPDATED NULL VALUE SUCH THAT
+    // IT MAY BE PUSHED AGAIN NEXT ITERATION.
+    CC_AssemB(self, String_Init("\tPop 1"));
+
     CC_Ref(self, queue);
     CC_Ref(self, index);
     CC_AssemB(self, String_Init("\tGet"));
@@ -3279,10 +3302,10 @@ CC_Block(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
                 prime = CC_Branches(self, head, tail, scoping + scope->size, loop);
             else
             if(String_Equals(ident, "elif"))
-                CC_Quit(self, "the keyword elif must follow an if or elif block");
+                CC_Quit(self, "keyword elif must follow an if or elif block");
             else
             if(String_Equals(ident, "else"))
-                CC_Quit(self, "the keyword else must follow an if or elif block");
+                CC_Quit(self, "keyword else must follow an if or elif block");
             else
             if(String_Equals(ident, "while"))
                 CC_While(self, 0);
@@ -3305,7 +3328,7 @@ CC_Block(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
                     CC_AssemB(self, String_Format("\tJmp @l%ld", head));
                 }
                 else
-                    CC_Quit(self, "the keyword continue can only be used within while, for, or foreach loops");
+                    CC_Quit(self, "the keyword continue can only be used within a while, for, or foreach loop");
             }
             else
             if(String_Equals(ident, "break"))
@@ -3317,7 +3340,7 @@ CC_Block(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
                     CC_AssemB(self, String_Format("\tJmp @l%ld", tail));
                 }
                 else
-                    CC_Quit(self, "the keyword break can only be used within while, for, or foreach loops");
+                    CC_Quit(self, "the keyword break can only be used within a while, for, or foreach loop");
             }
             else
             if(CC_Next(self) == ':')
@@ -3500,7 +3523,7 @@ ASM_Dump(Queue* assembly)
             labels += 1;
         puts(assem->value);
     }
-    printf("instructions %ld : labels %ld\n", instructions, labels);
+    fprintf(stdout, "instructions %ld : labels %ld\n", instructions, labels);
 }
 
 static int64_t
@@ -3580,11 +3603,11 @@ VM_Kill(VM* self)
 static void
 VM_Data(VM* self)
 {
-    printf(".data:\n");
+    fprintf(stdout, ".data:\n");
     for(int64_t i = 0; i < self->data->size; i++)
     {
         Value* value = Queue_Get(self->data, i);
-        printf("%2lu : %2lu : ", i, value->refs);
+        fprintf(stdout, "%2lu : %2lu : ", i, value->refs);
         Value_Print(value, 0, 6);
     }
 }
@@ -3598,7 +3621,7 @@ VM_AssertRefs(VM* self)
         if(value->refs > 0)
         {
             String* print = Value_Sprint(value, true, 0, -1, -1);
-            VM_Quit(self, "the .data segment value `%s` contained %ld references at the time of exit", print->value, value->refs);
+            VM_Quit(self, "the .data segment value %s contained %ld references at the time of exit", print->value, value->refs);
         }
     }
 }
@@ -3624,7 +3647,7 @@ VM_ConvertEscs(VM* self, char* chars)
             int64_t esc = chars[i];
             ch = CC_String_EscToByte(esc);
             if(ch == -1)
-                VM_Quit(self, "an unknown escape character `0x%02X` was encountered\n", esc);
+                VM_Quit(self, "an unknown escape character 0x%02X was encountered\n", esc);
         }
         String_PshB(string, ch);
     }
@@ -3751,16 +3774,28 @@ VM_Ptr(VM* self, int64_t unused)
 {
     (void) unused;
     Value* back = Queue_Back(self->stack);
-    Value* pointer = Value_NewPointer(Pointer_Init(back));
-    VM_Pop(self, 1);
-    Queue_PshB(self->stack, pointer);
+    if(back->type != TYPE_FUNCTION)
+    {
+        Value* pointer = Value_NewPointer(Pointer_Init(back));
+        VM_Pop(self, 1);
+        Queue_PshB(self->stack, pointer);
+    }
 }
 
 static void
 VM_TypeExpect(VM* self, Type a, Type b)
 {
     if(a != b)
-        VM_Quit(self, "encountered type %s but expected type %s", Type_ToString(a), Type_ToString(b));
+        VM_Quit(self, "encountered type %s but expected type %s",
+                Type_ToString(a), Type_ToString(b));
+}
+
+static void
+VM_TypeAllign(VM* self, Type a, Type b, char* operator)
+{
+    if(a != b)
+        VM_Quit(self, "type mismatch with type %s and type %s with operator %s",
+                Type_ToString(a), Type_ToString(b), operator);
 }
 
 static void
@@ -3817,13 +3852,6 @@ VM_Ret(VM* self, int64_t unused)
 }
 
 static void
-VM_Lod(VM* self, int64_t unused)
-{
-    (void) unused;
-    Queue_PshB(self->stack, self->ret);
-}
-
-static void
 VM_Sav(VM* self, int64_t unused)
 {
     (void) unused;
@@ -3831,6 +3859,24 @@ VM_Sav(VM* self, int64_t unused)
     Value_Inc(value);
     self->ret = value;
     VM_Pop(self, 1);
+}
+
+static void
+VM_Lod(VM* self, int64_t unused)
+{
+    (void) unused;
+
+    // OPCODE (SAV) INCREMENTED REF COUNT - REFERENCE COUNTER DECREMENT
+    // SINCE TRANSITION FROM RETURN REGISTER TO STACK IS DIRECT.
+    Queue_PshB(self->stack, self->ret);
+}
+
+static void
+VM_Trv(VM* self, int64_t unused)
+{
+    (void) unused;
+    VM_Pop(self, 1);
+    VM_Lod(self, unused);
 }
 
 static void
@@ -3851,7 +3897,7 @@ VM_Mov(VM* self, int64_t unused)
     else
     {
         if(a->type == TYPE_NULL)
-            VM_Quit(self, "values cannot be moved into null storage. Value type was `%s`", Type_ToString(b->type));
+            VM_Quit(self, "values cannot be moved into null storage. Value type was %s", Type_ToString(b->type));
         if(a != b)
         {
             Type_Kill(a->type, &a->of);
@@ -3963,11 +4009,10 @@ VM_Add(VM* self, int64_t unused)
             case TYPE_BOOL:
             case TYPE_NULL:
             case TYPE_FILE:
-                VM_Quit(self, "type %s not supported with operator `+`", Type_ToString(a->type));
+                VM_Quit(self, "type %s not supported with nperator +", Type_ToString(a->type));
             }
         else
-        if(a->type != b->type)
-            VM_Quit(self, "type mismatch with operator `+`");
+            VM_TypeAllign(self, a->type, b->type, "+");
         VM_Pop(self, 1);
     }
 }
@@ -4013,11 +4058,10 @@ VM_Sub(VM* self, int64_t unused)
             case TYPE_BOOL:
             case TYPE_NULL:
             case TYPE_FILE:
-                VM_Quit(self, "type %s not supported with operator `-`", Type_ToString(a->type));
+                VM_Quit(self, "type %s not supported with operator -", Type_ToString(a->type));
             }
         else
-        if(a->type != b->type)
-            VM_Quit(self, "type mismatch with operator `-`");
+            VM_TypeAllign(self, a->type, b->type, "-");
         VM_Pop(self, 1);
     }
 }
@@ -4029,8 +4073,7 @@ VM_Mul(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `*`");
+    VM_TypeAllign(self, a->type, b->type, "*");
     a->of.number *= b->of.number;
     VM_Pop(self, 1); 
 }
@@ -4042,8 +4085,7 @@ VM_Div(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `/`");
+    VM_TypeAllign(self, a->type, b->type, "/");
     if(b->of.number == 0)
         VM_Quit(self, "cannot divide by zero");
     a->of.number /= b->of.number;
@@ -4057,8 +4099,7 @@ VM_Idv(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `//`");
+    VM_TypeAllign(self, a->type, b->type, "//");
     if(b->of.number == 0)
         VM_Quit(self, "cannot divide by zero");
     a->of.number = (int64_t) a->of.number / (int64_t) b->of.number;
@@ -4072,8 +4113,7 @@ VM_Imd(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `%%`");
+    VM_TypeAllign(self, a->type, b->type, "%%");
     if(b->of.number == 0)
         VM_Quit(self, "cannot divide by zero");
     a->of.number = (int64_t) a->of.number % (int64_t) b->of.number;
@@ -4084,30 +4124,28 @@ static void
 VM_Vrt(VM* self, int64_t unused)
 {
     (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_FUNCTION);
-    VM_TypeExpect(self, b->type, TYPE_NUMBER);
-    int64_t args = b->of.number;
-    int64_t size = a->of.function->size;
-    if(size != args)
+    Value* size = Queue_Back(self->stack);
+    VM_TypeExpect(self, size->type, TYPE_NUMBER);
+    int64_t ofsize = size->of.number;
+    VM_Pop(self, 1);
+    Value* function = Queue_Get(self->stack, self->stack->size - ofsize - 1);
+    int64_t ofargs = function->of.function->size;
+    if(ofsize != ofargs)
     {  
-        char* name = a->of.function->name->value;
-        VM_Quit(self, "expected %ld arguments for indirect function call `%s` but encountered %ld arguments", size, name, args);
+        char* name = function->of.function->name->value;
+        VM_Quit(self, "expected %ld arguments for indirect function call %s but encountered %ld arguments", ofsize, name, ofargs);
     }
-    int64_t spds = b->of.number;
-    int64_t address = a->of.function->address;
-    VM_Pop(self, 2);
-    int64_t sp = self->stack->size - spds;
-    Queue_PshB(self->frame, Frame_Init(self->pc, sp, address));
-    self->pc = address;
+    VM_TypeExpect(self, function->type, TYPE_FUNCTION);
+    int64_t sp = self->stack->size - ofsize;
+    Queue_PshB(self->frame, Frame_Init(self->pc, sp, function->of.function->address));
+    self->pc = function->of.function->address;
 }
 
 static void
 VM_Run(VM*, bool arbitrary);
 
 static Value*
-VM_BSearch(VM* self, Queue* queue, Value* key, Value* diff)
+VM_BSearch(VM* self, Queue* queue, Value* key, Value* comparator)
 {
     int64_t low = 0;
     int64_t high = queue->size - 1;
@@ -4115,15 +4153,21 @@ VM_BSearch(VM* self, Queue* queue, Value* key, Value* diff)
     {
         int64_t mid = (low + high) / 2;
         Value* now = Queue_Get(queue, mid);
+        Value_Inc(comparator);
         Value_Inc(key);
         Value_Inc(now);
-        Value_Inc(diff);
+    
+        // OPCODE (VRT) EXPECTS CALLBACK AS THE FIRST ARGUMENT.
+        Queue_PshB(self->stack, comparator);
         Queue_PshB(self->stack, key);
         Queue_PshB(self->stack, now);
-        Queue_PshB(self->stack, diff);
         Queue_PshB(self->stack, Value_NewNumber(2));
         VM_Vrt(self, 0);
         VM_Run(self, true);
+
+        // POPS COMPARATOR - THIS IS A VIRTUAL (VRT) CALL - SEE OPCODE (TRV).
+        VM_Pop(self, 1);
+
         VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
         int64_t cmp = self->ret->of.number;
         Value_Kill(self->ret);
@@ -4159,7 +4203,7 @@ VM_Bsr(VM* self, int64_t unused)
 }
 
 static void
-VM_RangedSort(VM* self, Queue* queue, Value* compare, int64_t left, int64_t right)
+VM_RangedSort(VM* self, Queue* queue, Value* comparator, int64_t left, int64_t right)
 {
     if(left >= right)
         return;
@@ -4169,32 +4213,38 @@ VM_RangedSort(VM* self, Queue* queue, Value* compare, int64_t left, int64_t righ
     {
         Value* a = Queue_Get(queue, i);
         Value* b = Queue_Get(queue, left);
+        Value_Inc(comparator);
         Value_Inc(a);
         Value_Inc(b);
-        Value_Inc(compare);
+
+        // OPCODE (VRT) EXPECTS CALLBACK AS THE FIRST ARGUMENT.
+        Queue_PshB(self->stack, comparator);
         Queue_PshB(self->stack, a);
         Queue_PshB(self->stack, b);
-        Queue_PshB(self->stack, compare);
         Queue_PshB(self->stack, Value_NewNumber(2));
         VM_Vrt(self, 0);
         VM_Run(self, true);
+
+        // POPS comparator - THIS IS A VIRTUAL (VRT) CALL - SEE OPCODE (TRV).
+        VM_Pop(self, 1);
+
         VM_TypeExpect(self, self->ret->type, TYPE_BOOL);
         if(self->ret->of.boolean)
              Queue_Swap(queue, ++last, i);
         Value_Kill(self->ret);
     }
    Queue_Swap(queue, left, last);
-   VM_RangedSort(self, queue, compare, left, last - 1);
-   VM_RangedSort(self, queue, compare, last + 1, right);
+   VM_RangedSort(self, queue, comparator, left, last - 1);
+   VM_RangedSort(self, queue, comparator, last + 1, right);
 }
 
 static void
-VM_Sort(VM* self, Queue* queue, Value* compare)
+VM_Sort(VM* self, Queue* queue, Value* comparator)
 {
-    VM_TypeExpect(self, compare->type, TYPE_FUNCTION);
-    if(compare->of.function->size != 2)
-        VM_Quit(self, "expected 2 arguments for Sort's comparator but encountered %ld arguments", compare->of.function->size);
-    VM_RangedSort(self, queue, compare, 0, queue->size - 1);
+    VM_TypeExpect(self, comparator->type, TYPE_FUNCTION);
+    if(comparator->of.function->size != 2)
+        VM_Quit(self, "expected 2 arguments for Sort's comparator but encountered %ld arguments", comparator->of.function->size);
+    VM_RangedSort(self, queue, comparator, 0, queue->size - 1);
 }
 
 static void
@@ -4267,8 +4317,7 @@ VM_Lst(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `<`");
+    VM_TypeAllign(self, a->type, b->type, "<");
     bool boolean = Value_LessThan(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
@@ -4280,8 +4329,7 @@ VM_Lte(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `<=`");
+    VM_TypeAllign(self, a->type, b->type, "<=");
     bool boolean = Value_LessThanEqualTo(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
@@ -4293,8 +4341,7 @@ VM_Grt(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `>`");
+    VM_TypeAllign(self, a->type, b->type, ">");
     bool boolean = Value_GreaterThan(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
@@ -4306,8 +4353,7 @@ VM_Gte(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `>=`");
+    VM_TypeAllign(self, a->type, b->type, ">=");
     bool boolean = Value_GreaterThanEqualTo(a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_NewBool(boolean));
@@ -4319,8 +4365,7 @@ VM_And(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `&&`");
+    VM_TypeAllign(self, a->type, b->type, "&&");
     VM_TypeExpect(self, a->type, TYPE_BOOL);
     a->of.boolean = a->of.boolean && b->of.boolean;
     VM_Pop(self, 1);
@@ -4332,8 +4377,7 @@ VM_Lor(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `||`");
+    VM_TypeAllign(self, a->type, b->type, "||");
     VM_TypeExpect(self, a->type, TYPE_BOOL);
     a->of.boolean = a->of.boolean || b->of.boolean;
     VM_Pop(self, 1);
@@ -4450,13 +4494,13 @@ VM_Ins(VM* self, int64_t unused)
     Value* c = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_MAP);
     if(c->type == TYPE_NULL)
-        VM_Quit(self, "nulls cannot be inserted into maps. See key `%s`", b->of.string->value);
+        VM_Quit(self, "nulls cannot be inserted into maps. See key %s", b->of.string->value);
     if(b->type == TYPE_CHAR)
         Value_PromoteChar(b);
     if(b->type == TYPE_STRING)
         Map_Set(a->of.map, String_Copy(b->of.string), Value_Copy(c));
     else
-        VM_Quit(self, "type `%s` was attempted to be used as a map key - only strings may be used as keys", Type_ToString(b->type));
+        VM_Quit(self, "type %s was attempted to be used as a map key - only strings may be used as keys", Type_ToString(b->type));
     VM_Pop(self, 2);
 }
 
@@ -4570,7 +4614,7 @@ VM_Mod(VM* self, int64_t unused)
                     while(*c != '}')
                     {
                         if(CC_String_IsSpace(*c))
-                            VM_Quit(self, "spaces may not be inserted between `{` and `}` with formatted printing");
+                            VM_Quit(self, "spaces may not be inserted between { and } with formatted printing");
                         String_PshB(buffer, *c);
                         c += 1;
                     }
@@ -4590,7 +4634,7 @@ VM_Mod(VM* self, int64_t unused)
         Queue_PshB(self->stack, Value_NewString(formatted));
     }
     else
-        VM_Quit(self, "type %s and type %s not supported with modulus `%` operator", Type_ToString(a->type), Type_ToString(b->type));
+        VM_Quit(self, "type %s and type %s not supported with modulus % operator", Type_ToString(a->type), Type_ToString(b->type));
 }
 
 static void
@@ -4684,8 +4728,7 @@ VM_Pow(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    if(a->type != b->type)
-        VM_Quit(self, "type mismatch with operator `**`");
+    VM_TypeAllign(self, a->type, b->type, "**");
     a->of.number = pow(a->of.number, b->of.number);
     VM_Pop(self, 1);
 }
@@ -4802,8 +4845,8 @@ VM_Slc(VM* self, int64_t unused)
         VM_TypeExpect(self, a->type, TYPE_MAP);
         VM_TypeExpect(self, b->type, TYPE_STRING);
         VM_TypeExpect(self, c->type, TYPE_STRING);
-        if(!Map_Exists(a->of.map, b->of.string->value)) VM_Quit(self, "key `%s` does not exist with map slice", b->of.string->value); 
-        if(!Map_Exists(a->of.map, c->of.string->value)) VM_Quit(self, "key `%s` does not exist with map slice", c->of.string->value); 
+        if(!Map_Exists(a->of.map, b->of.string->value)) VM_Quit(self, "key %s does not exist with map slice", b->of.string->value); 
+        if(!Map_Exists(a->of.map, c->of.string->value)) VM_Quit(self, "key %s does not exist with map slice", c->of.string->value); 
         Value* keys = Map_Key(a->of.map);
         int64_t x = Queue_Index(keys->of.queue, 0, b, (Compare) Value_Equal);
         int64_t y = Queue_Index(keys->of.queue, x, c, (Compare) Value_Equal);
