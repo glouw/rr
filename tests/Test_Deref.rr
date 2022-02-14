@@ -1,0 +1,13 @@
+Main()
+{
+    a := 2;
+    b := 3;
+    c := &a;
+    Assert(*c == a);
+    c = &b;
+    Assert(*c == b);
+    d := {"key" : 1};
+    e := &(d);
+    Assert((*e).key == 1);
+    ret 0;
+}

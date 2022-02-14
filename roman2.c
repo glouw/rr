@@ -51,6 +51,7 @@ typedef enum
     TYPE_STRING,
     TYPE_NUMBER,
     TYPE_BOOL,
+    TYPE_POINTER,
     TYPE_NULL,
 }
 Type;
@@ -125,6 +126,12 @@ typedef struct
 }
 Map;
 
+typedef struct
+{
+    Value* value;
+}
+Pointer;
+
 typedef union
 {
     File* file;
@@ -133,6 +140,7 @@ typedef union
     Map* map;
     String* string;
     Char* character;
+    Pointer* pointer;
     double number;
     bool boolean;
 }
@@ -147,8 +155,7 @@ struct Value
 
 typedef enum
 {
-    FRONT,
-    BACK,
+    FRONT, BACK
 }
 End;
 
@@ -170,80 +177,12 @@ typedef enum
 Class;
 
 #define OPCODES \
-    X(Abs) \
-    X(Aco) \
-    X(Add) \
-    X(All) \
-    X(And) \
-    X(Any) \
-    X(Asi) \
-    X(Asr) \
-    X(Ata) \
-    X(Brf) \
-    X(Bsr) \
-    X(Cal) \
-    X(Cel) \
-    X(Cop) \
-    X(Cos) \
-    X(Del) \
-    X(Div) \
-    X(End) \
-    X(Eql) \
-    X(Ext) \
-    X(Fil) \
-    X(Flr) \
-    X(Fls) \
-    X(Get) \
-    X(Glb) \
-    X(God) \
-    X(Grt) \
-    X(Gte) \
-    X(Idv) \
-    X(Imd) \
-    X(Ins) \
-    X(Jmp) \
-    X(Key) \
-    X(Len) \
-    X(Lin) \
-    X(Loc) \
-    X(Lod) \
-    X(Log) \
-    X(Lor) \
-    X(Lst) \
-    X(Lte) \
-    X(Max) \
-    X(Mem) \
-    X(Min) \
-    X(Mod) \
-    X(Mov) \
-    X(Mul) \
-    X(Neq) \
-    X(Not) \
-    X(Opn) \
-    X(Pop) \
-    X(Pow) \
-    X(Prt) \
-    X(Psb) \
-    X(Psf) \
-    X(Psh) \
-    X(Qso) \
-    X(Ran) \
-    X(Red) \
-    X(Ref) \
-    X(Ret) \
-    X(Sav) \
-    X(Sin) \
-    X(Slc) \
-    X(Spd) \
-    X(Sqr) \
-    X(Srd) \
-    X(Str) \
-    X(Sub) \
-    X(Tan) \
-    X(Tim) \
-    X(Typ) \
-    X(Vrt) \
-    X(Wrt)
+    X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Brf) X(Bsr) X(Cal) X(Cel) \
+    X(Cop) X(Cos) X(Del) X(Div) X(Drf) X(End) X(Eql) X(Ext) X(Fil) X(Flr) X(Fls) X(Get) X(Glb) \
+    X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) X(Jmp) X(Key) X(Len) X(Lin) X(Loc) X(Lod) \
+    X(Log) X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) X(Not) \
+    X(Opn) X(Pop) X(Pow) X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) X(Red) X(Ref) X(Ret) X(Sav) \
+    X(Sin) X(Slc) X(Spd) X(Sqr) X(Srd) X(Str) X(Sub) X(Tan) X(Tim) X(Typ) X(Vrt) X(Wrt)
 
 typedef enum
 {
@@ -344,36 +283,6 @@ typedef struct
     int64_t args;
 }
 Handle;
-
-static String*
-Value_Sprint(Value*, bool newline, int64_t indents, int64_t width, int64_t precision);
-
-static Value*
-Value_NewQueue(void);
-
-static bool
-Value_LessThan(Value*, Value*);
-
-static Value*
-Value_NewString(String*);
-
-static void
-Value_Kill(Value*);
-
-static void
-CC_Expression(CC*);
-
-static bool
-CC_Factor(CC*);
-
-static void
-CC_Block(CC*, int64_t head, int64_t tail, int64_t scoping, bool loop);
-
-static void
-VM_Run(VM*, bool arbitrary);
-
-static Gen*
-Gen_Find(char* mnemonic);
 
 static void*
 Malloc(int64_t size)
@@ -1108,6 +1017,9 @@ Queue_Sort(Queue* self, Compare compare)
 }
 
 static String*
+Value_Sprint(Value*, bool newline, int64_t indents, int64_t width, int64_t precision);
+
+static String*
 Queue_Print(Queue* self, int64_t indents)
 {
     if(self->size == 0)
@@ -1470,6 +1382,15 @@ Map_Print(Map* self, int64_t indents)
     }
 }
 
+static bool
+Value_LessThan(Value*, Value*);
+
+static Value*
+Value_NewQueue(void);
+
+static Value*
+Value_NewString(String*);
+
 static Value*
 Map_Key(Map* self)
 {
@@ -1503,6 +1424,9 @@ Char_Init(Value* string, int64_t index)
 }
 
 static void
+Value_Kill(Value*);
+
+static void
 Char_Kill(Char* self)
 {
     Value_Kill(self->string);
@@ -1528,12 +1452,39 @@ Type_ToString(Type self)
         return "string";
     case TYPE_NUMBER:
         return "number";
+    case TYPE_POINTER:
+        return "pointer";
     case TYPE_BOOL:
         return "bool";
     case TYPE_NULL:
         return "null";
     }
     return "N/A";
+}
+
+static void Value_Dec(Value* self) { self->refs -= 1; }
+static void Value_Inc(Value* self) { self->refs += 1; }
+
+static void
+Pointer_Kill(Pointer* self)
+{
+    Value_Dec(self->value);
+    Free(self);
+}
+
+static Pointer*
+Pointer_Init(Value* value)
+{
+    Value_Inc(value);
+    Pointer* self = Malloc(sizeof(*self));
+    self->value = value;
+    return self;
+}
+
+static Pointer*
+Pointer_Copy(Pointer* other)
+{
+    return Pointer_Init(other->value);
 }
 
 static void
@@ -1552,6 +1503,9 @@ Type_Kill(Type type, Of* of)
         break;
     case TYPE_MAP:
         Map_Kill(of->map);
+        break;
+    case TYPE_POINTER:
+        Pointer_Kill(of->pointer);
         break;
     case TYPE_STRING:
         String_Kill(of->string);
@@ -1598,6 +1552,9 @@ Type_Copy(Value* copy, Value* self)
     case TYPE_MAP:
         copy->of.map = Map_Copy(self->of.map);
         break;
+    case TYPE_POINTER:
+        copy->of.pointer = Pointer_Copy(self->of.pointer);
+        break;
     case TYPE_STRING:
         copy->of.string = String_Copy(self->of.string);
         break;
@@ -1631,22 +1588,11 @@ Value_Len(Value* self)
     case TYPE_CHAR:
     case TYPE_NUMBER:
     case TYPE_BOOL:
+    case TYPE_POINTER:
     case TYPE_NULL:
         break;
     }
     return 0;
-}
-
-static void
-Value_Dec(Value* self)
-{
-    self->refs -= 1;
-}
-
-static void
-Value_Inc(Value* self)
-{
-    self->refs += 1;
 }
 
 static void
@@ -1686,6 +1632,8 @@ Value_Kill(Value* self)
     case TYPE_FUNCTION:                           \
         return a->of.function->size               \
            CMP b->of.function->size;              \
+    case TYPE_POINTER:                            \
+        break;                                    \
     case TYPE_NULL:                               \
         break;
 
@@ -1751,6 +1699,8 @@ Value_Equal(Value* a, Value* b)
             return *a->of.character->value == *b->of.character->value;
         case TYPE_NULL:
             return b->type == TYPE_NULL;
+        case TYPE_POINTER:
+            return a->of.pointer->value == b->of.pointer->value;
         }
     return false;
 }
@@ -1788,6 +1738,14 @@ Value_NewMap(void)
     Of of;
     of.map = Map_Init((Kill) Value_Kill, (Copy) Value_Copy);
     return Value_Init(of, TYPE_MAP);
+}
+
+static Value*
+Value_NewPointer(Pointer* pointer)
+{
+    Of of;
+    of.pointer = pointer;
+    return Value_Init(of, TYPE_POINTER);
 }
 
 static Value*
@@ -1878,6 +1836,9 @@ Value_Sprint(Value* self, bool newline, int64_t indents, int64_t width, int64_t 
         break;
     case TYPE_CHAR:
         String_Append(print, String_Format(indents == 0 ? "%c" : "\"%c\"", *self->of.character->value));
+        break;
+    case TYPE_POINTER:
+        String_Append(print, String_Format("%p", self->of.pointer->value));
         break;
     case TYPE_NULL:
         String_Appends(print, "null");
@@ -2385,8 +2346,7 @@ Module_Name(CC* self, char* postfix)
     return name;
 }
 
-static
-Handle Handles[] = {
+static Handle Handles[] = {
     { "Abs",     "Abs", 1 },
     { "Acos",    "Aco", 1 },
     { "All",     "All", 1 },
@@ -2549,6 +2509,9 @@ CC_Pops(CC* self, int64_t count)
 }
 
 static void
+CC_Expression(CC*);
+
+static void
 CC_ConsumeExpression(CC* self)
 {
     CC_Expression(self);
@@ -2660,6 +2623,17 @@ CC_Ref(CC* self, String* ident)
     else
     if(meta->class == CLASS_VARIABLE_LOCAL)
         CC_AssemB(self, String_Format("\tLoc %ld", meta->stack));
+}
+
+static bool
+CC_Factor(CC*);
+
+static void
+CC_Pointer(CC* self)
+{
+    CC_Match(self, "&");
+    CC_Factor(self);
+    CC_AssemB(self, String_Init("\tPtr"));
 }
 
 static void
@@ -2787,14 +2761,6 @@ CC_Queue(CC* self)
 }
 
 static void
-CC_Not(CC* self)
-{
-    CC_Match(self, "!");
-    CC_Factor(self);
-    CC_AssemB(self, String_Init("\tNot"));
-}
-
-static void
 CC_Direct(CC* self, bool negative)
 {
     String* number = CC_Number(self);
@@ -2890,6 +2856,17 @@ CC_DirectPos(CC* self)
     CC_Direct(self, false);
 }
 
+static void
+CC_Deref(CC* self)
+{
+    CC_Match(self, "*");
+    CC_Factor(self);
+    CC_AssemB(self, String_Init("\tDrf"));
+}
+
+static void
+CC_Not(CC*);
+
 static bool
 CC_Factor(CC* self)
 {
@@ -2923,12 +2900,26 @@ CC_Factor(CC* self)
     case '"':
         CC_String(self);
         break;
+    case '*':
+        CC_Deref(self);
+        break;
+    case '&':
+        CC_Pointer(self);
+        break;
     default:
         CC_Quit(self, "an unknown factor starting with `%c` was encountered", next);
         break;
     }
     storage &= CC_Resolve(self);
     return storage;
+}
+
+static void
+CC_Not(CC* self)
+{
+    CC_Match(self, "!");
+    CC_Factor(self);
+    CC_AssemB(self, String_Init("\tNot"));
 }
 
 static bool
@@ -3130,6 +3121,9 @@ CC_Label(CC* self)
     self->labels += 1;
     return label;
 }
+
+static void
+CC_Block(CC*, int64_t head, int64_t tail, int64_t scoping, bool loop);
 
 static void
 CC_Branch(CC* self, int64_t head, int64_t tail, int64_t end, int64_t scoping, bool loop)
@@ -3350,7 +3344,7 @@ CC_Block(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
 }
 
 static void
-CC_FunctionPrototype(CC* self, Queue* params, String* ident)
+CC_Prototype(CC* self, Queue* params, String* ident)
 {
     CC_Define(self, CLASS_FUNCTION_PROTOTYPE, params->size, ident, String_Copy(CC_CurrentFile(self)));
     Queue_Kill(params);
@@ -3373,7 +3367,7 @@ CC_Function(CC* self, String* ident)
         CC_AssemB(self, String_Init("\tRet"));
     }
     else
-        CC_FunctionPrototype(self, params, ident);
+        CC_Prototype(self, params, ident);
 }
 
 static void
@@ -3732,33 +3726,6 @@ VM_Redirect(VM* self, Map* labels, Opcode opcode)
     return opcode;
 }
 
-static VM*
-VM_Assemble(Queue* assembly, Queue* debug)
-{
-    int64_t size = 0;
-    Map* labels = ASM_Label(assembly, &size);
-    Queue* addresses = ASM_Flatten(labels);
-    VM* self = VM_Init(size, debug, addresses);
-    int64_t pc = 0;
-    for(int64_t i = 0; i < assembly->size; i++)
-    {
-        String* stub = Queue_Get(assembly, i);
-        if(stub->value[0] == '\t')
-        {
-            String* line = String_Init(stub->value + 1);
-            char* mnemonic = strtok(line->value, " \n");
-            Gen* gen = Gen_Find(mnemonic);
-            if(gen == NULL)
-                Quit("assembler unknown mnemonic %s", mnemonic);
-            self->instructions[pc] = VM_Redirect(self, labels, gen->opcode);
-            pc += 1;
-            String_Kill(line);
-        }
-    }
-    Map_Kill(labels);
-    return self;
-}
-
 static void
 VM_Cal(VM* self, int64_t address)
 {
@@ -3777,6 +3744,16 @@ VM_Cop(VM* self, int64_t unused)
     Value* copy = Value_Copy(back);
     VM_Pop(self, 1);
     Queue_PshB(self->stack, copy);
+}
+
+static void
+VM_Ptr(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* back = Queue_Back(self->stack);
+    Value* pointer = Value_NewPointer(Pointer_Init(back));
+    VM_Pop(self, 1);
+    Queue_PshB(self->stack, pointer);
 }
 
 static void
@@ -3981,6 +3958,7 @@ VM_Add(VM* self, int64_t unused)
                 a->of.number += b->of.number;
                 break;
             case TYPE_FUNCTION:
+            case TYPE_POINTER:
             case TYPE_CHAR:
             case TYPE_BOOL:
             case TYPE_NULL:
@@ -4028,6 +4006,7 @@ VM_Sub(VM* self, int64_t unused)
                 a->of.number = diff;
                 break;
             }
+            case TYPE_POINTER:
             case TYPE_FUNCTION:
             case TYPE_MAP:
             case TYPE_CHAR:
@@ -4123,6 +4102,9 @@ VM_Vrt(VM* self, int64_t unused)
     Queue_PshB(self->frame, Frame_Init(self->pc, sp, address));
     self->pc = address;
 }
+
+static void
+VM_Run(VM*, bool arbitrary);
 
 static Value*
 VM_BSearch(VM* self, Queue* queue, Value* key, Value* diff)
@@ -4622,6 +4604,18 @@ VM_Typ(VM* self, int64_t unused)
 }
 
 static void
+VM_Drf(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* back = Queue_Back(self->stack);
+    VM_TypeExpect(self, back->type, TYPE_POINTER);
+    Value* deref = back->of.pointer->value;
+    Value_Inc(deref);
+    VM_Pop(self, 1);
+    Queue_PshB(self->stack, deref);
+}
+
+static void
 VM_Del(VM* self, int64_t unused)
 {
     (void) unused;
@@ -4934,6 +4928,33 @@ Gen_Find(char* mnemonic)
 {
     Gen key = { .mnemonic = mnemonic };
     return bsearch(&key, Gens, LEN(Gens), sizeof(Gen), Gen_Compare);
+}
+
+static VM*
+VM_Assemble(Queue* assembly, Queue* debug)
+{
+    int64_t size = 0;
+    Map* labels = ASM_Label(assembly, &size);
+    Queue* addresses = ASM_Flatten(labels);
+    VM* self = VM_Init(size, debug, addresses);
+    int64_t pc = 0;
+    for(int64_t i = 0; i < assembly->size; i++)
+    {
+        String* stub = Queue_Get(assembly, i);
+        if(stub->value[0] == '\t')
+        {
+            String* line = String_Init(stub->value + 1);
+            char* mnemonic = strtok(line->value, " \n");
+            Gen* gen = Gen_Find(mnemonic);
+            if(gen == NULL)
+                Quit("assembler unknown mnemonic %s", mnemonic);
+            self->instructions[pc] = VM_Redirect(self, labels, gen->opcode);
+            pc += 1;
+            String_Kill(line);
+        }
+    }
+    Map_Kill(labels);
+    return self;
 }
 
 static void

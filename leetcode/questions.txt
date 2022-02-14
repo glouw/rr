@@ -1,26 +1,5 @@
 ------------------------------
 ------------------------------
-Integer to Roman 
-------------------------------
-Given an integer, convert it to a roman numeral.
-
-
-Input is guaranteed to be within the range from 1 to 3999.
-------------------------------
-------------------------------
-Roman to Integer 
-------------------------------
-Given a roman numeral, convert it to an integer.
-
-Input is guaranteed to be within the range from 1 to 3999.
-------------------------------
-------------------------------
-Longest Common Prefix 
-------------------------------
-Write a function to find the longest common prefix string amongst an array of strings.
-
-------------------------------
-------------------------------
 3Sum 
 ------------------------------
 Given an array S of n integers, are there elements a, b, c in S such that a + b + c = 0? Find all unique triplets in the array which gives the sum of zero.
@@ -9978,3 +9957,18 @@ Write the code that will take a string and make this conversion given a number o
 string convert(string text, int nRows);
 
 convert("PAYPALISHIRING", 3) should return "PAHNAPLSIIGYIR".
+
+------------------------------
+Integer to Roman 
+------------------------------
+Given an integer, convert it to a roman numeral.
+
+
+Input is guaranteed to be within the range from 1 to 3999.
+------------------------------
+------------------------------
+Roman to Integer 
+------------------------------
+Given a roman numeral, convert it to an integer.
+
+Input is guaranteed to be within the range from 1 to 3999.
