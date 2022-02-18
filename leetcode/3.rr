@@ -10,7 +10,7 @@
 
 IsPalidrome(value)
 {
-    s := String("{0.0}" % [value]);
+    s := "{0.0}" % [value];
     for(i := 0; i < Len(s) / 2; i += 1)
     {
         a := s[i];

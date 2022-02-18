@@ -177,12 +177,13 @@ typedef enum
 Class;
 
 #define OPCODES \
-    X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Brf) X(Bsr) X(Cal) X(Cel) \
-    X(Cop) X(Cos) X(Del) X(Div) X(Drf) X(End) X(Eql) X(Ext) X(Fil) X(Flr) X(Fls) X(Get) X(Glb) \
-    X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) X(Jmp) X(Key) X(Len) X(Lin) X(Loc) X(Lod) X(Log) \
-    X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) X(Not) X(Opn) X(Pop) \
-    X(Pow) X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) X(Red) X(Ref) X(Ret) X(Sav) X(Sin) \
-    X(Slc) X(Spd) X(Sqr) X(Srd) X(Str) X(Sub) X(Tan) X(Tim) X(Trv) X(Typ) X(Vrt) X(Wrt)
+    X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Bol) X(Brf) X(Bsr) \
+    X(Cal) X(Cel) X(Cop) X(Cos) X(Del) X(Div) X(Drf) X(End) X(Eql) X(Ext) X(Flr) X(Fls) \
+    X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) X(Jmp) X(Key) X(Len) X(Loc) \
+    X(Lod) X(Log) X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) \
+    X(Not) X(Num) X(Opn) X(Pop) X(Pow) X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) \
+    X(Red) X(Ref) X(Ret) X(Sav) X(Sin) X(Slc) X(Spd) X(Sqr) X(Srd) X(Sub) X(Tan) X(Tim) \
+    X(Trv) X(Typ) X(Vrt) X(Wrt)
 
 typedef enum
 {
@@ -1017,7 +1018,7 @@ Queue_Sort(Queue* self, Compare compare)
 }
 
 static String*
-Value_Sprint(Value*, bool newline, int64_t indents, int64_t width, int64_t precision);
+Value_Sprint(Value*, bool newline, int64_t indents, int64_t width, int64_t preci);
 
 static String*
 Queue_Print(Queue* self, int64_t indents)
@@ -1386,21 +1387,21 @@ static bool
 Value_LessThan(Value*, Value*);
 
 static Value*
-Value_NewQueue(void);
+Value_Queue(void);
 
 static Value*
-Value_NewString(String*);
+Value_String(String*);
 
 static Value*
 Map_Key(Map* self)
 {
-    Value* queue = Value_NewQueue();
+    Value* queue = Value_Queue();
     for(int64_t i = 0; i < Map_Buckets(self); i++)
     {
         Node* chain = self->bucket[i];
         while(chain)
         {
-            Value* string = Value_NewString(String_Copy(chain->key));
+            Value* string = Value_String(String_Copy(chain->key));
             Queue_PshB(queue->of.queue, string);
             chain = chain->next;
         }
@@ -1706,6 +1707,12 @@ Value_Equal(Value* a, Value* b)
     return false;
 }
 
+static bool
+Value_NotEqual(Value* a, Value* b)
+{
+    return !Value_Equal(a, b);
+}
+
 static Value*
 Value_Copy(Value* self)
 {
@@ -1726,7 +1733,7 @@ Value_Init(Of of, Type type)
 }
 
 static Value*
-Value_NewQueue(void)
+Value_Queue(void)
 {
     Of of;
     of.queue = Queue_Init((Kill) Value_Kill, (Copy) Value_Copy);
@@ -1734,7 +1741,7 @@ Value_NewQueue(void)
 }
 
 static Value*
-Value_NewMap(void)
+Value_Map(void)
 {
     Of of;
     of.map = Map_Init((Kill) Value_Kill, (Copy) Value_Copy);
@@ -1742,7 +1749,7 @@ Value_NewMap(void)
 }
 
 static Value*
-Value_NewPointer(Pointer* pointer)
+Value_Pointer(Pointer* pointer)
 {
     Of of;
     of.pointer = pointer;
@@ -1750,7 +1757,7 @@ Value_NewPointer(Pointer* pointer)
 }
 
 static Value*
-Value_NewFunction(Function* function)
+Value_Function(Function* function)
 {
     Of of;
     of.function = function;
@@ -1758,7 +1765,7 @@ Value_NewFunction(Function* function)
 }
 
 static Value*
-Value_NewChar(Char* character)
+Value_Char(Char* character)
 {
     Of of;
     of.character = character;
@@ -1766,7 +1773,7 @@ Value_NewChar(Char* character)
 }
 
 static Value*
-Value_NewString(String* string)
+Value_String(String* string)
 {
     Of of;
     of.string = string;
@@ -1774,7 +1781,7 @@ Value_NewString(String* string)
 }
 
 static Value*
-Value_NewNumber(double number)
+Value_Number(double number)
 {
     Of of;
     of.number = number;
@@ -1782,7 +1789,7 @@ Value_NewNumber(double number)
 }
 
 static Value*
-Value_NewBool(bool boolean)
+Value_Bool(bool boolean)
 {
     Of of;
     of.boolean = boolean;
@@ -1790,7 +1797,7 @@ Value_NewBool(bool boolean)
 }
 
 static Value*
-Value_NewFile(File* file)
+Value_File(File* file)
 {
     Of of;
     of.file = file;
@@ -1798,19 +1805,17 @@ Value_NewFile(File* file)
 }
 
 static Value*
-Value_NewNull(void)
+Value_Null(void)
 {
     Of of;
     return Value_Init(of, TYPE_NULL);
 }
 
 static String*
-Value_Sprint(Value* self, bool newline, int64_t indents, int64_t width, int64_t precision)
+Value_Sprint(Value* self, bool newline, int64_t indents, int64_t width, int64_t preci)
 {
-    if(width == -1)
-        width = 0;
-    if(precision == -1)
-        precision = 5;
+    if(width == -1) width = 0;
+    if(preci == -1) preci = 5;
     String* print = String_Init("");
     switch(self->type)
     {
@@ -1830,7 +1835,7 @@ Value_Sprint(Value* self, bool newline, int64_t indents, int64_t width, int64_t 
         String_Append(print, String_Format(indents == 0 ? "%*s" : "\"%*s\"", width, self->of.string->value));
         break;
     case TYPE_NUMBER:
-        String_Append(print, String_Format("%*.*f", width, precision, self->of.number));
+        String_Append(print, String_Format("%*.*f", width, preci, self->of.number));
         break;
     case TYPE_BOOL:
         String_Append(print, String_Format("%s", self->of.boolean ? "true" : "false"));
@@ -1851,9 +1856,9 @@ Value_Sprint(Value* self, bool newline, int64_t indents, int64_t width, int64_t 
 }
 
 static void
-Value_Print(Value* self, int64_t width, int64_t precision)
+Value_Print(Value* self, int64_t width, int64_t preci)
 {
-    String* out = Value_Sprint(self, false, 0, width, precision);
+    String* out = Value_Sprint(self, false, 0, width, preci);
     puts(out->value);
     String_Kill(out);
 }
@@ -2055,8 +2060,7 @@ CC_String_IsModule(int64_t c)
 static bool
 CC_String_IsOp(int64_t c)
 {
-    return c == '*' || c == '/' || c == '%' || c == '+' || c == '-' || c == '='
-        || c == '<' || c == '>' || c == '!' || c == '&' || c == '|' || c == '?';
+    return c == '*' || c == '/' || c == '%' || c == '+' || c == '-' || c == '=' || c == '<' || c == '>' || c == '!' || c == '&' || c == '|' || c == '?';
 }
 
 static bool
@@ -2155,22 +2159,14 @@ CC_String_EscToByte(int64_t ch)
 {
     switch(ch)
     {
-    case '"':
-        return '\"';
-    case '\\':
-        return '\\';
-    case '/':
-        return '/';
-    case 'b':
-        return '\b';
-    case 'f':
-        return '\f';
-    case 'n':
-        return '\n';
-    case 'r':
-        return '\r';
-    case 't':
-        return '\t';
+    case '"' : return '\"';
+    case '\\': return '\\';
+    case '/' : return '/';
+    case 'b' : return '\b';
+    case 'f' : return '\f';
+    case 'n' : return '\n';
+    case 'r' : return '\r';
+    case 't' : return '\t';
     }
     return -1;
 }
@@ -2355,6 +2351,7 @@ static Handle Handles[] = {
     { "Asin",    "Asi", 1 },
     { "Assert",  "Asr", 1 },
     { "Atan",    "Ata", 1 },
+    { "Bool",    "Bol", 1 },
     { "Bsearch", "Bsr", 3 },
     { "Ceil",    "Cel", 1 },
     { "Copy",    "Cop", 1 },
@@ -2364,8 +2361,8 @@ static Handle Handles[] = {
     { "Floor",   "Flr", 1 },
     { "Keys",    "Key", 1 },
     { "Len",     "Len", 1 },
-    { "Line",    "Lin", 0 },
     { "Log",     "Log", 1 },
+    { "Num",     "Num", 1 },
     { "Max",     "Max", 2 },
     { "Min",     "Min", 2 },
     { "Open",    "Opn", 2 },
@@ -2504,7 +2501,7 @@ CC_AssemF(CC* self, String* assem)
     CC_Assem(self, assem, FRONT);
 }
 
-void
+static void
 CC_Pops(CC* self, int64_t count)
 {
     if(count > 0)
@@ -2702,6 +2699,8 @@ CC_Resolve(CC* self)
                     slice = true;
                     storage = false;
                 }
+                else
+                    storage = true;
                 CC_Match(self, "]");
             }
             else
@@ -2711,6 +2710,7 @@ CC_Resolve(CC* self)
                 String* ident = CC_Ident(self);
                 CC_AssemB(self, String_Format("\tPsh \"%s\"", ident->value));
                 String_Kill(ident);
+                storage = true;
             }
             if(CC_Next(self) == ':')
             {
@@ -2804,10 +2804,8 @@ CC_Calling(CC* self, String* ident)
         CC_DirectCalling(self, ident, meta);
     else
     if(CC_IsVariable(meta->class))
-    {
         // LEAVE A REFERENCE VALUE ON THE STACK FOR CC_RESOLVE TO HANDLE.
         CC_Ref(self, ident);
-    }
     else
         CC_Quit(self, "identifier %s is not callable", ident->value);
 }
@@ -2942,7 +2940,7 @@ static void
 CC_StorageCheck(CC* self, String* operator, bool storage)
 {
     if(storage == false)
-        CC_Quit(self, "the left hand sideof operator %s must be storage", operator->value);
+        CC_Quit(self, "the left hand side of operator %s must be storage", operator->value);
 }
 
 static bool
@@ -3202,19 +3200,15 @@ CC_Foreach(CC* self, int64_t scoping)
     CC_Match(self, ":");
     CC_Expression(self);
     CC_Match(self, ")");
-
     String* queue = String_Format("!queue_%s", item->value);
     CC_Local(self, queue);
     Queue_PshB(init, String_Copy(queue));
     CC_AssemB(self, String_Init("\tPsh 0"));
-
     String* index = String_Format("!index_%s", item->value);
     CC_Local(self, index);
     Queue_PshB(init, String_Copy(index));
-
     // NULL VALUE SERVES AS TEMPORARY STORAGE HOLDER FOR ITERATOR REFERENCE TYPE.
     CC_AssemB(self, String_Init("\tPsh null"));
-
     CC_Local(self, item);
     Queue_PshB(init, String_Copy(item));
     CC_AssemB(self, String_Format("@l%ld:", A));
@@ -3224,11 +3218,8 @@ CC_Foreach(CC* self, int64_t scoping)
     CC_AssemB(self, String_Init("\tEql"));
     CC_AssemB(self, String_Init("\tNot"));
     CC_AssemB(self, String_Format("\tBrf @l%ld", B));
-
-    // THIS POP REMOVES THE UPDATED NULL VALUE SUCH THAT
-    // IT MAY BE PUSHED AGAIN NEXT ITERATION.
+    // THIS POP REMOVES THE UPDATED NULL VALUE SUCH THAT IT MAY BE PUSHED AGAIN NEXT ITERATION.
     CC_AssemB(self, String_Init("\tPop 1"));
-
     CC_Ref(self, queue);
     CC_Ref(self, index);
     CC_AssemB(self, String_Init("\tGet"));
@@ -3669,15 +3660,15 @@ VM_Store(VM* self, Map* labels, char* operand)
         Value* value = NULL;
         char ch = operand[0];
         if(ch == '[')
-            value = Value_NewQueue();
+            value = Value_Queue();
         else
         if(ch == '{')
-            value = Value_NewMap();
+            value = Value_Map();
         else
         if(ch == '"')
         {
             String* string = VM_ConvertEscs(self, operand);
-            value = Value_NewString(string);
+            value = Value_String(string);
         }
         else
         if(ch == '@')
@@ -3687,17 +3678,17 @@ VM_Store(VM* self, Map* labels, char* operand)
             int64_t* address = Map_Get(labels, name->value);
             if(address == NULL)
                 Quit("assembler label %s not defined", name);
-            value = Value_NewFunction(Function_Init(name, size, *address));
+            value = Value_Function(Function_Init(name, size, *address));
         }
         else
         if(ch == 't' || ch == 'f')
-            value = Value_NewBool(Equals(operand, "true") ? true : false);
+            value = Value_Bool(Equals(operand, "true") ? true : false);
         else
         if(ch == 'n')
-            value = Value_NewNull();
+            value = Value_Null();
         else
         if(CC_String_IsDigit(ch) || ch == '-')
-            value = Value_NewNumber(String_ToNumber(operand));
+            value = Value_Number(String_ToNumber(operand));
         else
             Quit("assembler unknown psh operand %s encountered", operand);
         Map_Set(self->data_dups, key, Int_Init(self->data->size));
@@ -3776,7 +3767,7 @@ VM_Ptr(VM* self, int64_t unused)
     Value* back = Queue_Back(self->stack);
     if(back->type != TYPE_FUNCTION)
     {
-        Value* pointer = Value_NewPointer(Pointer_Init(back));
+        Value* pointer = Value_Pointer(Pointer_Init(back));
         VM_Pop(self, 1);
         Queue_PshB(self->stack, pointer);
     }
@@ -3786,16 +3777,14 @@ static void
 VM_TypeExpect(VM* self, Type a, Type b)
 {
     if(a != b)
-        VM_Quit(self, "encountered type %s but expected type %s",
-                Type_ToString(a), Type_ToString(b));
+        VM_Quit(self, "encountered type %s but expected type %s", Type_ToString(a), Type_ToString(b));
 }
 
 static void
 VM_TypeAllign(VM* self, Type a, Type b, char* operator)
 {
     if(a != b)
-        VM_Quit(self, "type mismatch with type %s and type %s with operator %s",
-                Type_ToString(a), Type_ToString(b), operator);
+        VM_Quit(self, "type mismatch with type %s and type %s with operator %s", Type_ToString(a), Type_ToString(b), operator);
 }
 
 static void
@@ -3865,7 +3854,6 @@ static void
 VM_Lod(VM* self, int64_t unused)
 {
     (void) unused;
-
     // OPCODE (SAV) INCREMENTED REF COUNT - REFERENCE COUNTER DECREMENT
     // SINCE TRANSITION FROM RETURN REGISTER TO STACK IS DIRECT.
     Queue_PshB(self->stack, self->ret);
@@ -3908,26 +3896,67 @@ VM_Mov(VM* self, int64_t unused)
 }
 
 static void
+VM_Operate(VM* self, double (*exec)(double, double), char* operator)
+{
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    VM_TypeExpect(self, a->type, TYPE_NUMBER);
+    VM_TypeAllign(self, a->type, b->type, operator);
+    a->of.number = exec(a->of.number, b->of.number);
+    VM_Pop(self, 1);
+}
+
+static void
 VM_Math(VM* self, double (*math)(double))
 {
     Value* a = Queue_Back(self->stack);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     double value = math(a->of.number);
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewNumber(value));
+    Queue_PshB(self->stack, Value_Number(value));
 }
 
-static void VM_Abs(VM* self, int64_t unused) { (void) unused; VM_Math(self, fabs);  }
-static void VM_Tan(VM* self, int64_t unused) { (void) unused; VM_Math(self, tan);   }
-static void VM_Sin(VM* self, int64_t unused) { (void) unused; VM_Math(self, sin);   }
-static void VM_Cos(VM* self, int64_t unused) { (void) unused; VM_Math(self, cos);   }
-static void VM_Ata(VM* self, int64_t unused) { (void) unused; VM_Math(self, atan);  }
-static void VM_Asi(VM* self, int64_t unused) { (void) unused; VM_Math(self, asin);  }
-static void VM_Aco(VM* self, int64_t unused) { (void) unused; VM_Math(self, acos);  }
-static void VM_Log(VM* self, int64_t unused) { (void) unused; VM_Math(self, log);   }
-static void VM_Sqr(VM* self, int64_t unused) { (void) unused; VM_Math(self, sqrt);  }
-static void VM_Cel(VM* self, int64_t unused) { (void) unused; VM_Math(self, ceil);  }
+static void
+VM_Associate(VM* self, bool (*exec)(Value*, Value*))
+{
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    bool boolean = exec(a, b);
+    VM_Pop(self, 2);
+    Queue_PshB(self->stack, Value_Bool(boolean));
+}
+
+static bool Value_And(Value* a, Value* b) { return (a->type == TYPE_BOOL && b->type == TYPE_BOOL) ? (a->of.boolean && b->of.boolean) : false; }
+static bool Value_Lor(Value* a, Value* b) { return (a->type == TYPE_BOOL && b->type == TYPE_BOOL) ? (a->of.boolean || b->of.boolean) : false; }
+static double Number_Mul(double x, double y) { return x * y; }
+static double Number_Div(double x, double y) { return x / y; }
+static double Number_Pow(double x, double y) { return pow(x, y); }
+static double Number_Idv(double x, double y) { return (int64_t) x / (int64_t) y; }
+static double Number_Imd(double x, double y) { return (int64_t) x % (int64_t) y; }
+static void VM_Pow(VM* self, int64_t unused) { (void) unused; VM_Operate(self, Number_Pow, "**"); }
+static void VM_Mul(VM* self, int64_t unused) { (void) unused; VM_Operate(self, Number_Mul, "*"); }
+static void VM_Div(VM* self, int64_t unused) { (void) unused; VM_Operate(self, Number_Div, "/"); }
+static void VM_Idv(VM* self, int64_t unused) { (void) unused; VM_Operate(self, Number_Idv, "//"); }
+static void VM_Imd(VM* self, int64_t unused) { (void) unused; VM_Operate(self, Number_Imd, "%%"); }
+static void VM_Abs(VM* self, int64_t unused) { (void) unused; VM_Math(self, fabs); }
+static void VM_Tan(VM* self, int64_t unused) { (void) unused; VM_Math(self, tan); }
+static void VM_Sin(VM* self, int64_t unused) { (void) unused; VM_Math(self, sin); }
+static void VM_Cos(VM* self, int64_t unused) { (void) unused; VM_Math(self, cos); }
+static void VM_Ata(VM* self, int64_t unused) { (void) unused; VM_Math(self, atan); }
+static void VM_Asi(VM* self, int64_t unused) { (void) unused; VM_Math(self, asin); }
+static void VM_Aco(VM* self, int64_t unused) { (void) unused; VM_Math(self, acos); }
+static void VM_Log(VM* self, int64_t unused) { (void) unused; VM_Math(self, log); }
+static void VM_Sqr(VM* self, int64_t unused) { (void) unused; VM_Math(self, sqrt); }
+static void VM_Cel(VM* self, int64_t unused) { (void) unused; VM_Math(self, ceil); }
 static void VM_Flr(VM* self, int64_t unused) { (void) unused; VM_Math(self, floor); }
+static void VM_Lst(VM* self, int64_t unused) { (void) unused; VM_Associate(self, Value_LessThan); }
+static void VM_Lte(VM* self, int64_t unused) { (void) unused; VM_Associate(self, Value_LessThanEqualTo); }
+static void VM_Grt(VM* self, int64_t unused) { (void) unused; VM_Associate(self, Value_GreaterThan); }
+static void VM_Gte(VM* self, int64_t unused) { (void) unused; VM_Associate(self, Value_GreaterThanEqualTo); }
+static void VM_Eql(VM* self, int64_t unused) { (void) unused; VM_Associate(self, Value_Equal); }
+static void VM_Neq(VM* self, int64_t unused) { (void) unused; VM_Associate(self, Value_NotEqual); }
+static void VM_And(VM* self, int64_t unused) { (void) unused; VM_Associate(self, Value_And); }
+static void VM_Lor(VM* self, int64_t unused) { (void) unused; VM_Associate(self, Value_Lor); }
 
 static void
 VM_Psb(VM* self, int64_t unused)
@@ -4009,7 +4038,7 @@ VM_Add(VM* self, int64_t unused)
             case TYPE_BOOL:
             case TYPE_NULL:
             case TYPE_FILE:
-                VM_Quit(self, "type %s not supported with nperator +", Type_ToString(a->type));
+                VM_Quit(self, "type %s not supported with operator +", Type_ToString(a->type));
             }
         else
             VM_TypeAllign(self, a->type, b->type, "+");
@@ -4067,60 +4096,6 @@ VM_Sub(VM* self, int64_t unused)
 }
 
 static void
-VM_Mul(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    VM_TypeAllign(self, a->type, b->type, "*");
-    a->of.number *= b->of.number;
-    VM_Pop(self, 1); 
-}
-
-static void
-VM_Div(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    VM_TypeAllign(self, a->type, b->type, "/");
-    if(b->of.number == 0)
-        VM_Quit(self, "cannot divide by zero");
-    a->of.number /= b->of.number;
-    VM_Pop(self, 1);
-}
-
-static void
-VM_Idv(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    VM_TypeAllign(self, a->type, b->type, "//");
-    if(b->of.number == 0)
-        VM_Quit(self, "cannot divide by zero");
-    a->of.number = (int64_t) a->of.number / (int64_t) b->of.number;
-    VM_Pop(self, 1);
-}
-
-static void
-VM_Imd(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    VM_TypeAllign(self, a->type, b->type, "%%");
-    if(b->of.number == 0)
-        VM_Quit(self, "cannot divide by zero");
-    a->of.number = (int64_t) a->of.number % (int64_t) b->of.number;
-    VM_Pop(self, 1);
-}
-
-static void
 VM_Vrt(VM* self, int64_t unused)
 {
     (void) unused;
@@ -4156,18 +4131,15 @@ VM_BSearch(VM* self, Queue* queue, Value* key, Value* comparator)
         Value_Inc(comparator);
         Value_Inc(key);
         Value_Inc(now);
-    
         // OPCODE (VRT) EXPECTS CALLBACK AS THE FIRST ARGUMENT.
         Queue_PshB(self->stack, comparator);
         Queue_PshB(self->stack, key);
         Queue_PshB(self->stack, now);
-        Queue_PshB(self->stack, Value_NewNumber(2));
+        Queue_PshB(self->stack, Value_Number(2));
         VM_Vrt(self, 0);
         VM_Run(self, true);
-
         // POPS COMPARATOR - THIS IS A VIRTUAL (VRT) CALL - SEE OPCODE (TRV).
         VM_Pop(self, 1);
-
         VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
         int64_t cmp = self->ret->of.number;
         Value_Kill(self->ret);
@@ -4194,7 +4166,7 @@ VM_Bsr(VM* self, int64_t unused)
     Value* found = VM_BSearch(self, a->of.queue, b, c);
     VM_Pop(self, 3);
     if(found == NULL)
-        Queue_PshB(self->stack, Value_NewNull());
+        Queue_PshB(self->stack, Value_Null());
     else
     {
         Value_Inc(found);
@@ -4216,18 +4188,15 @@ VM_RangedSort(VM* self, Queue* queue, Value* comparator, int64_t left, int64_t r
         Value_Inc(comparator);
         Value_Inc(a);
         Value_Inc(b);
-
         // OPCODE (VRT) EXPECTS CALLBACK AS THE FIRST ARGUMENT.
         Queue_PshB(self->stack, comparator);
         Queue_PshB(self->stack, a);
         Queue_PshB(self->stack, b);
-        Queue_PshB(self->stack, Value_NewNumber(2));
+        Queue_PshB(self->stack, Value_Number(2));
         VM_Vrt(self, 0);
         VM_Run(self, true);
-
         // POPS comparator - THIS IS A VIRTUAL (VRT) CALL - SEE OPCODE (TRV).
         VM_Pop(self, 1);
-
         VM_TypeExpect(self, self->ret->type, TYPE_BOOL);
         if(self->ret->of.boolean)
              Queue_Swap(queue, ++last, i);
@@ -4257,7 +4226,7 @@ VM_Qso(VM* self, int64_t unused)
     VM_TypeExpect(self, b->type, TYPE_FUNCTION);
     VM_Sort(self, a->of.queue, b);
     VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewNull());
+    Queue_PshB(self->stack, Value_Null());
 }
 
 static void
@@ -4285,7 +4254,7 @@ VM_All(VM* self, int64_t unused)
         }
     }
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_Bool(boolean));
 }
 
 static void
@@ -4308,101 +4277,7 @@ VM_Any(VM* self, int64_t unused)
         }
     }
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewBool(boolean));
-}
-
-static void
-VM_Lst(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeAllign(self, a->type, b->type, "<");
-    bool boolean = Value_LessThan(a, b);
-    VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewBool(boolean));
-}
-
-static void
-VM_Lte(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeAllign(self, a->type, b->type, "<=");
-    bool boolean = Value_LessThanEqualTo(a, b);
-    VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewBool(boolean));
-}
-
-static void
-VM_Grt(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeAllign(self, a->type, b->type, ">");
-    bool boolean = Value_GreaterThan(a, b);
-    VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewBool(boolean));
-}
-
-static void
-VM_Gte(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeAllign(self, a->type, b->type, ">=");
-    bool boolean = Value_GreaterThanEqualTo(a, b);
-    VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewBool(boolean));
-}
-
-static void
-VM_And(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeAllign(self, a->type, b->type, "&&");
-    VM_TypeExpect(self, a->type, TYPE_BOOL);
-    a->of.boolean = a->of.boolean && b->of.boolean;
-    VM_Pop(self, 1);
-}
-
-static void
-VM_Lor(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeAllign(self, a->type, b->type, "||");
-    VM_TypeExpect(self, a->type, TYPE_BOOL);
-    a->of.boolean = a->of.boolean || b->of.boolean;
-    VM_Pop(self, 1);
-}
-
-static void
-VM_Eql(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    bool boolean = Value_Equal(a, b);
-    VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewBool(boolean));
-}
-
-static void
-VM_Neq(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    bool boolean = !Value_Equal(a, b);
-    VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_Bool(boolean));
 }
 
 static void
@@ -4461,18 +4336,8 @@ VM_Prt(VM* self, int64_t unused)
     String* print = Value_Sprint(value, false, 0, -1, -1);
     puts(print->value);
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewNumber(print->size));
+    Queue_PshB(self->stack, Value_Number(print->size));
     String_Kill(print);
-}
-
-static void
-VM_Str(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* value = Queue_Back(self->stack);
-    String* string = Value_Sprint(value, false, 0, -1, -1);
-    VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewString(string));
 }
 
 static void
@@ -4482,7 +4347,7 @@ VM_Len(VM* self, int64_t unused)
     Value* value = Queue_Back(self->stack);
     int64_t len = Value_Len(value);
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewNumber(len));
+    Queue_PshB(self->stack, Value_Number(len));
 }
 
 static void
@@ -4511,7 +4376,7 @@ VM_Ref(VM* self, int64_t unused)
     Value* a = Queue_Back(self->stack);
     int64_t refs = a->refs;
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewNumber(refs));
+    Queue_PshB(self->stack, Value_Number(refs));
 }
 
 static Value*
@@ -4532,7 +4397,7 @@ VM_IndexString(VM* self, Value* queue, Value* index)
     Char* character = Char_Init(queue, ind);
     if(character == NULL)
         VM_Quit(self, "string character access out of bounds with index %ld", ind);
-    Value* value = Value_NewChar(character);
+    Value* value = Value_Char(character);
     Value_Inc(queue);
     return value;
 }
@@ -4580,7 +4445,7 @@ VM_Get(VM* self, int64_t unused)
         VM_Quit(self, "type %s cannot be indexed", Type_ToString(b->type));
     VM_Pop(self, 2);
     if(value == NULL)
-        Queue_PshB(self->stack, Value_NewNull());
+        Queue_PshB(self->stack, Value_Null());
     else
         Queue_PshB(self->stack, value);
 }
@@ -4593,8 +4458,6 @@ VM_Mod(VM* self, int64_t unused)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type == TYPE_NUMBER && b->type == TYPE_NUMBER)
     {
-        if(b->of.number == 0)
-            VM_Quit(self, "cannot divide by zero");
         a->of.number = fmod(a->of.number, b->of.number);
         VM_Pop(self, 1);
     }
@@ -4631,7 +4494,7 @@ VM_Mod(VM* self, int64_t unused)
             String_PshB(formatted, *c);
         }
         VM_Pop(self, 2);
-        Queue_PshB(self->stack, Value_NewString(formatted));
+        Queue_PshB(self->stack, Value_String(formatted));
     }
     else
         VM_Quit(self, "type %s and type %s not supported with modulus % operator", Type_ToString(a->type), Type_ToString(b->type));
@@ -4644,7 +4507,7 @@ VM_Typ(VM* self, int64_t unused)
     Value* a = Queue_Back(self->stack);
     Type type = a->type;
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewString(String_Init(Type_ToString(type))));
+    Queue_PshB(self->stack, Value_String(String_Init(Type_ToString(type))));
 }
 
 static void
@@ -4694,7 +4557,7 @@ VM_Del(VM* self, int64_t unused)
     else
         VM_Quit(self, "type %s cannot be used as a deletion index", Type_ToString(b->type));
     VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewNull());
+    Queue_PshB(self->stack, Value_Null());
 }
 
 static void
@@ -4705,7 +4568,7 @@ VM_Mem(VM* self, int64_t unused)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     bool boolean = a == b;
     VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_Bool(boolean));
 }
 
 static void
@@ -4718,19 +4581,7 @@ VM_Opn(VM* self, int64_t unused)
     VM_TypeExpect(self, b->type, TYPE_STRING);
     File* file = File_Init(String_Copy(a->of.string), String_Copy(b->of.string));
     VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewFile(file));
-}
-
-static void
-VM_Pow(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_NUMBER);
-    VM_TypeAllign(self, a->type, b->type, "**");
-    a->of.number = pow(a->of.number, b->of.number);
-    VM_Pop(self, 1);
+    Queue_PshB(self->stack, Value_File(file));
 }
 
 static void
@@ -4754,7 +4605,7 @@ VM_Red(VM* self, int64_t unused)
         }
     }
     VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewString(buffer));
+    Queue_PshB(self->stack, Value_String(buffer));
 }
 
 static void
@@ -4769,7 +4620,7 @@ VM_Wrt(VM* self, int64_t unused)
     if(a->of.file->file)
         bytes = fwrite(b->of.string->value, sizeof(char), b->of.string->size, a->of.file->file);
     VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_NewNumber(bytes));
+    Queue_PshB(self->stack, Value_Number(bytes));
 }
 
 static int64_t
@@ -4799,10 +4650,8 @@ VM_Slc(VM* self, int64_t unused)
             VM_TypeExpect(self, b->type, TYPE_NUMBER);
             VM_TypeExpect(self, c->type, TYPE_NUMBER);
             int64_t len = a->of.string->size;
-            if(x == -1)
-                x = len - 1;
-            if(y == -1)
-                y = len - 1;
+            if(x == -1) x = len - 1;
+            if(y == -1) y = len - 1;
             if(x > y || x < 0)
                 VM_Quit(self, "string slice [%ld : %ld] not possible", x, y);
             if(y > len)
@@ -4814,7 +4663,7 @@ VM_Slc(VM* self, int64_t unused)
                 String_Resize(sub, size);
                 strncpy(sub->value, a->of.string->value + x, size);
             }
-            value = Value_NewString(sub);
+            value = Value_String(sub);
         }
         else
         if(a->type == TYPE_QUEUE)
@@ -4823,15 +4672,13 @@ VM_Slc(VM* self, int64_t unused)
             VM_TypeExpect(self, b->type, TYPE_NUMBER);
             VM_TypeExpect(self, c->type, TYPE_NUMBER);
             int64_t len = a->of.queue->size;
-            if(x == -1)
-                x = len - 1;
-            if(y == -1)
-                y = len - 1;
+            if(x == -1) x = len - 1;
+            if(y == -1) y = len - 1;
             if(x > y || x < 0)
                 VM_Quit(self, "queue slice [%ld : %ld] not possible", x, y);
             if(y > len)
                 VM_Quit(self, "queue slice [%ld : %ld] not possible - right bound larger than queue of size %ld", x, y, len);
-            value = Value_NewQueue();
+            value = Value_Queue();
             for(int64_t i = x; i < y; i++)
                 Queue_PshB(value->of.queue, Value_Copy(Queue_Get(a->of.queue, i)));
         }
@@ -4841,7 +4688,7 @@ VM_Slc(VM* self, int64_t unused)
     else
     if(b->type == TYPE_STRING)
     {
-        value = Value_NewMap();
+        value = Value_Map();
         VM_TypeExpect(self, a->type, TYPE_MAP);
         VM_TypeExpect(self, b->type, TYPE_STRING);
         VM_TypeExpect(self, c->type, TYPE_STRING);
@@ -4865,6 +4712,33 @@ VM_Slc(VM* self, int64_t unused)
 }
 
 static void
+VM_Num(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* a = Queue_Back(self->stack);
+    VM_TypeExpect(self, a->type, TYPE_STRING);
+    double number = String_ToNumber(a->of.string->value);
+    VM_Pop(self, 1);
+    Queue_PshB(self->stack, Value_Number(number));
+}
+
+static void
+VM_Bol(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* a = Queue_Back(self->stack);
+    VM_TypeExpect(self, a->type, TYPE_STRING);
+    if(String_IsBoolean(a->of.string))
+    {
+        bool boolean = String_Equals(a->of.string, "true");
+        VM_Pop(self, 1);
+        Queue_PshB(self->stack, Value_Bool(boolean));
+    }
+    else
+        VM_Quit(self, "cannot convert %s to boolean", a->of.string->value);
+}
+
+static void
 VM_God(VM* self, int64_t unused)
 {
     (void) unused;
@@ -4872,7 +4746,7 @@ VM_God(VM* self, int64_t unused)
     VM_TypeExpect(self, a->type, TYPE_FILE);
     bool boolean = a->of.file->file != NULL;
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewBool(boolean));
+    Queue_PshB(self->stack, Value_Bool(boolean));
 }
 
 static void
@@ -4894,15 +4768,14 @@ VM_Ext(VM* self, int64_t unused)
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     exit(a->of.number);
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewNull());
+    Queue_PshB(self->stack, Value_Null());
 }
 
 static void
 VM_Tim(VM* self, int64_t unused)
 {
     (void) unused;
-    double us = Microseconds();
-    Queue_PshB(self->stack, Value_NewNumber(us));
+    Queue_PshB(self->stack, Value_Number(Microseconds()));
 }
 
 static void
@@ -4913,7 +4786,7 @@ VM_Srd(VM* self, int64_t unused)
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     srand(a->of.number);
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewNull());
+    Queue_PshB(self->stack, Value_Null());
 }
 
 static void
@@ -4921,23 +4794,7 @@ VM_Ran(VM* self, int64_t unused)
 {
     (void) unused;
     double number = rand();
-    Queue_PshB(self->stack, Value_NewNumber(number));
-}
-
-static void
-VM_Lin(VM* self, int64_t unused)
-{
-    (void) unused;
-    Debug* debug = Queue_Get(self->debug, self->pc);
-    Queue_PshB(self->stack, Value_NewNumber(debug->line));
-}
-
-static void
-VM_Fil(VM* self, int64_t unused)
-{
-    (void) unused;
-    Debug* debug = Queue_Get(self->debug, self->pc);
-    Queue_PshB(self->stack, Value_NewString(String_Init(debug->file)));
+    Queue_PshB(self->stack, Value_Number(number));
 }
 
 static void
@@ -4949,7 +4806,7 @@ VM_Asr(VM* self, int64_t unused)
     if(a->of.boolean == false)
         VM_Quit(self, "assert");
     VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_NewNull());
+    Queue_PshB(self->stack, Value_Null());
 }
 
 static const Gen Gens[] = {
@@ -5028,11 +4885,7 @@ VM_Run(VM* self, bool arbitrary)
 static Args
 Args_Parse(int64_t argc, char* argv[])
 {
-    Args self = {
-        .entry = NULL,
-        .dump = false,
-        .help = false,
-    };
+    Args self = { NULL, false, false };
     for(int64_t i = 1; i < argc; i++)
     {
         char* arg = argv[i];

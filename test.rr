@@ -1,0 +1,19 @@
+Closure(a)
+{
+    ret a;
+}
+
+Fun(a, b, c)
+{
+    Print(a);
+    Print(b);
+    Print(c);
+}
+
+Main()
+{
+    x := {"key" : 1 };
+    x["value"] := 2;
+    Print(x);
+    ret 0;
+}

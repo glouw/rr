@@ -15,7 +15,7 @@ CountDups(input)
     output := [];
     foreach(x : input)
     {
-        key := String(x);
+        key := "{}" % [x];
         if(count[key] == null)
         {
             count[key] := true;

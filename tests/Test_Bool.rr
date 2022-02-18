@@ -1,0 +1,6 @@
+Main()
+{
+    Assert(false == Bool("false"));
+    Assert(true == Bool("true"));
+    ret 0;
+}
