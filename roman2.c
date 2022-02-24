@@ -2633,8 +2633,6 @@ static void
 CC_Pointer(CC* self)
 {
     CC_Match(self, "&");
-    if(CC_Next(self) == '&')
-        CC_Quit(self, "multiple address-of operators & encountered");
     CC_Factor(self);
     CC_AssemB(self, String_Init("\tPtr"));
 }
@@ -2885,9 +2883,6 @@ CC_Factor(CC* self)
 {
     bool storage = false;
     int64_t next = CC_Next(self);
-    if(next == '!')
-        CC_Not(self);
-    else
     if(CC_String_IsDigit(next))
         CC_Direct(self, false);
     else
@@ -2895,6 +2890,9 @@ CC_Factor(CC* self)
         storage = CC_Identifier(self);
     else switch(next)
     {
+    case '!':
+        CC_Not(self);
+        break;
     case '-':
         CC_DirectNeg(self);
         break;
@@ -3105,6 +3103,15 @@ CC_Expression(CC* self)
         {
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tLte"));
+        }
+        else
+        if(String_Equals(operator, "->"))
+        {
+            String* ident = CC_Ident(self);
+            CC_AssemB(self, String_Init("\tDrf"));
+            CC_AssemB(self, String_Format("\tPsh \"%s\"", ident->value));
+            CC_AssemB(self, String_Init("\tGet"));
+            String_Kill(ident);
         }
         else
         {
@@ -4382,6 +4389,8 @@ VM_Ref(VM* self, int64_t unused)
 static Value*
 VM_IndexQueue(VM* self, Value* queue, Value* index)
 {
+    if(queue->of.queue->size == 0)
+        VM_Quit(self, "cannot index empty queue");
     int64_t ind = index->of.number;
     Value* value = Queue_Get(queue->of.queue, ind);
     if(value == NULL)
@@ -4391,14 +4400,16 @@ VM_IndexQueue(VM* self, Value* queue, Value* index)
 }
 
 static Value*
-VM_IndexString(VM* self, Value* queue, Value* index)
+VM_IndexString(VM* self, Value* string, Value* index)
 {
+    if(string->of.string->size == 0)
+        VM_Quit(self, "cannot index empty string");
     int64_t ind = index->of.number;
-    Char* character = Char_Init(queue, ind);
+    Char* character = Char_Init(string, ind);
     if(character == NULL)
         VM_Quit(self, "string character access out of bounds with index %ld", ind);
     Value* value = Value_Char(character);
-    Value_Inc(queue);
+    Value_Inc(string);
     return value;
 }
 

@@ -1,40 +1,65 @@
 # ------------------------------
 # Longest Common Prefix 
 # ------------------------------
-# Write a function to find the longest common prefix string amongst an array of strings.
-
-Node(char)
-{
-    ret {
-        "char": char,
-        "nodes" : [],
-    };
-}
+#
+# Write a function to find the longest common
+# prefix string amongst an array of strings.
 
 Insert(head, string)
 {
     neck := &head;
     foreach(char : string)
     {
-        node := Node(char);
-        node.nodes += node;
-        neck = node;
+        if((*neck)[char] == null)
+        {
+            (*neck)[char] := {};
+        }
+        neck = &(*neck)[char];
     }
 }
 
-Debug(head)
+Prefix(head)
 {
-    Print(head.char);
-    foreach(node : head.nodes)
+    longest := "";
+    chars := Keys(head);
+    foreach(char : chars)
     {
-        Debug(node);
+        prefix := char;
+        neck := &head[char];
+        while(true)
+        {
+            keys := Keys(*neck);
+            if((Len(keys) >= 2)  # Trie branch fork - this is a common prefix.
+            || (Len(keys) == 0)) # Trie branch end  - this is not a prefix.
+            {
+                break; 
+            }
+            next := keys[0];
+            prefix += next;
+            neck = &(*neck)[next];
+        }
+        if(Len(prefix) > Len(longest))
+        {
+            longest = prefix;
+        }
     }
+    ret longest;
 }
 
 Main()
 {
-    head := Node("");
-    Insert(head, "abc");
-    Debug(head);
+    head := {};
+    foreach(string : [
+        "fffffg",
+        "abdc",
+        "abde",
+        "fffff",
+        "abdeeeee",
+        "abdcee",
+        "fffffh"])
+        {
+            Insert(head, string);
+        }
+    Assert(Prefix(head) == "fffff");
     ret 0;
 }
