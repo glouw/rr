@@ -1,12 +1,7 @@
-/*
- * The Roman II Programming Language
- *
- * Copyright (c) 2021-2022 Gustav Louw. All rights reserved.
- * 
- * This work is licensed under the terms of the MIT license.  
- * For a copy, see <https://opensource.org/licenses/MIT>.
- *
- */
+// THE ROMAN II PROGRAMMING LANGUAGE
+// 
+// COPYRIGHT (C) 2021-2022 GUSTAV LOUW. ALL RIGHTS RESERVED.
+// THIS WORK IS LICENSED UNDER THE TERMS OF THE MIT LICENSE.  
 
 #include <string.h>
 #include <float.h>
