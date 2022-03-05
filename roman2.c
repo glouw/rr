@@ -554,7 +554,7 @@ String_Get(String* self, int64_t index)
 {
     if(index == -1)
         return &self->value[self->size - 1];
-    if(index >= self->size)
+    if(index >= self->size || index < 0)
         return NULL;
     return &self->value[index];
 }
@@ -733,7 +733,7 @@ Queue_Kill(Queue* self)
 static void**
 Queue_At(Queue* self, int64_t index)
 {
-    if(index < self->size)
+    if(index < self->size && index >= 0)
     {
         Block* block = *Queue_BlockF(self);
         int64_t at = index + block->a;
@@ -2665,6 +2665,15 @@ CC_Vrt(CC* self)
     CC_AssemB(self, String_Init("\tTrv"));
 }
 
+static void
+CC_Dot(CC* self)
+{
+    CC_Match(self, ".");
+    String* ident = CC_Ident(self);
+    CC_AssemB(self, String_Format("\tPsh \"%s\"", ident->value));
+    String_Kill(ident);
+}
+
 static bool
 CC_Resolve(CC* self)
 {
@@ -2699,10 +2708,7 @@ CC_Resolve(CC* self)
             else
             if(CC_Next(self) == '.')
             {
-                CC_Match(self, ".");
-                String* ident = CC_Ident(self);
-                CC_AssemB(self, String_Format("\tPsh \"%s\"", ident->value));
-                String_Kill(ident);
+                CC_Dot(self);
                 storage = true;
             }
             if(CC_Next(self) == ':')
@@ -2738,7 +2744,10 @@ CC_Map(CC* self)
     CC_Match(self, "{");
     while(CC_Next(self) != '}')
     {
-        CC_Expression(self);
+        if(CC_Next(self) == '.')
+            CC_Dot(self);
+        else
+            CC_Expression(self);
         if(CC_Next(self) == ':')
         {
             CC_Match(self, ":");
@@ -4503,7 +4512,7 @@ VM_Mod(VM* self, int64_t unused)
         Queue_PshB(self->stack, Value_String(formatted));
     }
     else
-        VM_Quit(self, "type %s and type %s not supported with modulus % operator", Type_ToString(a->type), Type_ToString(b->type));
+        VM_Quit(self, "type %s and type %s not supported with modulus %% operator", Type_ToString(a->type), Type_ToString(b->type));
 }
 
 static void

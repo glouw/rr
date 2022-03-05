@@ -1,131 +1,40 @@
-# ------------------------------
-# Single Element in a Sorted Array 
-# ------------------------------
-# 
-# Given a sorted array consisting of only integers where
-# every element appears twice except for one element which
-# appears once.
+# Given an array of integers nums and an integer target,
+# return indices of the two numbers such that they add up to target.
 #
-# Find this single element that appears only once. 
-# 
-# Your solution should run in O(log n) time and O(1) space.
+# You may assume that each input would have exactly one solution,
+# and you may not use the same element twice.
+#
+# You can return the answer in any order.
 
-IsEven(n)
-{ 
-    ret (Floor(n) % 2) == 0;
+Key(number)
+{
+    ret "{0.0}" % [number];
 }
 
-IsOdd(n)
+TwoSum(array, target)
 {
-    ret !IsEven(n);
-}
-
-Mid(l, r)
-{
-    ret l + (r - l) / 2;
-}
-
-FindRecursive(arr, l, r)
-{
-    if(l <= r)
+    have := {};
+    index := 0;
+    foreach(x : array)
     {
-        if(l == r)
+        want := target - x;
+        found := have[Key(want)];
+        if(found != null)
         {
-            ret arr[l];
+            ret [found, index];
         }
-        m := Mid(l, r);
-        if(IsEven(m))
-        {
-            if(arr[m] == arr[m + 1])
-            {
-                ret FindRecursive(arr, m + 1, r);
-            }
-            else
-            {
-                ret FindRecursive(arr, l, m);
-            }
-        }
-        else
-        {
-            if(arr[m] == arr[m + 1])
-            {
-                ret FindRecursive(arr, l, m);
-            }
-            else
-            {
-                ret FindRecursive(arr, m + 1, r);
-            }
-        }
+        have[Key(x)] := index;
+        index += 1;
     }
-    else
-    {
-        ret -1;
-    }
-}
-
-Find(arr, l, r)
-{
-    while(true)
-    {
-        if(l > r)
-        {
-            break;
-        }
-        m := Mid(l, r);
-        if(l == r)
-        {
-            ret arr[m];
-        }
-        if(IsEven(m))
-        {
-            if(arr[m] == arr[m + 1])
-            {
-                l = m + 1;
-            }
-            else
-            {
-                r = m;
-            }
-        }
-        else
-        {
-            if(arr[m] == arr[m + 1])
-            {
-                r = m;
-            }
-            else
-            {
-                l = m + 1;
-            }
-        }
-    }
-    ret -1;
-}
-
-Helper(func, queue)
-{
-    ret func(queue, 0, Len(queue) - 1);
+    ret null;
 }
 
 Main()
 {
-    Assert( 2 == Helper(Find,          [1, 1, 2,  3,  3,  4,  4, 8, 8]));
-    Assert(10 == Helper(Find,          [3, 3, 7,  7, 10, 11, 11]      ));
-    Assert( 7 == Helper(Find,          [3, 3, 7, 10, 10, 11, 11]      ));
-    Assert( 7 == Helper(Find,          [3, 3, 7,  9,  9]              ));
-    Assert( 7 == Helper(Find,          [3, 3, 7]                      ));
-    Assert( 3 == Helper(Find,          [3, 4, 4]                      ));
-    Assert( 1 == Helper(Find,          [1],                           ));
-    Assert(-1 == Helper(Find,          [2, 2],                        ));
-    Assert(-1 == Helper(Find,          [],                            ));
-    Assert( 2 == Helper(FindRecursive, [1, 1, 2,  3,  3,  4,  4, 8, 8]));
-    Assert(10 == Helper(FindRecursive, [3, 3, 7,  7, 10, 11, 11]      ));
-    Assert( 7 == Helper(FindRecursive, [3, 3, 7, 10, 10, 11, 11]      ));
-    Assert( 7 == Helper(FindRecursive, [3, 3, 7,  9,  9]              ));
-    Assert( 7 == Helper(FindRecursive, [3, 3, 7]                      ));
-    Assert( 3 == Helper(FindRecursive, [3, 4, 4]                      ));
-    Assert( 1 == Helper(FindRecursive, [1],                           ));
-    Assert(-1 == Helper(FindRecursive, [2, 2],                        ));
-    Assert(-1 == Helper(FindRecursive, [],                            ));
+    Assert(TwoSum([2, 7, 11, 15], 9) == [0, 1]);
+    Assert(TwoSum([3, 2, 4], 6) == [1, 2]);
+    Assert(TwoSum([3, 3], 6) == [0, 1]);
+    Assert(TwoSum([], 6) == null);
+    Assert(TwoSum([], -1) == null);
     ret 0;
 }
