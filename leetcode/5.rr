@@ -1,0 +1,110 @@
+# Given a string s containing just the characters '(', ')', '{', '}', '[' and ']',
+# determine if the input string is valid.
+# 
+# An input string is valid if:
+#     Open brackets must be closed by the same type of brackets.
+#     Open brackets must be closed in the correct order.
+
+Front(queue)
+{
+    ret queue[0];
+}
+
+Pop(queue)
+{
+    Del(queue, 0);
+}
+
+Match(queue, char)
+{
+    if(Front(queue) == char)
+    {
+        Pop(queue);
+        ret true;
+    }
+    else
+    {
+        ret false;
+    }
+}
+
+Parens(queue);
+
+Template(queue, x, y)
+{
+    a := Match(queue, x);
+    b := Parens(queue);
+    c := Match(queue, y);
+    ret a && b && c;
+}
+
+Curly(queue) { ret Template(queue, "{", "}"); }
+Squre(queue) { ret Template(queue, "[", "]"); }
+Round(queue) { ret Template(queue, "(", ")"); }
+
+Paren(queue)
+{
+    if(Front(queue) == "{") { ret Curly(queue); }
+    if(Front(queue) == "[") { ret Squre(queue); }
+    if(Front(queue) == "(") { ret Round(queue); }
+    ret false;
+}
+
+Opening(queue)
+{
+    ret (Front(queue) != "}")
+     && (Front(queue) != "]")
+     && (Front(queue) != ")");
+}
+
+Parens(queue)
+{
+    ok := true;
+    while(Opening(queue))
+    {
+        ok = ok && Paren(queue);
+        if(Len(queue) == 0)
+        {
+            break;
+        }
+    }
+    ret ok;
+}
+
+Queue(string)
+{
+    queue := [];
+    foreach(char : string)
+    {
+        if(char != " ") # IGNORE WHITE SPACE.
+        {
+            queue += char;
+        }
+    }
+    ret queue;
+}
+
+ValidParens(string)
+{
+    queue := Queue(string);
+    if((Len(queue) == 0) || (Len(queue) == 1))
+    {
+        ret false;
+    }
+    ret Parens(queue) && (Len(queue) == 0);
+}
+
+Main()
+{
+    Assert(ValidParens("()") == true);
+    Assert(ValidParens("()[]{}") == true);
+    Assert(ValidParens("(]") == false);
+    Assert(ValidParens("](") == false);
+    Assert(ValidParens("()()({[[{}()[]]]})()()") == true);
+    Assert(ValidParens("}()[]{}") == false);
+    Assert(ValidParens("") == false);
+    Assert(ValidParens("{") == false);
+    Assert(ValidParens("}") == false);
+    Assert(ValidParens("{}") == true);
+    ret 0;
+}

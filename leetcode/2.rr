@@ -1,0 +1,35 @@
+# Given an integer array nums, return true if any value appears at
+# least twice in the array, and return false if every element is distinct.
+
+Key(number)
+{
+    ret "{0.0}" % [number];
+}
+
+# O(N) Time
+# O(N) Space
+ContainsDuplicate(array)
+{
+    have := {};
+    foreach(x : array)
+    {
+        key := Key(x);
+        if(have[key] == null)
+        {
+            have[key] := true;
+        }
+        else
+        {
+            ret true;
+        }
+    }
+    ret false;
+}
+
+Main()
+{
+    Assert(ContainsDuplicate([1, 2, 3, 1]) == true);
+    Assert(ContainsDuplicate([1, 2, 3, 4]) == false);
+    Assert(ContainsDuplicate([1, 1, 1, 3, 3, 4, 3, 2, 4, 2]) == true);
+    ret 0;
+}

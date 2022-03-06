@@ -11,6 +11,8 @@ Key(number)
     ret "{0.0}" % [number];
 }
 
+# O(N) Time
+# O(N) Space
 TwoSum(array, target)
 {
     have := {};

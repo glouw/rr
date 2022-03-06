@@ -1,0 +1,36 @@
+# You are given an array prices where prices[i] is the
+# price of a given stock on the ith day.
+# You want to maximize your profit by choosing a single day
+# to buy one stock and choosing a different day in the future to sell that stock.
+# Return the maximum profit you can achieve from this transaction.
+# If you cannot achieve any profit, return 0.
+
+# O(N) Time
+# O(1) Space
+Profit(nums)
+{
+    max := 0;
+    x := 0;
+    y := 0;
+    while(y < Len(nums))
+    {
+        diff := nums[y] - nums[x];
+        if(diff <= 0)
+        {
+            x = y; # RESET SLIDING WINDOW.
+        }
+        elif(diff > max)
+        {
+            max = diff;
+        }
+        y += 1;
+    }
+    ret max;
+}
+
+Main()
+{
+    Assert(Profit([7, 1, 5, 3, 6, 4]) == 5);
+    Assert(Profit([7, 6, 4, 3, 1]) == 0);
+    ret 0;
+}
