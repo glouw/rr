@@ -1,0 +1,46 @@
+# Given an array of strings strs, group the anagrams together.
+# You can return the answer in any order.
+# An Anagram is a word or phrase formed by rearranging the letters of
+# a different word or phrase, typically using all the original letters exactly once.
+#
+# O(N) Time
+# O(N) Space
+
+Compare(a, b)
+{
+    ret a < b;
+}
+
+GroupAnagrams(anagrams)
+{
+    group := {};
+    foreach(anagram : anagrams)
+    {
+        key := anagram;
+        Qsort(key, Compare);
+        if(group[key] == null)
+        {
+            group[key] := [ anagram ];
+        }
+        else
+        {
+            group[key] += anagram;
+        }
+    }
+    out := [];
+    keys := Keys(group);
+    foreach(key : keys)
+    {
+        temp := group[key];
+        Qsort(temp, Compare); # NOT NECESSARY - ORDER DOES NOT MATTER
+        out += [ temp ];
+    }
+    Qsort(out, Compare); # NOT NECESSARY - ORDER DOES NOT MATTER
+    ret out;
+}
+
+Main()
+{
+    Assert(GroupAnagrams(["eat", "tea", "tan", "ate", "nat", "bat"]) == [["bat"], ["nat", "tan"], ["ate", "eat", "tea"]]);
+    ret 0;
+}

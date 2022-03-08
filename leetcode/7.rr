@@ -1,0 +1,38 @@
+# Product of Array Except Self
+# Given an integer array nums, return an array answer such that
+# answer[i] is equal to the product of all the elements of nums except nums[i].
+# The product of any prefix or suffix of nums is guaranteed to fit
+# in a 32-bit integer.
+# You must write an algorithm that runs in O(n) time and without
+# using the division operation.
+
+# O(N) Time
+# O(N) Space
+
+ProductOfArray(nums)
+{
+    out := [];
+    foreach(x : nums)
+    {
+        out += 0;
+    }
+    out[0] = 1;
+    for(i := 1; i < Len(nums); i += 1)
+    {
+        out[i] = out[i - 1] * nums[i - 1];
+    }
+    prod := 1;
+    for(i := Len(nums) - 1; i >= 0; i -= 1)
+    {
+        out[i] *= prod;
+        prod *= nums[i];
+    }
+    ret out;
+}
+
+Main()
+{
+    Assert(ProductOfArray([1, 2, 3, 4]) == [24, 12, 8, 6]);
+    Assert(ProductOfArray([-1, 1, 0, -3, 3]) == [0, 0, 9, 0, 0]);
+    ret 0;
+}

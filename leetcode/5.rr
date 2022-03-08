@@ -5,6 +5,9 @@
 #     Open brackets must be closed by the same type of brackets.
 #     Open brackets must be closed in the correct order.
 
+# O(N) Time
+# O(N) Space
+
 Front(queue)
 {
     ret queue[0];

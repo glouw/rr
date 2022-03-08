@@ -1,0 +1,50 @@
+# Given an integer array nums, return all the triplets
+# [nums[i], nums[j], nums[k]] such that i != j, i != k,
+# and j != k, and nums[i] + nums[j] + nums[k] == 0.
+# Notice that the solution set must not contain duplicate triplets.
+
+# O(NLogN) Time
+# O(N) Space
+
+Compare(a, b)
+{
+    ret a < b;
+}
+
+ThreeSum(array)
+{
+    out := [];
+    Qsort(array, Compare);
+    for(i := 0; i < Len(array) - 1; i += 1)
+    {
+        l := i + 1;
+        r := Len(array) - 1;
+        while(l < r)
+        {
+            a := array[i];
+            b := array[l];
+            c := array[r];
+            sum := a + b + c;
+            if(sum == 0)
+            {
+                out += [[a, b, c]];
+                break;
+            }
+            elif(sum < 0)
+            {
+                l += 1;
+            }
+            else # > 0.
+            {
+                r -= 1;
+            }
+        }
+    }
+    ret out;
+}
+
+Main()
+{
+    Assert(ThreeSum([-1, 0, 1, 2, -1, -4]) == [[-1, -1, 2], [-1, 0, 1]]);
+    ret 0;
+}

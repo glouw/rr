@@ -1,0 +1,15 @@
+Diff(a, b)
+{
+    ret a - b;
+}
+
+Main()
+{
+    string := "abcdefg";
+    pointer := &Bsearch(string, "e", Diff);
+    *pointer = "Z";
+    Assert(string == "abcdZfg");
+    test := &Bsearch("abcefg", "e", Diff);
+    Assert(*test == "e");
+    ret 0;
+}

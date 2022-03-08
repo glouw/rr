@@ -1,0 +1,36 @@
+# Given an integer array nums, find the contiguous subarray
+# (containing at least one number) which has the largest sum and return its sum.
+# A subarray is a contiguous part of an array.
+
+# O(N) Time
+# O(1) Space
+
+MaxSubArray(array)
+{
+    max := 0;
+    best := -2147483648;
+    foreach(x : array)
+    {
+        if(x > max)
+        {
+            max = x; # RESET SLIDING WINDOW.
+        }
+        else
+        {
+            max += x;
+        }
+        if(max > best)
+        {
+            best = max;
+        }
+    }
+    ret best;
+}
+
+Main()
+{
+    Assert(MaxSubArray([-2, 1, -3, 4, -1, 2, 1, -5, 4]) == 6);
+    Assert(MaxSubArray([1]) == 1);
+    Assert(MaxSubArray([5, 4, -1, 7, 8]) == 23);
+    ret 0;
+}

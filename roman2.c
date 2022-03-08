@@ -325,17 +325,12 @@ Microseconds(void)
     return tv.tv_sec * 1e6 + tv.tv_usec;
 }
 
-static void
-Quit(const char* const message, ...)
-{
-    va_list args;
-    va_start(args, message);
-    fprintf(stderr, "error: ");
-    vfprintf(stderr, message, args);
-    fprintf(stderr, "\n");
-    va_end(args);
-    exit(0xFF);
-}
+#define Quit(...) do {            \
+    fprintf(stderr, "error: ");   \
+    fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\n");        \
+    exit(0xFF);                   \
+} while(0)
 
 static void
 String_Alloc(String* self, int64_t cap)
@@ -1042,20 +1037,20 @@ Queue_Print(Queue* self, int64_t indents)
 static void*
 Queue_BSearch(Queue* self, void* key, Diff diff)
 {
-    int64_t low = 0;
-    int64_t high = self->size - 1;
-    while(low <= high)
+    int64_t lo = 0;
+    int64_t hi = self->size - 1;
+    while(lo <= hi)
     {
-        int64_t mid = (low + high) / 2;
+        int64_t mid = (lo + hi) / 2;
         void* now = Queue_Get(self, mid);
         int64_t cmp = diff(key, now);
         if(cmp == 0)
             return now;
         else
         if(cmp < 0)
-            high = mid - 1;
+            hi = mid - 1;
         else
-            low = mid + 1;
+            lo = mid + 1;
     }
     return NULL;
 }
@@ -1405,9 +1400,13 @@ Map_Key(Map* self)
     return queue;
 }
 
+static void Value_Dec(Value* self) { self->refs -= 1; }
+static void Value_Inc(Value* self) { self->refs += 1; }
+
 static Char*
 Char_Init(Value* string, int64_t index)
 {
+    Value_Inc(string);
     char* value = String_Get(string->of.string, index);
     if(value)
     {
@@ -1457,9 +1456,6 @@ Type_ToString(Type self)
     }
     return "N/A";
 }
-
-static void Value_Dec(Value* self) { self->refs -= 1; }
-static void Value_Inc(Value* self) { self->refs += 1; }
 
 static void
 Pointer_Kill(Pointer* self)
@@ -1859,7 +1855,7 @@ Value_Print(Value* self, int64_t width, int64_t preci)
 }
 
 static void
-Value_Sub(Value* a, Value* b)
+Value_SubStr(Value* a, Value* b)
 {
     char* x = a->of.character->value;
     char* y = b->of.string->value;
@@ -1992,17 +1988,19 @@ CC_CurrentFile(CC* self)
 }
 
 static void
-CC_Quit(CC* self, const char* const message, ...)
+CC_PrintLine(CC* self)
 {
     Module* back = Queue_Back(self->modules);
-    va_list args;
-    va_start(args, message);
     fprintf(stderr, "error: file %s: line %ld: ", back ? back->name->value : "?", back ? back->line : 0);
-    vfprintf(stderr, message, args);
-    fprintf(stderr, "\n");
-    va_end(args);
-    exit(0xFF);
 }
+
+#define CC_Quit(self, ...) do {   \
+    CC_PrintLine(self);           \
+    fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\n");        \
+    exit(0xFF);                   \
+}                                 \
+while(0)
 
 static bool
 CC_String_IsUpper(int64_t c)
@@ -2205,7 +2203,7 @@ CC_StringStream(CC* self)
             ch = CC_Read(self);
             int64_t byte = CC_String_EscToByte(ch);
             if(byte == -1)
-                CC_Quit(self, "an unknown escape char 0x%02X was encountered", ch);
+                CC_Quit(self, "an unknown escape char 0x%02lX was encountered", ch);
             String_PshB(str, ch);
         }
     }
@@ -2557,6 +2555,11 @@ CC_ParamRoll(CC* self)
     while(CC_Next(self) != ')')
     {
         String* ident = CC_Ident(self);
+        if(ident->size == 0)
+            CC_Quit(self, "param arg %ld malformed", params->size);
+        if(CC_Next(self) != ','
+        && CC_Next(self) != ')')
+            CC_Quit(self, "unknown characters following parameter %ld", params->size);
         Queue_PshB(params, ident);
         if(CC_Next(self) == ',')
             CC_Match(self, ",");
@@ -2923,7 +2926,7 @@ CC_Factor(CC* self)
         CC_Pointer(self);
         break;
     default:
-        CC_Quit(self, "an unknown factor starting with `%c` was encountered", next);
+        CC_Quit(self, "an unknown factor starting with `%c` was encountered", (char) next);
         break;
     }
     storage &= CC_Resolve(self);
@@ -3537,10 +3540,8 @@ Stack_Diff(void* a, void* b)
 }
 
 static void
-VM_Quit(VM* self, const char* const message, ...)
+VM_PrintTrace(VM* self)
 {
-    va_list args;
-    va_start(args, message);
     if(self->frame->size != 0)
     {
         for(int64_t i = 0; i < self->frame->size - 1; i++)
@@ -3555,18 +3556,18 @@ VM_Quit(VM* self, const char* const message, ...)
         }
         Debug* debug = Queue_Get(self->debug, self->pc);
         fprintf(stderr, "error: file %s: line %ld: ", debug->file, debug->line);
-        vfprintf(stderr, message, args);
-        fprintf(stderr, "\n");
     }
     else
-    {
         fprintf(stderr, "error: Main return type ");
-        vfprintf(stderr, message, args);
-        fprintf(stderr, "\n");
-    }
-    va_end(args);
-    exit(0xFF);
 }
+
+#define VM_Quit(self, ...) do {   \
+    VM_PrintTrace(self);          \
+    fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\n");        \
+    exit(0xFF);                   \
+}                                 \
+while(0)
 
 static VM*
 VM_Init(int64_t size, Queue* debug, Queue* addresses)
@@ -3649,7 +3650,7 @@ VM_ConvertEscs(VM* self, char* chars)
             int64_t esc = chars[i];
             ch = CC_String_EscToByte(esc);
             if(ch == -1)
-                VM_Quit(self, "an unknown escape character 0x%02X was encountered\n", esc);
+                VM_Quit(self, "an unknown escape character 0x%02lX was encountered\n", esc);
         }
         String_PshB(string, ch);
     }
@@ -3688,7 +3689,7 @@ VM_Store(VM* self, Map* labels, char* operand)
             int64_t size = String_ToUll(strtok(NULL, " \n"));
             int64_t* address = Map_Get(labels, name->value);
             if(address == NULL)
-                Quit("assembler label %s not defined", name);
+                Quit("assembler label %s not defined", name->value);
             value = Value_Function(Function_Init(name, size, *address));
         }
         else
@@ -3892,7 +3893,7 @@ VM_Mov(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
-        Value_Sub(a, b);
+        Value_SubStr(a, b);
     else
     {
         if(a->type == TYPE_NULL)
@@ -4091,10 +4092,17 @@ VM_Sub(VM* self, int64_t unused)
                 a->of.number = diff;
                 break;
             }
+            case TYPE_CHAR:
+            {
+                double diff = strcmp(a->of.character->value, b->of.string->value);
+                Type_Kill(a->type, &a->of);
+                a->type = TYPE_NUMBER;
+                a->of.number = diff;
+                break;
+            }
             case TYPE_POINTER:
             case TYPE_FUNCTION:
             case TYPE_MAP:
-            case TYPE_CHAR:
             case TYPE_BOOL:
             case TYPE_NULL:
             case TYPE_FILE:
@@ -4131,14 +4139,23 @@ static void
 VM_Run(VM*, bool arbitrary);
 
 static Value*
-VM_BSearch(VM* self, Queue* queue, Value* key, Value* comparator)
+Array_Get(Value* self, int64_t a)
 {
-    int64_t low = 0;
-    int64_t high = queue->size - 1;
-    while(low <= high)
+    if(self->type == TYPE_STRING)
+        return Value_String(String_FromChar(self->of.string->value[a]));
+    else
+        return Queue_Get(self->of.queue, a);
+}
+
+static Value*
+VM_BSearch(VM* self, Value* value, Value* key, Value* comparator)
+{
+    int64_t lo = 0;
+    int64_t hi = Value_Len(value) - 1;
+    while(lo <= hi)
     {
-        int64_t mid = (low + high) / 2;
-        Value* now = Queue_Get(queue, mid);
+        int64_t mid = (lo + hi) / 2;
+        Value* now = Array_Get(value, mid);
         Value_Inc(comparator);
         Value_Inc(key);
         Value_Inc(now);
@@ -4154,13 +4171,24 @@ VM_BSearch(VM* self, Queue* queue, Value* key, Value* comparator)
         VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
         int64_t cmp = self->ret->of.number;
         Value_Kill(self->ret);
+        if(value->type == TYPE_STRING)
+            Value_Kill(now);
         if(cmp == 0)
+        {
+            if(value->type == TYPE_STRING)
+            {
+                now = Value_Char(Char_Init(value, mid));
+                now->refs = -1; // RETURN EXPECTS REFERENCE, BUT CHARS ARE VALUE TYPE.
+            }
             return now;
+        }
         else
-        if(cmp < 0)
-            high = mid - 1;
-        else
-            low = mid + 1;
+        {
+            if(cmp < 0)
+                hi = mid - 1;
+            else
+                lo = mid + 1;
+        }
     }
     return NULL;
 }
@@ -4172,9 +4200,10 @@ VM_Bsr(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 3);
     Value* b = Queue_Get(self->stack, self->stack->size - 2);
     Value* c = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_QUEUE);
+    if(a->type != TYPE_STRING && a->type != TYPE_QUEUE)
+        VM_Quit(self, "Bsearch expects either string or queue");
     VM_TypeExpect(self, c->type, TYPE_FUNCTION);
-    Value* found = VM_BSearch(self, a->of.queue, b, c);
+    Value* found = VM_BSearch(self, a, b, c);
     VM_Pop(self, 3);
     if(found == NULL)
         Queue_PshB(self->stack, Value_Null());
@@ -4186,16 +4215,33 @@ VM_Bsr(VM* self, int64_t unused)
 }
 
 static void
-VM_RangedSort(VM* self, Queue* queue, Value* comparator, int64_t left, int64_t right)
+Char_Swap(String* self, int64_t a, int64_t b)
+{
+    char temp = self->value[a];
+    self->value[a] = self->value[b];
+    self->value[b] = temp;
+}
+
+static void
+Array_Swap(Value* self, int64_t a, int64_t b)
+{
+    if(self->type == TYPE_STRING)
+        Char_Swap(self->of.string, a, b);
+    else
+        Queue_Swap(self->of.queue, a, b);
+}
+
+static void
+VM_RangedSort(VM* self, Value* value, Value* comparator, int64_t left, int64_t right)
 {
     if(left >= right)
         return;
-    Queue_Swap(queue, left, (left + right) / 2);
+    Array_Swap(value, left, (left + right) / 2);
     int64_t last = left;
     for(int64_t i = left + 1; i <= right; i++)
     {
-        Value* a = Queue_Get(queue, i);
-        Value* b = Queue_Get(queue, left);
+        Value* a = Array_Get(value, i);
+        Value* b = Array_Get(value, left);
         Value_Inc(comparator);
         Value_Inc(a);
         Value_Inc(b);
@@ -4210,21 +4256,26 @@ VM_RangedSort(VM* self, Queue* queue, Value* comparator, int64_t left, int64_t r
         VM_Pop(self, 1);
         VM_TypeExpect(self, self->ret->type, TYPE_BOOL);
         if(self->ret->of.boolean)
-             Queue_Swap(queue, ++last, i);
+             Array_Swap(value, ++last, i);
         Value_Kill(self->ret);
+        if(value->type == TYPE_STRING)
+        {
+            Value_Kill(a);
+            Value_Kill(b);
+        }
     }
-   Queue_Swap(queue, left, last);
-   VM_RangedSort(self, queue, comparator, left, last - 1);
-   VM_RangedSort(self, queue, comparator, last + 1, right);
+   Array_Swap(value, left, last);
+   VM_RangedSort(self, value, comparator, left, last - 1);
+   VM_RangedSort(self, value, comparator, last + 1, right);
 }
 
 static void
-VM_Sort(VM* self, Queue* queue, Value* comparator)
+VM_Qsort(VM* self, Value* value, Value* comparator)
 {
     VM_TypeExpect(self, comparator->type, TYPE_FUNCTION);
     if(comparator->of.function->size != 2)
         VM_Quit(self, "expected 2 arguments for Sort's comparator but encountered %ld arguments", comparator->of.function->size);
-    VM_RangedSort(self, queue, comparator, 0, queue->size - 1);
+    VM_RangedSort(self, value, comparator, 0, Value_Len(value) - 1);
 }
 
 static void
@@ -4233,9 +4284,10 @@ VM_Qso(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_QUEUE);
+    if(a->type != TYPE_STRING && a->type != TYPE_QUEUE)
+        VM_Quit(self, "Qsort expects either string or queue");
     VM_TypeExpect(self, b->type, TYPE_FUNCTION);
-    VM_Sort(self, a->of.queue, b);
+    VM_Qsort(self, a, b);
     VM_Pop(self, 2);
     Queue_PshB(self->stack, Value_Null());
 }
@@ -4412,9 +4464,7 @@ VM_IndexString(VM* self, Value* string, Value* index)
     Char* character = Char_Init(string, ind);
     if(character == NULL)
         VM_Quit(self, "string character access out of bounds with index %ld", ind);
-    Value* value = Value_Char(character);
-    Value_Inc(string);
-    return value;
+    return Value_Char(character);
 }
 
 static Value*
