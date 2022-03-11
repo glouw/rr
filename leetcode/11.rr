@@ -1,0 +1,76 @@
+# Given the head of a singly linked list,
+# reverse the list, and return the reversed list.
+
+# O(N) Time
+# O(N) Space
+
+Node(value)
+{
+    ret { .value : value };
+}
+
+Push(nodes, node)
+{
+    node.next := nodes;
+    ret node;
+}
+
+Dump(nodes)
+{
+    node := &nodes;
+    while(node@next != null)
+    {
+        Print(node@value);
+        node = &node@next;
+    }
+}
+
+Reverse(nodes)
+{
+    out := {};
+    node := &nodes;
+    while(node@next != null)
+    {
+        out = Push(out, Node(node@value));
+        node = &node@next;
+    }
+    ret out;
+}
+
+Populate(with)
+{
+    nodes := {};
+    foreach(value : with)
+    {
+        nodes = Push(nodes, Node(value));
+    }
+    ret nodes;
+}
+
+Equal(nodes, with)
+{
+    index := 0;
+    node := &nodes;
+    equal := true;
+    while(node@next != null)
+    {
+        equal = equal && (with[index] == node@value);
+        node = &node@next;
+        index += 1;
+    }
+    ret equal;
+}
+
+Test(with)
+{
+    ret Equal(Reverse(Populate(with)), with);
+}
+
+Main()
+{
+    Assert(Test([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) == true);
+    Assert(Test([1, 2]) == true);
+    Assert(Test([0]) == true);
+    Assert(Test([]) == true);
+    ret 0;
+}

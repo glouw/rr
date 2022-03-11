@@ -1,0 +1,65 @@
+Node(value)
+{
+    ret &{ .value : value };
+}
+
+Push(nodes, node)
+{
+    node@next := nodes;
+    nodes = node;
+}
+
+Dump(nodes)
+{
+    node := nodes;
+    while(node != null)
+    {
+        Print(node@value);
+        node = node@next;
+    }
+}
+
+HasCycle(nodes)
+{
+    walker := nodes;
+    runner := nodes;
+    while(true)
+    {
+        if(runner@next == null)
+        {
+            break;
+        }
+        if(runner@next@next == null)
+        {
+            break;
+        }
+        walker = walker@next;
+        runner = runner@next@next;
+        if(walker == runner)
+        {
+            ret true;
+        }
+    }
+    ret false;
+}
+
+Build()
+{
+    nodes := Node(1);
+    Push(nodes, Node(2));
+    loop := nodes;
+    Push(nodes, Node(3));
+    Push(nodes, Node(4));
+    Push(nodes, Node(5));
+    Push(nodes, Node(6));
+    Push(nodes, Node(7));
+    Push(nodes, loop);
+    ret loop;
+}
+
+Main()
+{
+    nodes := Build();
+    Assert(HasCycle(nodes));
+    ret 0;
+}

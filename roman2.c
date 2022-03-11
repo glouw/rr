@@ -280,6 +280,8 @@ typedef struct
 }
 Handle;
 
+static bool Collecting = false;
+
 static void*
 Malloc(int64_t size)
 {
@@ -960,6 +962,13 @@ Queue_Append(Queue* self, Queue* other)
     }
 }
 
+static void
+Queue_Consume(Queue* self, Queue* other)
+{
+    Queue_Append(self, other);
+    Queue_Kill(other);
+}
+
 static bool
 Queue_Equal(Queue* self, Queue* other, Compare compare)
 {
@@ -1421,6 +1430,56 @@ Char_Init(Value* string, int64_t index)
 static void
 Value_Kill(Value*);
 
+static Queue*
+Value_Children(Value*);
+
+static Queue*
+Queue_Children(Queue* self)
+{
+    Queue* children = Queue_Init(NULL, NULL);
+    for(int64_t i = 0; i < self->size; i++)
+    {
+        Value* value = Queue_Get(self, i);
+        Queue_Consume(children, Value_Children(value));
+    }
+    return children;
+}
+
+static Queue*
+Map_Children(Map* self)
+{
+    Queue* children = Queue_Init(NULL, NULL);
+    for(int64_t i = 0; i < Map_Buckets(self); i++)
+    {
+        Node* bucket = self->bucket[i];
+        while(bucket)
+        {
+            Queue_Consume(children, Value_Children(bucket->value));
+            bucket = bucket->next;
+        }
+    }
+    return children;
+}
+
+static Queue*
+Value_Children(Value* self)
+{
+    Queue* children = Queue_Init(NULL, NULL);
+    Queue_PshB(children, self);
+    switch(self->type)
+    {
+    case TYPE_QUEUE:
+        Queue_Consume(children, Queue_Children(self->of.queue));
+        break;
+    case TYPE_MAP:
+        Queue_Consume(children, Map_Children(self->of.map));
+        break;
+    default:
+        break;
+    }
+    return children;
+}
+
 static void
 Char_Kill(Char* self)
 {
@@ -1460,7 +1519,8 @@ Type_ToString(Type self)
 static void
 Pointer_Kill(Pointer* self)
 {
-    Value_Kill(self->value);
+    if(!Collecting)
+        Value_Kill(self->value);
     Free(self);
 }
 
@@ -1588,13 +1648,32 @@ Value_Len(Value* self)
     return 0;
 }
 
+static Map* Garbage;
+
+static String*
+Value_Key(Value* self)
+{
+    char buffer[32];
+    sprintf(buffer, "%p", (void*) self);
+    return String_Init(buffer);
+}
+
+static void
+Value_Free(Value* self)
+{
+    Type_Kill(self->type, &self->of);
+    Free(self);
+}
+
 static void
 Value_Kill(Value* self)
 {
     if(self->refs == 0)
     {
-        Type_Kill(self->type, &self->of);
-        Free(self);
+        Value_Free(self);
+        String* key = Value_Key(self);
+        Map_Del(Garbage, key->value);
+        String_Kill(key);
     }
     else
         Value_Dec(self);
@@ -1705,22 +1784,24 @@ Value_NotEqual(Value* a, Value* b)
 }
 
 static Value*
-Value_Copy(Value* self)
-{
-    Value* copy = Malloc(sizeof(*copy));
-    copy->refs = 0;
-    Type_Copy(copy, self);
-    return copy;
-}
-
-static Value*
 Value_Init(Of of, Type type)
 {
     Value* self = Malloc(sizeof(*self));
+    Map_Set(Garbage, Value_Key(self), NULL);
     self->type = type;
     self->refs = 0;
     self->of = of;
     return self;
+}
+
+static Value*
+Value_Copy(Value* self)
+{
+    Of of;
+    Type type = TYPE_NULL;
+    Value* copy = Value_Init(of, type);
+    Type_Copy(copy, self);
+    return copy;
 }
 
 static Value*
@@ -2677,12 +2758,23 @@ CC_Dot(CC* self)
     String_Kill(ident);
 }
 
+static void
+CC_At(CC* self)
+{
+    CC_Match(self, "@");
+    String* ident = CC_Ident(self);
+    CC_AssemB(self, String_Init("\tDrf"));
+    CC_AssemB(self, String_Format("\tPsh \"%s\"", ident->value));
+    String_Kill(ident);
+}
+
 static bool
 CC_Resolve(CC* self)
 {
     bool storage = true;
     while(CC_Next(self) == '['
        || CC_Next(self) == '.'
+       || CC_Next(self) == '@'
        || CC_Next(self) == '(')
     {
         if(CC_Next(self) == '(')
@@ -2712,6 +2804,12 @@ CC_Resolve(CC* self)
             if(CC_Next(self) == '.')
             {
                 CC_Dot(self);
+                storage = true;
+            }
+            else
+            if(CC_Next(self) == '@')
+            {
+                CC_At(self);
                 storage = true;
             }
             if(CC_Next(self) == ':')
@@ -2861,13 +2959,6 @@ CC_Force(CC* self)
 }
 
 static void
-CC_DirectNeg(CC* self)
-{
-    CC_Match(self, "-");
-    CC_Direct(self, true);
-}
-
-static void
 CC_DirectPos(CC* self)
 {
     CC_Match(self, "+");
@@ -2901,7 +2992,8 @@ CC_Factor(CC* self)
         CC_Not(self);
         break;
     case '-':
-        CC_DirectNeg(self);
+        CC_Match(self, "-");
+        CC_Direct(self, true);
         break;
     case '+':
         CC_DirectPos(self);
@@ -3110,15 +3202,6 @@ CC_Expression(CC* self)
         {
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tLte"));
-        }
-        else
-        if(String_Equals(operator, "->"))
-        {
-            String* ident = CC_Ident(self);
-            CC_AssemB(self, String_Init("\tDrf"));
-            CC_AssemB(self, String_Format("\tPsh \"%s\"", ident->value));
-            CC_AssemB(self, String_Init("\tGet"));
-            String_Kill(ident);
         }
         else
         {
@@ -4014,11 +4097,7 @@ VM_Add(VM* self, int64_t unused)
             {
             case TYPE_QUEUE:
                 if(a == b)
-                {
-                    Queue* copy = Queue_Copy(b->of.queue);
-                    Queue_Append(a->of.queue, copy);
-                    Queue_Kill(copy);
-                }
+                    Queue_Consume(a->of.queue, Queue_Copy(b->of.queue));
                 else
                     Queue_Append(a->of.queue, b->of.queue);
                 break;
@@ -4975,9 +5054,68 @@ Args_Help(void)
     );
 }
 
+static Queue*
+Populate(void)
+{
+    Queue* family = Queue_Init((Kill) Queue_Kill, (Copy) NULL);
+    for(int64_t i = 0; i < Map_Buckets(Garbage); i++)
+    {
+        Node* chain = Garbage->bucket[i];
+        while(chain)
+        {
+            Value* value = (Value*) strtoull(chain->key->value, NULL, 16);
+            Queue* children = Value_Children(value);
+            Queue_PshB(family, children);
+            chain = chain->next;
+        }
+    }
+    return family;
+}
+
+static bool
+Value_Child(Value* value, Queue* children)
+{
+    for(int64_t i = 1; i < children->size; i++)
+        if(Queue_Get(children, i) == value)
+            return true;
+    return false;
+}
+
+static bool
+Value_ChildOfOther(Value* value, Queue* family, int64_t ignore)
+{
+    for(int64_t i = 0; i < family->size; i++)
+        if(i != ignore)
+        {
+            Queue* children = Queue_Get(family, i);
+            if(Value_Child(value, children))
+                return true;
+        }
+    return false;
+}
+
+static void
+Collect(void)
+{
+    Queue* family = Populate();
+    for(int64_t i = 0; i < family->size; i++)
+    {
+        Queue* children = Queue_Get(family, i);
+        Value* value = Queue_Get(children, 0);
+        if(!Value_ChildOfOther(value, family, i))
+        {
+            Collecting = true;
+            Value_Free(value);
+            Collecting = false;
+        }
+    }
+    Queue_Kill(family);
+}
+
 int
 main(int argc, char* argv[])
 {
+    Garbage = Map_Init(NULL, NULL);
     Handle_Sort();
     Args args = Args_Parse(argc, argv);
     if(args.entry)
@@ -5000,6 +5138,8 @@ main(int argc, char* argv[])
         VM_Kill(vm);
         CC_Kill(cc);
         String_Kill(entry);
+        Collect();
+        Map_Kill(Garbage);
         return retno;
     }
     else

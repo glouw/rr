@@ -22,9 +22,9 @@ Main()
     ];
     Qsort(a, Compare);
     b := &Bsearch(a, { "key" : key }, Diff);
-    Assert(b->value == want);
+    Assert(b@value == want);
     other := 11;
-    b->value = other;
-    Assert(b->value == other);
+    b@value = other;
+    Assert(b@value == other);
     ret 0;
 }

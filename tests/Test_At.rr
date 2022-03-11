@@ -1,0 +1,11 @@
+Main()
+{
+    x := {
+        "key" : 1
+    };
+    y := &x;
+    Assert(y@key == 1);
+    Assert((&x)@key == 1);
+    Assert((*&&x)@key == 1);
+    ret 0;
+}
