@@ -54,7 +54,11 @@ Build()
     Push(nodes, Node(6));
     Push(nodes, Node(7));
     Push(nodes, loop);
-    ret loop;
+    ret nodes;
+}
+
+Test()
+{
 }
 
 Main()

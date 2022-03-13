@@ -280,8 +280,6 @@ typedef struct
 }
 Handle;
 
-static bool Collecting = false;
-
 static void*
 Malloc(int64_t size)
 {
@@ -1427,58 +1425,89 @@ Char_Init(Value* string, int64_t index)
     return NULL;
 }
 
-static void
-Value_Kill(Value*);
-
-static Queue*
-Value_Children(Value*);
-
-static Queue*
-Queue_Children(Queue* self)
+static String*
+Value_Key(Value* self)
 {
-    Queue* children = Queue_Init(NULL, NULL);
-    for(int64_t i = 0; i < self->size; i++)
-    {
-        Value* value = Queue_Get(self, i);
-        Queue_Consume(children, Value_Children(value));
-    }
-    return children;
+    char buffer[32];
+    sprintf(buffer, "%p", (void*) self);
+    return String_Init(buffer);
 }
 
-static Queue*
-Map_Children(Map* self)
+static Map* Alloc;
+
+static bool Assembled = false;
+
+static void
+Value_Untrack(Value* self)
 {
-    Queue* children = Queue_Init(NULL, NULL);
+    if(Assembled)
+    {
+        String* key = Value_Key(self);
+        Map_Del(Alloc, key->value);
+        String_Kill(key);
+    }
+}
+
+static void
+Value_Track(Value* self)
+{
+    if(Assembled)
+        Map_Set(Alloc, Value_Key(self), self);
+}
+
+static void
+Value_Reach(Value*, Map*, bool deep);
+
+static void
+Queue_Reach(Queue* self, Map* reach, bool deep)
+{
+    for(int64_t i = 0; i < self->size; i++)
+        Value_Reach(Queue_Get(self, i), reach, deep);
+}
+
+static void
+Map_Reach(Map* self, Map* reach, bool deep)
+{
     for(int64_t i = 0; i < Map_Buckets(self); i++)
     {
         Node* bucket = self->bucket[i];
         while(bucket)
         {
-            Queue_Consume(children, Value_Children(bucket->value));
+            Value_Reach(bucket->value, reach, deep);
             bucket = bucket->next;
         }
     }
-    return children;
 }
 
-static Queue*
-Value_Children(Value* self)
+static void
+Value_Reach(Value* self, Map* reach, bool deep)
 {
-    Queue* children = Queue_Init(NULL, NULL);
-    Queue_PshB(children, self);
-    switch(self->type)
+    String* key = Value_Key(self);
+    if(Map_Exists(reach, key->value))
+        String_Kill(key);
+    else
     {
-    case TYPE_QUEUE:
-        Queue_Consume(children, Queue_Children(self->of.queue));
-        break;
-    case TYPE_MAP:
-        Queue_Consume(children, Map_Children(self->of.map));
-        break;
-    default:
-        break;
+        Map_Set(reach, key, self);
+        switch(self->type)
+        {
+        case TYPE_QUEUE:
+            Queue_Reach(self->of.queue, reach, deep);
+            break;
+        case TYPE_MAP:
+            Map_Reach(self->of.map, reach, deep);
+            break;
+        case TYPE_POINTER:
+            if(deep)
+                Value_Reach(self->of.pointer->value, reach, deep);
+            break;
+        default:
+            break;
+        }
     }
-    return children;
 }
+
+static void
+Value_Kill(Value*);
 
 static void
 Char_Kill(Char* self)
@@ -1516,10 +1545,12 @@ Type_ToString(Type self)
     return "N/A";
 }
 
+static bool Sweeping = false;
+
 static void
 Pointer_Kill(Pointer* self)
 {
-    if(!Collecting)
+    if(!Sweeping)
         Value_Kill(self->value);
     Free(self);
 }
@@ -1648,16 +1679,6 @@ Value_Len(Value* self)
     return 0;
 }
 
-static Map* Garbage;
-
-static String*
-Value_Key(Value* self)
-{
-    char buffer[32];
-    sprintf(buffer, "%p", (void*) self);
-    return String_Init(buffer);
-}
-
 static void
 Value_Free(Value* self)
 {
@@ -1670,10 +1691,8 @@ Value_Kill(Value* self)
 {
     if(self->refs == 0)
     {
+        Value_Untrack(self);
         Value_Free(self);
-        String* key = Value_Key(self);
-        Map_Del(Garbage, key->value);
-        String_Kill(key);
     }
     else
         Value_Dec(self);
@@ -1787,10 +1806,10 @@ static Value*
 Value_Init(Of of, Type type)
 {
     Value* self = Malloc(sizeof(*self));
-    Map_Set(Garbage, Value_Key(self), NULL);
     self->type = type;
     self->refs = 0;
     self->of = of;
+    Value_Track(self);
     return self;
 }
 
@@ -3836,6 +3855,79 @@ VM_Redirect(VM* self, Map* labels, Opcode opcode)
 }
 
 static void
+Map_Diff(Map* self, Map* other)
+{
+    for(int64_t i = 0; i < Map_Buckets(other); i++)
+    {
+        Node* bucket = other->bucket[i];
+        while(bucket)
+        {
+            Map_Del(self, bucket->key->value);
+            bucket = bucket->next;
+        }
+    }
+}
+
+static void
+Map_Debug(Map* self)
+{
+    for(int64_t i = 0; i < Map_Buckets(self); i++)
+    {
+        Node* bucket = self->bucket[i];
+        while(bucket)
+        {
+            Value* value = bucket->value;
+            printf("%s\n", Type_ToString(value->type));
+            bucket = bucket->next;
+        }
+    }
+}
+
+static Map*
+VM_Mark(VM* self)
+{
+    Map* reach = Map_Init((Kill) NULL, (Copy) NULL);
+    for(int64_t i = 0; i < self->stack->size; i++)
+    {
+        Value* value = Queue_Get(self->stack, i);
+        Value_Reach(value, reach, true);
+    }
+    Map* marked = Map_Copy(Alloc);
+    Map_Diff(marked, reach);
+    Map_Kill(reach);
+    return marked;
+}
+
+static Map*
+VM_Children(Map* marked)
+{
+    Map* children = Map_Init((Kill) NULL, (Copy) NULL);
+    for(int64_t i = 0; i < Map_Buckets(marked); i++)
+    {
+        Node* bucket = marked->bucket[i];
+        while(bucket)
+        {
+            Map* temp = Map_Init((Kill) NULL, (Copy) NULL);
+            Value* value = bucket->value;
+            Value_Reach(value, temp, false);
+            Map_Del(temp, bucket->key->value);
+            Map_Append(children, temp);
+            Map_Kill(temp);
+            bucket = bucket->next;
+        }
+    }
+    return children;
+}
+
+static Map*
+VM_Parents(Map* marked, Map* children)
+{
+    Map* parents = Map_Copy(marked);
+    Map_Diff(parents, children);
+    return parents;
+}
+
+static void
 VM_Cal(VM* self, int64_t address)
 {
     int64_t sp = self->stack->size - self->spds;
@@ -3946,12 +4038,43 @@ VM_Sav(VM* self, int64_t unused)
 }
 
 static void
+VM_Sweep(VM* self)
+{
+    Map* marked = VM_Mark(self);
+    Map* children = VM_Children(marked);
+    Map* parents = VM_Parents(marked, children);
+#if 0
+    puts("~~marked");
+    Map_Debug(marked);
+    puts("~~children");
+    Map_Debug(children);
+    puts("~~parents");
+    Map_Debug(parents);
+#endif
+    for(int64_t i = 0; i < Map_Buckets(parents); i++)
+    {
+        Node* bucket = parents->bucket[i];
+        while(bucket)
+        {
+            Sweeping = true;
+            Value_Kill(bucket->value);
+            Sweeping = false;
+            bucket = bucket->next;
+        }
+    }
+    Map_Kill(marked);
+    Map_Kill(children);
+    Map_Kill(parents);
+}
+
+static void
 VM_Lod(VM* self, int64_t unused)
 {
     (void) unused;
     // OPCODE (SAV) INCREMENTED REF COUNT - REFERENCE COUNTER DECREMENT
     // SINCE TRANSITION FROM RETURN REGISTER TO STACK IS DIRECT.
     Queue_PshB(self->stack, self->ret);
+    VM_Sweep(self);
 }
 
 static void
@@ -5054,78 +5177,21 @@ Args_Help(void)
     );
 }
 
-static Queue*
-Populate(void)
-{
-    Queue* family = Queue_Init((Kill) Queue_Kill, (Copy) NULL);
-    for(int64_t i = 0; i < Map_Buckets(Garbage); i++)
-    {
-        Node* chain = Garbage->bucket[i];
-        while(chain)
-        {
-            Value* value = (Value*) strtoull(chain->key->value, NULL, 16);
-            Queue* children = Value_Children(value);
-            Queue_PshB(family, children);
-            chain = chain->next;
-        }
-    }
-    return family;
-}
-
-static bool
-Value_Child(Value* value, Queue* children)
-{
-    for(int64_t i = 1; i < children->size; i++)
-        if(Queue_Get(children, i) == value)
-            return true;
-    return false;
-}
-
-static bool
-Value_ChildOfOther(Value* value, Queue* family, int64_t ignore)
-{
-    for(int64_t i = 0; i < family->size; i++)
-        if(i != ignore)
-        {
-            Queue* children = Queue_Get(family, i);
-            if(Value_Child(value, children))
-                return true;
-        }
-    return false;
-}
-
-static void
-Collect(void)
-{
-    Queue* family = Populate();
-    for(int64_t i = 0; i < family->size; i++)
-    {
-        Queue* children = Queue_Get(family, i);
-        Value* value = Queue_Get(children, 0);
-        if(!Value_ChildOfOther(value, family, i))
-        {
-            Collecting = true;
-            Value_Free(value);
-            Collecting = false;
-        }
-    }
-    Queue_Kill(family);
-}
-
 int
 main(int argc, char* argv[])
 {
-    Garbage = Map_Init(NULL, NULL);
     Handle_Sort();
     Args args = Args_Parse(argc, argv);
     if(args.entry)
     {
+        Alloc = Map_Init(NULL, NULL);
         String* entry = String_Init(args.entry);
         CC* cc = CC_Init();
         CC_Reserve(cc);
         CC_Including(cc, entry);
         CC_Parse(cc);
         VM* vm = VM_Assemble(cc->assembly, cc->debug);
+        Assembled = true;
         if(args.dump)
         {
             ASM_Dump(cc->assembly);
@@ -5135,11 +5201,11 @@ main(int argc, char* argv[])
             VM_Run(vm, false);
         int64_t retno = vm->retno;
         VM_AssertRefs(vm);
+        VM_Sweep(vm);
         VM_Kill(vm);
         CC_Kill(cc);
         String_Kill(entry);
-        Collect();
-        Map_Kill(Garbage);
+        Map_Kill(Alloc);
         return retno;
     }
     else

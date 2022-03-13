@@ -1,4 +1,4 @@
-DEBUG = 1
+DEBUG = 0
 
 ifeq (1,$(DEBUG))
 CFLAGS = -O0 -g -fsanitize=address -fsanitize=undefined
