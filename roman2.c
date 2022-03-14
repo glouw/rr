@@ -4887,7 +4887,7 @@ Queue_Index(Queue* self, int64_t from, void* value, Compare compare)
     for(int64_t x = from; x < self->size; x++)
         if(compare(Queue_Get(self, x), value))
             return x;
-    return SIZE_MAX;
+    return -1;
 }
 
 static Value*
