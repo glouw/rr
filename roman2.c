@@ -1145,19 +1145,24 @@ Map_Init(Kill kill, Copy copy)
     return self;
 }
 
+#define MAP_FOREACH(map, node, ...)               \
+    for(int64_t i = 0; i < Map_Buckets(map); i++) \
+    {                                             \
+        Node* node = map->bucket[i];              \
+        while(node)                               \
+        {                                         \
+            Node* next = node->next;              \
+            __VA_ARGS__                           \
+            node = next;                          \
+        }                                         \
+    }
+
 static void
 Map_Kill(Map* self)
 {
-    for(int64_t i = 0; i < Map_Buckets(self); i++)
-    {
-        Node* bucket = self->bucket[i];
-        while(bucket)
-        {
-            Node* next = bucket->next;
-            Node_Kill(bucket, self->kill);
-            bucket = next;
-        }
-    }
+    MAP_FOREACH(self, bucket,
+        Node_Kill(bucket, self->kill);
+    )
     Free(self->bucket);
     Free(self);
 }
@@ -1200,16 +1205,9 @@ Map_Rehash(Map* self)
 {
     Map* other = Map_Init(self->kill, self->copy);
     Map_Alloc(other, self->prime_index + 1);
-    for(int64_t i = 0; i < Map_Buckets(self); i++)
-    {
-        Node* bucket = self->bucket[i];
-        while(bucket)
-        {
-            Node* next = bucket->next;
-            Map_Emplace(other, bucket->key, bucket);
-            bucket = next;
-        }
-    }
+    MAP_FOREACH(self, bucket,
+        Map_Emplace(other, bucket->key, bucket);
+    )
     Free(self->bucket);
     *self = *other;
     Free(other);
@@ -1305,52 +1303,33 @@ static Map*
 Map_Copy(Map* self)
 {
     Map* copy = Map_Init(self->kill, self->copy);
-    for(int64_t i = 0; i < Map_Buckets(self); i++)
-    {
-        Node* chain = self->bucket[i];
-        while(chain)
-        {
-            Node* node = Node_Copy(chain, copy->copy);
-            Map_Emplace(copy, node->key, node);
-            chain = chain->next;
-        }
-    }
+    MAP_FOREACH(self, chain,
+        Node* node = Node_Copy(chain, copy->copy);
+        Map_Emplace(copy, node->key, node);
+        chain = chain->next;
+    )
     return copy;
 }
 
 static void
 Map_Append(Map* self, Map* other)
 {
-    for(int64_t i = 0; i < Map_Buckets(other); i++)
-    {
-        Node* chain = other->bucket[i];
-        while(chain)
-        {
-            Map_Set(self, String_Copy(chain->key), self->copy ? self->copy(chain->value) : chain->value);
-            chain = chain->next;
-        }
-    }
+    MAP_FOREACH(other, chain,
+        Map_Set(self, String_Copy(chain->key), self->copy ? self->copy(chain->value) : chain->value);
+    )
 }
 
 static bool
 Map_Equal(Map* self, Map* other, Compare compare)
 {
     if(self->size == other->size)
-    {
-        for(int64_t i = 0; i < Map_Buckets(self); i++)
-        {
-            Node* chain = self->bucket[i];
-            while(chain)
-            {
-                void* got = Map_Get(other, chain->key->value);
-                if(got == NULL)
-                    return false;
-                if(!compare(chain->value, got))
-                    return false;
-                chain = chain->next;
-            }
-        }
-    }
+        MAP_FOREACH(self, chain,
+            void* got = Map_Get(other, chain->key->value);
+            if(got == NULL)
+                return false;
+            if(!compare(chain->value, got))
+                return false;
+        )
     return true;
 }
 
@@ -1362,20 +1341,14 @@ Map_Print(Map* self, int64_t indents)
     else
     {
         String* print = String_Init("{\n");
-        for(int64_t i = 0; i < Map_Buckets(self); i++)
-        {
-            Node* bucket = self->bucket[i];
-            while(bucket)
-            {
-                String_Append(print, String_Indent(indents + 1));
-                String_Append(print, String_Format("\"%s\" : ", bucket->key->value));
-                String_Append(print, Value_Sprint(bucket->value, false, indents + 1, -1, -1));
-                if(i < self->size - 1)
-                    String_Appends(print, ",");
-                String_Appends(print, "\n");
-                bucket = bucket->next;
-            }
-        }
+        MAP_FOREACH(self, bucket,
+            String_Append(print, String_Indent(indents + 1));
+            String_Append(print, String_Format("\"%s\" : ", bucket->key->value));
+            String_Append(print, Value_Sprint(bucket->value, false, indents + 1, -1, -1));
+            if(i < self->size - 1)
+                String_Appends(print, ",");
+            String_Appends(print, "\n");
+        )
         String_Append(print, String_Indent(indents));
         String_Appends(print, "}");
         return print;
@@ -1395,16 +1368,11 @@ static Value*
 Map_Key(Map* self)
 {
     Value* queue = Value_Queue();
-    for(int64_t i = 0; i < Map_Buckets(self); i++)
-    {
-        Node* chain = self->bucket[i];
-        while(chain)
-        {
-            Value* string = Value_String(String_Copy(chain->key));
-            Queue_PshB(queue->of.queue, string);
-            chain = chain->next;
-        }
-    }
+    MAP_FOREACH(self, chain,
+        Value* string = Value_String(String_Copy(chain->key));
+        Queue_PshB(queue->of.queue, string);
+        chain = chain->next;
+    )
     Queue_Sort(queue->of.queue, (Compare) Value_LessThan);
     return queue;
 }
@@ -1470,15 +1438,9 @@ Queue_Reach(Queue* self, Map* reach, bool deep)
 static void
 Map_Reach(Map* self, Map* reach, bool deep)
 {
-    for(int64_t i = 0; i < Map_Buckets(self); i++)
-    {
-        Node* bucket = self->bucket[i];
-        while(bucket)
-        {
-            Value_Reach(bucket->value, reach, deep);
-            bucket = bucket->next;
-        }
-    }
+    MAP_FOREACH(self, bucket,
+        Value_Reach(bucket->value, reach, deep);
+    )
 }
 
 static void
@@ -1701,6 +1663,14 @@ Value_Kill(Value* self)
     }
     else
         Value_Dec(self);
+}
+
+static void
+Value_Collect(Value* self)
+{
+    Sweeping = true;
+    Value_Kill(self);
+    Sweeping = false;
 }
 
 #define COMPARE_TABLE(CMP)                        \
@@ -3587,17 +3557,11 @@ static Queue*
 ASM_Flatten(Map* labels)
 {
     Queue* addresses = Queue_Init((Kill) Stack_Kill, (Copy) NULL);
-    for(int64_t i = 0; i < Map_Buckets(labels); i++)
-    {
-        Node* chain = labels->bucket[i];
-        while(chain)
-        {
-            int64_t* address = Map_Get(labels, chain->key->value);
-            Stack* stack = Stack_Init(String_Init(chain->key->value), *address);
-            Queue_PshB(addresses, stack);
-            chain = chain->next;
-        }
-    }
+    MAP_FOREACH(labels, chain,
+        int64_t* address = Map_Get(labels, chain->key->value);
+        Stack* stack = Stack_Init(String_Init(chain->key->value), *address);
+        Queue_PshB(addresses, stack);
+    )
     Queue_Sort(addresses, (Compare) Stack_Compare);
     return addresses;
 }
@@ -3866,15 +3830,9 @@ VM_Redirect(VM* self, Map* labels, Opcode opcode)
 static void
 Map_Diff(Map* self, Map* other)
 {
-    for(int64_t i = 0; i < Map_Buckets(other); i++)
-    {
-        Node* bucket = other->bucket[i];
-        while(bucket)
-        {
-            Map_Del(self, bucket->key->value);
-            bucket = bucket->next;
-        }
-    }
+    MAP_FOREACH(other, bucket,
+        Map_Del(self, bucket->key->value);
+    )
 }
 
 static Map*
@@ -3896,29 +3854,15 @@ static Map*
 VM_Children(Map* marked)
 {
     Map* children = Map_Init((Kill) NULL, (Copy) NULL);
-    for(int64_t i = 0; i < Map_Buckets(marked); i++)
-    {
-        Node* bucket = marked->bucket[i];
-        while(bucket)
-        {
-            Map* temp = Map_Init((Kill) NULL, (Copy) NULL);
-            Value* value = bucket->value;
-            Value_Reach(value, temp, false);
-            Map_Del(temp, bucket->key->value);
-            Map_Append(children, temp);
-            Map_Kill(temp);
-            bucket = bucket->next;
-        }
-    }
+    MAP_FOREACH(marked, bucket,
+        Map* temp = Map_Init((Kill) NULL, (Copy) NULL);
+        Value* value = bucket->value;
+        Value_Reach(value, temp, false);
+        Map_Del(temp, bucket->key->value);
+        Map_Append(children, temp);
+        Map_Kill(temp);
+    )
     return children;
-}
-
-static Map*
-VM_Parents(Map* marked, Map* children)
-{
-    Map* parents = Map_Copy(marked);
-    Map_Diff(parents, children);
-    return parents;
 }
 
 static void
@@ -4038,20 +3982,11 @@ VM_Sweep(VM* self)
     if(marked->size > 0)
     {
         Map* children = VM_Children(marked);
-        Map* parents = VM_Parents(marked, children);
-        for(int64_t i = 0; i < Map_Buckets(parents); i++)
-        {
-            Node* bucket = parents->bucket[i];
-            while(bucket)
-            {
-                Sweeping = true;
-                Value_Kill(bucket->value);
-                Sweeping = false;
-                bucket = bucket->next;
-            }
-        }
+        MAP_FOREACH(marked, bucket,
+            if(!Map_Exists(children, bucket->key->value))
+                Value_Collect(bucket->value);
+        )
         Map_Kill(children);
-        Map_Kill(parents);
         self->buffer = Alloc->size + SWEEP_BUFFER;
     }
     else
