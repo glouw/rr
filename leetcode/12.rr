@@ -57,10 +57,6 @@ Build()
     ret nodes;
 }
 
-Test()
-{
-}
-
 Main()
 {
     nodes := Build();

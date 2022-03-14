@@ -20,6 +20,7 @@
 #define QUEUE_BLOCK_SIZE (8)
 #define STR_CAP_SIZE (16)
 #define MODULE_BUFFER_SIZE (8192)
+#define SWEEP_BUFFER (1024)
 #define LEN(a) (sizeof(a) / sizeof(*a))
 
 typedef int64_t
@@ -177,8 +178,8 @@ Class;
     X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) X(Jmp) X(Key) X(Len) X(Loc) \
     X(Lod) X(Log) X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) \
     X(Not) X(Num) X(Opn) X(Pop) X(Pow) X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) \
-    X(Red) X(Ref) X(Ret) X(Sav) X(Sin) X(Slc) X(Spd) X(Sqr) X(Srd) X(Sub) X(Tan) X(Tim) \
-    X(Trv) X(Typ) X(Vrt) X(Wrt)
+    X(Red) X(Ref) X(Ret) X(Sav) X(Sin) X(Slc) X(Spd) X(Sqr) X(Srd) X(Sub) X(Swe) X(Tan) \
+    X(Tim) X(Trv) X(Typ) X(Vrt) X(Wrt)
 
 typedef enum
 {
@@ -237,6 +238,7 @@ typedef struct
     int64_t size;
     int64_t pc;
     int64_t spds;
+    int64_t buffer;
     int64_t retno;
     bool done;
 }
@@ -1496,6 +1498,9 @@ Value_Reach(Value* self, Map* reach, bool deep)
         case TYPE_MAP:
             Map_Reach(self->of.map, reach, deep);
             break;
+        case TYPE_CHAR:
+            Value_Reach(self->of.character->string, reach, deep);
+            break;
         case TYPE_POINTER:
             if(deep)
                 Value_Reach(self->of.pointer->value, reach, deep);
@@ -2657,8 +2662,7 @@ CC_ParamRoll(CC* self)
         String* ident = CC_Ident(self);
         if(ident->size == 0)
             CC_QUIT(self, "param arg %ld malformed", params->size);
-        if(CC_Next(self) != ','
-        && CC_Next(self) != ')')
+        if(CC_Next(self) != ',' && CC_Next(self) != ')')
             CC_QUIT(self, "unknown characters following parameter %ld", params->size);
         Queue_PshB(params, ident);
         if(CC_Next(self) == ',')
@@ -2855,6 +2859,7 @@ CC_Call(CC* self, String* ident, int64_t args)
         CC_AssemB(self, String_Init("\tSpd"));
     CC_AssemB(self, String_Format("\tCal %s", ident->value));
     CC_AssemB(self, String_Init("\tLod"));
+    CC_AssemB(self, String_Init("\tSwe"));
 }
 
 static void
@@ -3300,6 +3305,7 @@ CC_While(CC* self, int64_t scoping)
     CC_AssemB(self, String_Format("\tBrf @l%ld", B));
     CC_Match(self, ")");
     CC_Block(self, A, B, scoping, true);
+    CC_AssemB(self, String_Init("\tSwe"));
     CC_AssemB(self, String_Format("\tJmp @l%ld", A));
     CC_AssemB(self, String_Format("@l%ld:", B));
 }
@@ -3345,6 +3351,7 @@ CC_Foreach(CC* self, int64_t scoping)
     CC_AssemB(self, String_Init("\tPsh 1"));
     CC_AssemB(self, String_Init("\tAdd"));
     CC_AssemB(self, String_Init("\tPop 1"));
+    CC_AssemB(self, String_Init("\tSwe"));
     CC_AssemB(self, String_Format("\tJmp @l%ld", A));
     CC_AssemB(self, String_Format("@l%ld:", B));
     CC_PopScope(self, init);
@@ -3373,6 +3380,7 @@ CC_For(CC* self, int64_t scoping)
     CC_AssemB(self, String_Format("\tJmp @l%ld", A));
     CC_AssemB(self, String_Format("@l%ld:", C));
     CC_Block(self, B, D, scoping, true);
+    CC_AssemB(self, String_Init("\tSwe"));
     CC_AssemB(self, String_Format("\tJmp @l%ld", B));
     CC_AssemB(self, String_Format("@l%ld:", D));
     CC_PopScope(self, init);
@@ -3687,6 +3695,7 @@ VM_Init(int64_t size, Queue* debug, Queue* addresses)
     self->instructions = Malloc(size * sizeof(*self->instructions));
     self->pc = 0;
     self->spds = 0;
+    self->buffer = SWEEP_BUFFER;
     self->retno = 0;
     self->done = false;
     return self;
@@ -3868,21 +3877,6 @@ Map_Diff(Map* self, Map* other)
     }
 }
 
-static void
-Map_Debug(Map* self)
-{
-    for(int64_t i = 0; i < Map_Buckets(self); i++)
-    {
-        Node* bucket = self->bucket[i];
-        while(bucket)
-        {
-            Value* value = bucket->value;
-            printf("%s\n", Type_ToString(value->type));
-            bucket = bucket->next;
-        }
-    }
-}
-
 static Map*
 VM_Mark(VM* self)
 {
@@ -4041,30 +4035,28 @@ static void
 VM_Sweep(VM* self)
 {
     Map* marked = VM_Mark(self);
-    Map* children = VM_Children(marked);
-    Map* parents = VM_Parents(marked, children);
-#if 0
-    puts("~~marked");
-    Map_Debug(marked);
-    puts("~~children");
-    Map_Debug(children);
-    puts("~~parents");
-    Map_Debug(parents);
-#endif
-    for(int64_t i = 0; i < Map_Buckets(parents); i++)
+    if(marked->size > 0)
     {
-        Node* bucket = parents->bucket[i];
-        while(bucket)
+        Map* children = VM_Children(marked);
+        Map* parents = VM_Parents(marked, children);
+        for(int64_t i = 0; i < Map_Buckets(parents); i++)
         {
-            Sweeping = true;
-            Value_Kill(bucket->value);
-            Sweeping = false;
-            bucket = bucket->next;
+            Node* bucket = parents->bucket[i];
+            while(bucket)
+            {
+                Sweeping = true;
+                Value_Kill(bucket->value);
+                Sweeping = false;
+                bucket = bucket->next;
+            }
         }
+        Map_Kill(children);
+        Map_Kill(parents);
+        self->buffer = Alloc->size + SWEEP_BUFFER;
     }
+    else
+        self->buffer *= 2;
     Map_Kill(marked);
-    Map_Kill(children);
-    Map_Kill(parents);
 }
 
 static void
@@ -4074,7 +4066,6 @@ VM_Lod(VM* self, int64_t unused)
     // OPCODE (SAV) INCREMENTED REF COUNT - REFERENCE COUNTER DECREMENT
     // SINCE TRANSITION FROM RETURN REGISTER TO STACK IS DIRECT.
     Queue_PshB(self->stack, self->ret);
-    VM_Sweep(self);
 }
 
 static void
@@ -4899,6 +4890,74 @@ Queue_Index(Queue* self, int64_t from, void* value, Compare compare)
     return SIZE_MAX;
 }
 
+static Value*
+VM_QueueSlice(VM* self, Value* a, Value* b, Value* c)
+{
+    VM_TypeExpect(self, a->type, TYPE_QUEUE);
+    VM_TypeExpect(self, b->type, TYPE_NUMBER);
+    VM_TypeExpect(self, c->type, TYPE_NUMBER);
+    int64_t len = a->of.queue->size;
+    int64_t x = b->of.number;
+    int64_t y = c->of.number;
+    if(x == -1) x = len - 1;
+    if(y == -1) y = len - 1;
+    if(x > y || x < 0)
+        VM_QUIT(self, "queue slice [%ld : %ld] not possible", x, y);
+    if(y > len)
+        VM_QUIT(self, "queue slice [%ld : %ld] not possible - right bound larger than queue of size %ld", x, y, len);
+    Value* slice = Value_Queue();
+    for(int64_t i = x; i < y; i++)
+        Queue_PshB(slice->of.queue, Value_Copy(Queue_Get(a->of.queue, i)));
+    return slice;
+}
+
+static Value*
+VM_StringSlice(VM* self, Value* a, Value* b, Value* c)
+{
+    VM_TypeExpect(self, a->type, TYPE_STRING);
+    VM_TypeExpect(self, b->type, TYPE_NUMBER);
+    VM_TypeExpect(self, c->type, TYPE_NUMBER);
+    int64_t len = a->of.string->size;
+    int64_t x = b->of.number;
+    int64_t y = c->of.number;
+    if(x == -1) x = len - 1;
+    if(y == -1) y = len - 1;
+    if(x > y || x < 0)
+        VM_QUIT(self, "string slice [%ld : %ld] not possible", x, y);
+    if(y > len)
+        VM_QUIT(self, "string slice [%ld : %ld] not possible - right bound larger than string of size %ld", x, y, len);
+    int64_t size = y - x;
+    Value* slice = Value_String(String_Init(""));
+    if(size > 0)
+    {
+        String_Resize(slice->of.string, size);
+        strncpy(slice->of.string->value, a->of.string->value + x, size);
+    }
+    return slice;
+}
+
+static Value*
+VM_MapSlice(VM* self, Value* a, Value* b, Value* c)
+{
+    Value* slice = Value_Map();
+    VM_TypeExpect(self, a->type, TYPE_MAP);
+    VM_TypeExpect(self, b->type, TYPE_STRING);
+    VM_TypeExpect(self, c->type, TYPE_STRING);
+    if(!Map_Exists(a->of.map, b->of.string->value)) VM_QUIT(self, "key %s does not exist with map slice", b->of.string->value);
+    if(!Map_Exists(a->of.map, c->of.string->value)) VM_QUIT(self, "key %s does not exist with map slice", c->of.string->value);
+    Value* keys = Map_Key(a->of.map);
+    int64_t x = Queue_Index(keys->of.queue, 0, b, (Compare) Value_Equal);
+    int64_t y = Queue_Index(keys->of.queue, x, c, (Compare) Value_Equal);
+    for(int64_t i = x; i < y; i++)
+    {
+        Value* temp = Queue_Get(keys->of.queue, i);
+        String* key = String_Copy(temp->of.string);
+        Map_Set(slice->of.map, key, Value_Copy(Map_Get(a->of.map, key->value)));
+    }
+    Value_Kill(keys);
+    return slice;
+}
+
 static void
 VM_Slc(VM* self, int64_t unused)
 {
@@ -4906,76 +4965,24 @@ VM_Slc(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 3);
     Value* b = Queue_Get(self->stack, self->stack->size - 2);
     Value* c = Queue_Get(self->stack, self->stack->size - 1);
-    Value* value;
+    Value* slice;
     if(b->type == TYPE_NUMBER)
     {
-        int64_t x = b->of.number;
-        int64_t y = c->of.number;
         if(a->type == TYPE_STRING)
-        {
-            VM_TypeExpect(self, a->type, TYPE_STRING);
-            VM_TypeExpect(self, b->type, TYPE_NUMBER);
-            VM_TypeExpect(self, c->type, TYPE_NUMBER);
-            int64_t len = a->of.string->size;
-            if(x == -1) x = len - 1;
-            if(y == -1) y = len - 1;
-            if(x > y || x < 0)
-                VM_QUIT(self, "string slice [%ld : %ld] not possible", x, y);
-            if(y > len)
-                VM_QUIT(self, "string slice [%ld : %ld] not possible - right bound larger than string of size %ld", x, y, len);
-            int64_t size = y - x;
-            String* sub = String_Init("");
-            if(size > 0)
-            {
-                String_Resize(sub, size);
-                strncpy(sub->value, a->of.string->value + x, size);
-            }
-            value = Value_String(sub);
-        }
+            slice = VM_StringSlice(self, a, b, c);
         else
         if(a->type == TYPE_QUEUE)
-        {
-            VM_TypeExpect(self, a->type, TYPE_QUEUE);
-            VM_TypeExpect(self, b->type, TYPE_NUMBER);
-            VM_TypeExpect(self, c->type, TYPE_NUMBER);
-            int64_t len = a->of.queue->size;
-            if(x == -1) x = len - 1;
-            if(y == -1) y = len - 1;
-            if(x > y || x < 0)
-                VM_QUIT(self, "queue slice [%ld : %ld] not possible", x, y);
-            if(y > len)
-                VM_QUIT(self, "queue slice [%ld : %ld] not possible - right bound larger than queue of size %ld", x, y, len);
-            value = Value_Queue();
-            for(int64_t i = x; i < y; i++)
-                Queue_PshB(value->of.queue, Value_Copy(Queue_Get(a->of.queue, i)));
-        }
+            slice = VM_QueueSlice(self, a, b, c);
         else
             VM_QUIT(self, "type %s was attempted to be sliced - only maps, queues, and strings can be sliced", Type_ToString(a->type));
     }
     else
     if(b->type == TYPE_STRING)
-    {
-        value = Value_Map();
-        VM_TypeExpect(self, a->type, TYPE_MAP);
-        VM_TypeExpect(self, b->type, TYPE_STRING);
-        VM_TypeExpect(self, c->type, TYPE_STRING);
-        if(!Map_Exists(a->of.map, b->of.string->value)) VM_QUIT(self, "key %s does not exist with map slice", b->of.string->value); 
-        if(!Map_Exists(a->of.map, c->of.string->value)) VM_QUIT(self, "key %s does not exist with map slice", c->of.string->value); 
-        Value* keys = Map_Key(a->of.map);
-        int64_t x = Queue_Index(keys->of.queue, 0, b, (Compare) Value_Equal);
-        int64_t y = Queue_Index(keys->of.queue, x, c, (Compare) Value_Equal);
-        for(int64_t i = x; i < y; i++)
-        {
-            Value* temp = Queue_Get(keys->of.queue, i);
-            String* key = String_Copy(temp->of.string);
-            Map_Set(value->of.map, key, Value_Copy(Map_Get(a->of.map, key->value)));
-        }
-        Value_Kill(keys);
-    }
+        slice = VM_MapSlice(self, a, b, c);
     else
         VM_QUIT(self, "type %s cannot be indexed for array slicing", Type_ToString(b->type));
     VM_Pop(self, 3);
-    Queue_PshB(self->stack, value);
+    Queue_PshB(self->stack, slice);
 }
 
 static void
@@ -5043,6 +5050,14 @@ VM_Tim(VM* self, int64_t unused)
 {
     (void) unused;
     Queue_PshB(self->stack, Value_Number(Microseconds()));
+}
+
+static void
+VM_Swe(VM* self, int64_t unused)
+{
+    (void) unused;
+    if(Alloc->size > self->buffer)
+        VM_Sweep(self);
 }
 
 static void
