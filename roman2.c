@@ -4948,6 +4948,8 @@ VM_MapSlice(VM* self, Value* a, Value* b, Value* c)
     Value* keys = Map_Key(a->of.map);
     int64_t x = Queue_Index(keys->of.queue, 0, b, (Compare) Value_Equal);
     int64_t y = Queue_Index(keys->of.queue, x, c, (Compare) Value_Equal);
+    if(x == -1 || y == -1)
+        VM_QUIT(self, "map slice [%s : %s] not possible", a->of.string->value, b->of.string->value);
     for(int64_t i = x; i < y; i++)
     {
         Value* temp = Queue_Get(keys->of.queue, i);
