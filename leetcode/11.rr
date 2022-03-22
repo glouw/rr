@@ -5,71 +5,73 @@
 
 Node(value)
 {
-    ret { .value : value };
+    ret &{ .value : value, .next : null };
 }
 
 Push(nodes, node)
 {
-    node.next := nodes;
-    ret node;
-}
-
-Dump(nodes)
-{
-    node := &nodes;
-    while(node@next != null)
-    {
-        Print(node@value);
-        node = &node@next;
-    }
+    node@next = nodes;
+    nodes = node;
 }
 
 Reverse(nodes)
 {
-    out := {};
-    node := &nodes;
-    while(node@next != null)
+    rev := null;
+    node := nodes;
+    while(node != null)
     {
-        out = Push(out, Node(node@value));
-        node = &node@next;
+        Push(rev, Node(node@value));
+        node = node@next;
     }
-    ret out;
+    ret rev;
 }
 
 Populate(with)
 {
-    nodes := {};
-    foreach(value : with)
+    nodes := null;
+    for(i := Len(with) - 1; i >= 0; i -= 1)
     {
-        nodes = Push(nodes, Node(value));
+        Push(nodes, Node(with[i]));
     }
     ret nodes;
 }
 
-Equal(nodes, with)
+Equal(a, b)
 {
-    index := 0;
-    node := &nodes;
-    equal := true;
-    while(node@next != null)
+    x := a;
+    y := b;
+    while((x != null) && (y != null))
     {
-        equal = equal && (with[index] == node@value);
-        node = &node@next;
-        index += 1;
+        if(x@value != y@value)
+        {
+            ret false;
+        }
+        x = x@next;
+        y = y@next;
+        if((x != null) && (y == null))
+        {
+            ret false;
+        }
+        if((x == null) && (y != null))
+        {
+            ret false;
+        }
     }
-    ret equal;
+    ret true;
 }
 
-Test(with)
+Test(a, b)
 {
-    ret Equal(Reverse(Populate(with)), with);
+    ret Equal(Reverse(Populate(a)), Populate(b));
 }
 
 Main()
 {
-    Assert(Test([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) == true);
-    Assert(Test([1, 2]) == true);
-    Assert(Test([0]) == true);
-    Assert(Test([]) == true);
+    Assert(Test([0, 1, 2, 3   ], [3, 2, 1, 0    ]) == true);
+    Assert(Test([0, 1, 2, 3   ], [3, 2, 1, 0, -1]) == false);
+    Assert(Test([0, 1, 2, 3, 4], [3, 2, 1, 0    ]) == false);
+    Assert(Test([], []) == true);
+    Assert(Test([1], [1]) == true);
+    Assert(Test([1, 2], [2, 1]) == true);
     ret 0;
 }

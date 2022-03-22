@@ -13,23 +13,13 @@
 
 Node(value)
 {
-    ret &{ .value : value };
+    ret &{ .value : value, .next : null };
 }
 
 Push(nodes, node)
 {
     node@next := nodes;
     nodes = node;
-}
-
-Dump(nodes)
-{
-    node := nodes;
-    while(node != null)
-    {
-        Print(node@value);
-        node = node@next;
-    }
 }
 
 HasCycle(nodes)

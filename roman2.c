@@ -1551,7 +1551,7 @@ Pointer_Init(Value* value)
 {
     Value_Inc(value);
     Pointer* self = Malloc(sizeof(*self));
-    self->value = value;
+    self->value = value; // NOT A DEEP COPY LIKE A POINTER SHOULD BE!
     return self;
 }
 
@@ -4028,14 +4028,10 @@ VM_Mov(VM* self, int64_t unused)
     if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
         Value_SubStr(a, b);
     else
+    if(a != b)
     {
-        if(a->type == TYPE_NULL)
-            VM_QUIT(self, "values cannot be moved into null storage. Value type was %s", Type_ToString(b->type));
-        if(a != b)
-        {
-            Type_Kill(a->type, &a->of);
-            Type_Copy(a, b);
-        }
+        Type_Kill(a->type, &a->of);
+        Type_Copy(a, b);
     }
     VM_Pop(self, 1);
 }
@@ -4110,8 +4106,6 @@ VM_Psb(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
-    if(b->type == TYPE_NULL)
-        VM_QUIT(self, "nulls cannot be appended to queues");
     Queue_PshB(a->of.queue, Value_Copy(b));
     VM_Pop(self, 1);
 }
@@ -4123,8 +4117,6 @@ VM_Psf(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_QUEUE);
-    if(b->type == TYPE_NULL)
-        VM_QUIT(self, "nulls cannot be prepended to queues");
     Queue_PshF(a->of.queue, Value_Copy(b));
     VM_Pop(self, 1);
 }
@@ -4544,8 +4536,6 @@ VM_Ins(VM* self, int64_t unused)
     Value* b = Queue_Get(self->stack, self->stack->size - 2);
     Value* c = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_MAP);
-    if(c->type == TYPE_NULL)
-        VM_QUIT(self, "nulls cannot be inserted into maps. See key %s", b->of.string->value);
     if(b->type == TYPE_CHAR)
         Value_PromoteChar(b);
     if(b->type == TYPE_STRING)
