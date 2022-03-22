@@ -6,10 +6,10 @@ Diff(a, b)
 Main()
 {
     string := "abcdefg";
-    pointer := &Bsearch(string, "e", Diff);
+    pointer := Bsearch(string, "e", Diff);
     *pointer = "Z";
     Assert(string == "abcdZfg");
-    test := &Bsearch("abcefg", "e", Diff);
+    test := Bsearch("abcefg", "e", Diff);
     Assert(*test == "e");
     ret 0;
 }

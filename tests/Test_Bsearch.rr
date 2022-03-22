@@ -21,7 +21,7 @@ Main()
         { "key": "f", "value" : 6 },
     ];
     Qsort(a, Compare);
-    b := &Bsearch(a, { "key" : key }, Diff);
+    b := Bsearch(a, { "key" : key }, Diff);
     Assert(b@value == want);
     other := 11;
     b@value = other;

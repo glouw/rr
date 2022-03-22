@@ -1,9 +1,9 @@
+# MAXIMUM SUBARRAY
+#
 # Given an integer array nums, find the contiguous subarray
-# (containing at least one number) which has the largest sum and return its sum.
+# (containing at least one number) which has the largest sum
+# and return its sum.
 # A subarray is a contiguous part of an array.
-
-# O(N) Time
-# O(1) Space
 
 MaxSubArray(array)
 {

@@ -1,15 +1,56 @@
+# CONTAINER WITH MOST WATER
+#
 # You are given an integer array height of length n.
 # There are n vertical lines drawn such that the two
 # endpoints of the ith line are (i, 0) and (i, height[i]).
-# 
 # Find two lines that together with the x-axis form a container,
 # such that the container contains the most water.
-# 
 # Return the maximum amount of water a container can store.
-# 
 # Notice that you may not slant the container.
+
+MostWater(heights)
+{
+    x := 0;
+    y := 0;
+    if(Len(heights) > 0)
+    {
+        y = Len(heights) - 1;
+    }
+    max := 0;
+    while(x != y)
+    {
+        xx := heights[x];
+        yy := heights[y];
+        if((xx < 0) || (yy < 0))
+        {
+            ret -1; # AN ERROR OCCURED.
+        }
+        h := Min(xx, yy);
+        w := y - x;
+        area := w * h;
+        if(area > max)
+        {
+            max = area;
+        }
+        if(xx < yy)
+        {
+            x += 1;
+        }
+        else
+        {
+            y -= 1;
+        }
+    }
+    ret max;
+}
 
 Main()
 {
+    Assert(MostWater([1, 8, 6, 2, 5, 4, 8, 3, 7]) == 49);
+    Assert(MostWater([1, 8, 6, 2, -5]) == -1);
+    Assert(MostWater([1, 8, -6, 2, 5]) == -1);
+    Assert(MostWater([1, 1]) == 1);
+    Assert(MostWater([1]) == 0);
+    Assert(MostWater([]) == 0);
     ret 0;
 }

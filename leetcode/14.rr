@@ -1,0 +1,64 @@
+# FIND MIMIMUM IN ROTATED SORTED ARRAY
+#
+# Suppose an array of length n sorted in ascending order is rotated
+# between 1 and n times.
+# For example, the array nums = [0,1,2,4,5,6,7] might become:
+#     [4,5,6,7,0,1,2] if it was rotated 4 times.
+#     [0,1,2,4,5,6,7] if it was rotated 7 times.
+# Notice that rotating an array [a[0], a[1], a[2], ..., a[n-1]]
+# 1 time results in the array [a[n-1], a[0], a[1], a[2], ..., a[n-2]].
+# Given the sorted rotated array nums of unique elements,
+# return the minimum element of this array.
+# You must write an algorithm that runs in O(log n) time.
+
+Search(arr, l, r)
+{
+    m := Floor(l + (r - l) / 2);
+    w := r - l + 1;
+    x := arr[l];
+    y := arr[m];
+    z := arr[r];
+    if(l > r)
+    {
+        if(x < z)
+        {
+            ret l;
+        }
+        else
+        {
+            ret r;
+        }
+    }
+    if(y - x < y - z)
+    {
+        ret Search(arr, m, r);
+    }
+    else
+    {
+        ret Search(arr, l, m - 1);
+    }
+}
+
+Patch(arr)
+{
+    last := Len(arr) - 1;
+    out := Search(arr, 0, last);
+    if(out == 0)
+    {
+        out = last;
+    }
+    ret out;
+}
+
+Rotations(arr)
+{
+    ret Patch(arr);
+}
+
+Main()
+{
+    Assert(Rotations([ 4, 5, 6, 7, 0, 1, 2 ]) == 4);
+    Assert(Rotations([ 6, 7, 1, 2, 4, 5 ]) == 2);
+    Assert(Rotations([ 0, 1, 2, 3, 4, 5, 6, 7 ]) == 7);
+    ret 0;
+}

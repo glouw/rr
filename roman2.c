@@ -20,7 +20,7 @@
 #define QUEUE_BLOCK_SIZE (8)
 #define STR_CAP_SIZE (16)
 #define MODULE_BUFFER_SIZE (8192)
-#define SWEEP_BUFFER (1024)
+#define SWEEP_BUFFER_SIZE (1024)
 #define LEN(a) (sizeof(a) / sizeof(*a))
 
 typedef int64_t
@@ -238,7 +238,7 @@ typedef struct
     int64_t size;
     int64_t pc;
     int64_t spds;
-    int64_t buffer;
+    int64_t alloc_cap;
     int64_t retno;
     bool done;
 }
@@ -1160,9 +1160,7 @@ Map_Init(Kill kill, Copy copy)
 static void
 Map_Kill(Map* self)
 {
-    MAP_FOREACH(self, bucket,
-        Node_Kill(bucket, self->kill);
-    )
+    MAP_FOREACH(self, node, Node_Kill(node, self->kill);)
     Free(self->bucket);
     Free(self);
 }
@@ -1205,9 +1203,7 @@ Map_Rehash(Map* self)
 {
     Map* other = Map_Init(self->kill, self->copy);
     Map_Alloc(other, self->prime_index + 1);
-    MAP_FOREACH(self, bucket,
-        Map_Emplace(other, bucket->key, bucket);
-    )
+    MAP_FOREACH(self, node, Map_Emplace(other, node->key, node);)
     Free(self->bucket);
     *self = *other;
     Free(other);
@@ -1306,7 +1302,6 @@ Map_Copy(Map* self)
     MAP_FOREACH(self, chain,
         Node* node = Node_Copy(chain, copy->copy);
         Map_Emplace(copy, node->key, node);
-        chain = chain->next;
     )
     return copy;
 }
@@ -1314,9 +1309,7 @@ Map_Copy(Map* self)
 static void
 Map_Append(Map* self, Map* other)
 {
-    MAP_FOREACH(other, chain,
-        Map_Set(self, String_Copy(chain->key), self->copy ? self->copy(chain->value) : chain->value);
-    )
+    MAP_FOREACH(other, chain, Map_Set(self, String_Copy(chain->key), self->copy ? self->copy(chain->value) : chain->value);)
 }
 
 static bool
@@ -1341,10 +1334,10 @@ Map_Print(Map* self, int64_t indents)
     else
     {
         String* print = String_Init("{\n");
-        MAP_FOREACH(self, bucket,
+        MAP_FOREACH(self, node,
             String_Append(print, String_Indent(indents + 1));
-            String_Append(print, String_Format("\"%s\" : ", bucket->key->value));
-            String_Append(print, Value_Sprint(bucket->value, false, indents + 1, -1, -1));
+            String_Append(print, String_Format("\"%s\" : ", node->key->value));
+            String_Append(print, Value_Sprint(node->value, false, indents + 1, -1, -1));
             if(i < self->size - 1)
                 String_Appends(print, ",");
             String_Appends(print, "\n");
@@ -1368,11 +1361,7 @@ static Value*
 Map_Key(Map* self)
 {
     Value* queue = Value_Queue();
-    MAP_FOREACH(self, chain,
-        Value* string = Value_String(String_Copy(chain->key));
-        Queue_PshB(queue->of.queue, string);
-        chain = chain->next;
-    )
+    MAP_FOREACH(self, chain, Queue_PshB(queue->of.queue, Value_String(String_Copy(chain->key)));)
     Queue_Sort(queue->of.queue, (Compare) Value_LessThan);
     return queue;
 }
@@ -1438,9 +1427,7 @@ Queue_Reach(Queue* self, Map* reach, bool deep)
 static void
 Map_Reach(Map* self, Map* reach, bool deep)
 {
-    MAP_FOREACH(self, bucket,
-        Value_Reach(bucket->value, reach, deep);
-    )
+    MAP_FOREACH(self, node, Value_Reach(node->value, reach, deep);)
 }
 
 static void
@@ -1471,6 +1458,43 @@ Value_Reach(Value* self, Map* reach, bool deep)
             break;
         }
     }
+}
+
+static void
+Map_Diff(Map* self, Map* other)
+{
+    MAP_FOREACH(other, node, Map_Del(self, node->key->value);)
+}
+
+static Map*
+Map_Children(Map* marked)
+{
+    Map* children = Map_Init((Kill) NULL, (Copy) NULL);
+    MAP_FOREACH(marked, node,
+        Map* temp = Map_Init((Kill) NULL, (Copy) NULL);
+        Value* value = node->value;
+        Value_Reach(value, temp, false);
+        Map_Del(temp, node->key->value);
+        Map_Append(children, temp);
+        Map_Kill(temp);
+    )
+    return children;
+}
+
+static void
+Value_Collect(Value*);
+
+static void
+Map_CollectValues(Map* marked)
+{
+    Map* children = Map_Children(marked);
+    MAP_FOREACH(marked, node,
+        bool child = Map_Exists(children, node->key->value);
+        bool parent = !child;
+        if(parent)
+            Value_Collect(node->value);
+    )
+    Map_Kill(children);
 }
 
 static void
@@ -2762,13 +2786,20 @@ CC_At(CC* self)
 }
 
 static bool
+CC_NextOf(CC* self, char* any)
+{
+    char next = CC_Next(self);
+    for(char* c = any; *c; c++)
+        if(next == *c)
+            return true;
+    return false;
+}
+
+static bool
 CC_Resolve(CC* self)
 {
     bool storage = true;
-    while(CC_Next(self) == '['
-       || CC_Next(self) == '.'
-       || CC_Next(self) == '@'
-       || CC_Next(self) == '(')
+    while(CC_NextOf(self, "[.@("))
     {
         if(CC_Next(self) == '(')
         {
@@ -3038,11 +3069,7 @@ static bool
 CC_Term(CC* self)
 {
     bool storage = CC_Factor(self);
-    while(CC_Next(self) == '*'
-       || CC_Next(self) == '/'
-       || CC_Next(self) == '%'
-       || CC_Next(self) == '?'
-       || CC_Next(self) == '|')
+    while(CC_NextOf(self, "*/%?|"))
     {
         String* operator = CC_Operator(self);
         if(String_Equals(operator, "*="))
@@ -3131,14 +3158,7 @@ static void
 CC_Expression(CC* self)
 {
     bool storage = CC_Term(self);
-    while(CC_Next(self) == '+' 
-       || CC_Next(self) == '-'
-       || CC_Next(self) == '='
-       || CC_Next(self) == '!'
-       || CC_Next(self) == '?'
-       || CC_Next(self) == '>'
-       || CC_Next(self) == '<'
-       || CC_Next(self) == '&')
+    while(CC_NextOf(self, "+-=!?><&"))
     {
         String* operator = CC_Operator(self);
         if(String_Equals(operator, "="))
@@ -3643,6 +3663,18 @@ VM_PrintTrace(VM* self)
 }                                 \
 while(0)
 
+static void
+VM_CapAllocs(VM* self)
+{
+    self->alloc_cap = Alloc->size + SWEEP_BUFFER_SIZE;
+}
+
+static void
+VM_LetAllocs(VM* self)
+{
+    self->alloc_cap *= 2;
+}
+
 static VM*
 VM_Init(int64_t size, Queue* debug, Queue* addresses)
 {
@@ -3659,9 +3691,9 @@ VM_Init(int64_t size, Queue* debug, Queue* addresses)
     self->instructions = Malloc(size * sizeof(*self->instructions));
     self->pc = 0;
     self->spds = 0;
-    self->buffer = SWEEP_BUFFER;
     self->retno = 0;
     self->done = false;
+    VM_CapAllocs(self);
     return self;
 }
 
@@ -3828,44 +3860,6 @@ VM_Redirect(VM* self, Map* labels, Opcode opcode)
 }
 
 static void
-Map_Diff(Map* self, Map* other)
-{
-    MAP_FOREACH(other, bucket,
-        Map_Del(self, bucket->key->value);
-    )
-}
-
-static Map*
-VM_Mark(VM* self)
-{
-    Map* reach = Map_Init((Kill) NULL, (Copy) NULL);
-    for(int64_t i = 0; i < self->stack->size; i++)
-    {
-        Value* value = Queue_Get(self->stack, i);
-        Value_Reach(value, reach, true);
-    }
-    Map* marked = Map_Copy(Alloc);
-    Map_Diff(marked, reach);
-    Map_Kill(reach);
-    return marked;
-}
-
-static Map*
-VM_Children(Map* marked)
-{
-    Map* children = Map_Init((Kill) NULL, (Copy) NULL);
-    MAP_FOREACH(marked, bucket,
-        Map* temp = Map_Init((Kill) NULL, (Copy) NULL);
-        Value* value = bucket->value;
-        Value_Reach(value, temp, false);
-        Map_Del(temp, bucket->key->value);
-        Map_Append(children, temp);
-        Map_Kill(temp);
-    )
-    return children;
-}
-
-static void
 VM_Cal(VM* self, int64_t address)
 {
     int64_t sp = self->stack->size - self->spds;
@@ -3969,10 +3963,23 @@ static void
 VM_Sav(VM* self, int64_t unused)
 {
     (void) unused;
-    Value* value = Queue_Back(self->stack);
-    Value_Inc(value);
-    self->ret = value;
+    self->ret = Value_Copy(Queue_Back(self->stack));
     VM_Pop(self, 1);
+}
+
+static Map*
+VM_Mark(VM* self)
+{
+    Map* reach = Map_Init((Kill) NULL, (Copy) NULL);
+    for(int64_t i = 0; i < self->stack->size; i++)
+    {
+        Value* value = Queue_Get(self->stack, i);
+        Value_Reach(value, reach, true);
+    }
+    Map* marked = Map_Copy(Alloc);
+    Map_Diff(marked, reach);
+    Map_Kill(reach);
+    return marked;
 }
 
 static void
@@ -3981,16 +3988,11 @@ VM_Sweep(VM* self)
     Map* marked = VM_Mark(self);
     if(marked->size > 0)
     {
-        Map* children = VM_Children(marked);
-        MAP_FOREACH(marked, bucket,
-            if(!Map_Exists(children, bucket->key->value))
-                Value_Collect(bucket->value);
-        )
-        Map_Kill(children);
-        self->buffer = Alloc->size + SWEEP_BUFFER;
+        Map_CollectValues(marked);
+        VM_CapAllocs(self);
     }
     else
-        self->buffer *= 2;
+        VM_LetAllocs(self);
     Map_Kill(marked);
 }
 
@@ -3998,9 +4000,8 @@ static void
 VM_Lod(VM* self, int64_t unused)
 {
     (void) unused;
-    // OPCODE (SAV) INCREMENTED REF COUNT - REFERENCE COUNTER DECREMENT
-    // SINCE TRANSITION FROM RETURN REGISTER TO STACK IS DIRECT.
     Queue_PshB(self->stack, self->ret);
+    self->ret = NULL;
 }
 
 static void
@@ -4304,11 +4305,8 @@ VM_BSearch(VM* self, Value* value, Value* key, Value* comparator)
         if(cmp == 0)
         {
             if(value->type == TYPE_STRING)
-            {
                 now = Value_Char(Char_Init(value, mid));
-                now->refs = -1; // RETURN EXPECTS REFERENCE, BUT CHARS ARE VALUE TYPE.
-            }
-            return now;
+            return Value_Pointer(Pointer_Init(now));
         }
         else
         {
@@ -4336,10 +4334,7 @@ VM_Bsr(VM* self, int64_t unused)
     if(found == NULL)
         Queue_PshB(self->stack, Value_Null());
     else
-    {
-        Value_Inc(found);
         Queue_PshB(self->stack, found);
-    }
 }
 
 static void
@@ -4993,7 +4988,7 @@ static void
 VM_Swe(VM* self, int64_t unused)
 {
     (void) unused;
-    if(Alloc->size > self->buffer)
+    if(Alloc->size > self->alloc_cap)
         VM_Sweep(self);
 }
 
