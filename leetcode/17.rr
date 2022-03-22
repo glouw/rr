@@ -1,0 +1,60 @@
+Bounded(grid, x, y, w, h)
+{
+    ret (y < h) && (y >= 0)
+     && (x < w) && (x >= 0);
+}
+
+Mark(grid, x, y, w, h);
+
+Dive(grid, x, y, w, h)
+{
+    Mark(grid, x + 1, y + 0, w, h);
+    Mark(grid, x - 1, y + 0, w, h);
+    Mark(grid, x + 0, y + 1, w, h);
+    Mark(grid, x + 0, y - 1, w, h);
+}
+
+Mark(grid, x, y, w, h)
+{
+    if(Bounded(grid, x, y, w, h))
+    {
+        at := &grid[y][x];
+        if(*at == "1")
+        {
+            *at = "#";
+            Dive(grid, x, y, w, h);
+        }
+    }
+}
+
+Islands(grid)
+{
+    count := 0;
+    h := Len(grid);
+    w := Len(grid[0]);
+    for(x := 0; x < w; x += 1) {
+    for(y := 0; y < h; y += 1)
+    {
+        if(grid[y][x] == "1")
+        {
+            Mark(grid, x, y, w, h);
+            count += 1;
+        }
+    }}
+    ret count;
+}
+
+Main()
+{
+    Assert(Islands([
+        ["1","1","1","1","0"],
+        ["1","1","0","1","0"],
+        ["1","1","0","0","0"],
+        ["0","0","0","0","0"]]) == 1);
+    Assert(Islands([
+        ["1","1","0","0","0"],
+        ["1","1","0","0","0"],
+        ["0","0","1","0","0"],
+        ["0","0","0","1","1"]]) == 3);
+    ret 0;
+}
