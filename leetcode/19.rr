@@ -1,0 +1,38 @@
+# PALINDROMIC SUBSTRINGS
+# 
+# Given a string s, return the number of palindromic
+# substrings in it. A string is a palindrome when it
+# reads the same backward as forward.
+# A substring is a contiguous sequence of characters
+# within the string.
+
+IsPali(s)
+{
+    for(i := 0; i < Len(s) / 2; i += 1)
+    {
+        if(s[i] != s[Len(s) - 1])
+        {
+            ret false;
+        }
+    }
+    ret true;
+}
+
+CountPaliSubs(s)
+{
+    count := 0;
+    for(j := 0; j < Len(s); j += 1) {
+    for(i := j; i < Len(s); i += 1) {
+        if(IsPali(s[j : i + 1]))
+        {
+            count += 1;
+        }
+    }}
+    ret count;
+}
+
+Main()
+{
+    Print(CountPaliSubs("aaabaaa"));
+    ret 0;
+}

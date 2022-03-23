@@ -48,45 +48,33 @@ Equal(a, b)
     ret true;
 }
 
-Size(nodes)
-{
-    size := 0;
-    node := nodes;
-    while(node != null)
-    {
-        size += 1;
-        node = node@next;
-    }
-    ret size;
-}
-
-Dump(nodes)
-{
-    node := nodes;
-    while(node != null)
-    {
-        Print(node@value);
-        node = node@next;
-    }
-}
-
 DelFromBack(nodes, from)
 {
-    size := Size(nodes);
-    node := nodes;
-    index := 0;
-    end := size - from;
-    prev := null;
-    while(node != null)
+    if(from > 0)
     {
-        if(index == end)
+        fast := nodes;
+        slow := nodes;
+        for(index := 0; index < from; index += 1)
         {
-            prev@next = node@next;
-            break;
+            if(fast == null)
+            {
+                ret; # FAST FORWARDED PAST END OF TAPE.
+            }
+            fast = fast@next;
         }
-        index += 1;
-        prev = node;
-        node = node@next;
+        if(fast == null)
+        {
+            nodes = nodes@next; # REMOVING ZEROTH ELEMENT.
+        }
+        else
+        {
+            while(fast@next != null)
+            {
+                fast = fast@next;
+                slow = slow@next;
+            }
+            slow@next = slow@next@next;
+        }
     }
 }
 
@@ -104,7 +92,10 @@ Main()
     Assert(Test([0, 1, 2, 3, 4], [0, 1, 2, 4], 2) == true);
     Assert(Test([0, 1, 2, 3, 4], [0, 1, 3, 4], 3) == true);
     Assert(Test([0, 1, 2, 3, 4], [0, 2, 3, 4], 4) == true);
-    Assert(Test([0, 1], [0], 1) == true);
+    Assert(Test([0, 1, 2, 3, 4], [1, 2, 3, 4], 5) == true);
+    Assert(Test([0, 1], [1], 2) == true);
+    Assert(Test([0], [], 1) == true);
+    Assert(Test([], [], 1) == true);
     Assert(Test([0, 1, 2, 3, 4], [0, 1, 2, 3, 4], 0) == true);
     Assert(Test([0, 1, 2, 3, 4], [0, 1, 2, 3, 4], 6) == true);
     ret 0;
