@@ -68,16 +68,7 @@ Point(row, col)
 
 Point_Add(a, b)
 {
-    ret Point(
-        a.row + b.row,
-        a.col + b.col);
-}
-
-Point_Sub(a, b)
-{
-    ret Point(
-        a.row - b.row,
-        a.col - b.col);
+    ret Point(a.row + b.row, a.col + b.col);
 }
 
 Goal()
