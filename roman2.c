@@ -1326,28 +1326,6 @@ Map_Equal(Map* self, Map* other, Compare compare)
     return true;
 }
 
-static String*
-Map_Print(Map* self, int64_t indents)
-{
-    if(self->size == 0)
-        return String_Init("{}");
-    else
-    {
-        String* print = String_Init("{\n");
-        MAP_FOREACH(self, node,
-            String_Append(print, String_Indent(indents + 1));
-            String_Append(print, String_Format("\"%s\" : ", node->key->value));
-            String_Append(print, Value_Sprint(node->value, false, indents + 1, -1, -1));
-            if(i < self->size - 1)
-                String_Appends(print, ",");
-            String_Appends(print, "\n");
-        )
-        String_Append(print, String_Indent(indents));
-        String_Appends(print, "}");
-        return print;
-    }
-}
-
 static bool
 Value_LessThan(Value*, Value*);
 
@@ -1364,6 +1342,35 @@ Map_Key(Map* self)
     MAP_FOREACH(self, chain, Queue_PshB(queue->of.queue, Value_String(String_Copy(chain->key)));)
     Queue_Sort(queue->of.queue, (Compare) Value_LessThan);
     return queue;
+}
+
+static void
+Value_Kill(Value*);
+
+static String*
+Map_Print(Map* self, int64_t indents)
+{
+    if(self->size == 0)
+        return String_Init("{}");
+    else
+    {
+        String* print = String_Init("{\n");
+        Value* keys = Map_Key(self);
+        for(int64_t i = 0; i < keys->of.queue->size; i++)
+        {
+            Value* key = Queue_Get(keys->of.queue, i);
+            String_Append(print, String_Indent(indents + 1));
+            String_Append(print, String_Format("\"%s\" : ", key->of.string->value));
+            String_Append(print, Value_Sprint(Map_Get(self, key->of.string->value), false, indents + 1, -1, -1));
+            if(i < self->size - 1)
+                String_Appends(print, ",");
+            String_Appends(print, "\n");
+        }
+        String_Append(print, String_Indent(indents));
+        String_Appends(print, "}");
+        Value_Kill(keys);
+        return print;
+    }
 }
 
 static void Value_Dec(Value* self) { self->refs -= 1; }
@@ -1496,9 +1503,6 @@ Map_CollectValues(Map* marked)
     )
     Map_Kill(children);
 }
-
-static void
-Value_Kill(Value*);
 
 static void
 Char_Kill(Char* self)
