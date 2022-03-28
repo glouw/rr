@@ -3,7 +3,9 @@
 // COPYRIGHT (C) 2021-2022 GUSTAV LOUW. ALL RIGHTS RESERVED.
 // THIS WORK IS LICENSED UNDER THE TERMS OF THE MIT LICENSE.  
 
+#include <dlfcn.h>
 #include <string.h>
+#include <stdbool.h>
 #include <float.h>
 #include <math.h>
 #include <stdarg.h>
@@ -15,7 +17,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
-#include <stdbool.h>
 
 #define QUEUE_BLOCK_SIZE (8)
 #define STR_CAP_SIZE (16)
@@ -169,17 +170,18 @@ typedef enum
     CLASS_VARIABLE_LOCAL,
     CLASS_FUNCTION,
     CLASS_FUNCTION_PROTOTYPE,
+    CLASS_FUNCTION_PROTOTYPE_NATIVE,
 }
 Class;
 
 #define OPCODES \
     X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Bol) X(Brf) X(Bsr) \
-    X(Cal) X(Cel) X(Cop) X(Cos) X(Del) X(Div) X(Drf) X(End) X(Eql) X(Ext) X(Flr) X(Fls) \
-    X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) X(Jmp) X(Key) X(Len) X(Loc) \
-    X(Lod) X(Log) X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) \
-    X(Not) X(Num) X(Opn) X(Pop) X(Pow) X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) \
-    X(Red) X(Ref) X(Ret) X(Sav) X(Sin) X(Slc) X(Spd) X(Sqr) X(Srd) X(Sub) X(Swe) X(Tan) \
-    X(Tim) X(Trv) X(Typ) X(Vrt) X(Wrt)
+    X(Cal) X(Cel) X(Cop) X(Cos) X(Del) X(Div) X(Dll) X(Drf) X(End) X(Eql) X(Ext) X(Flr) \
+    X(Fls) X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) X(Jmp) X(Key) X(Len) \
+    X(Loc) X(Lod) X(Log) X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) \
+    X(Neq) X(Not) X(Num) X(Opn) X(Pop) X(Pow) X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) \
+    X(Ran) X(Red) X(Ref) X(Ret) X(Sav) X(Sin) X(Slc) X(Spd) X(Sqr) X(Srd) X(Sub) X(Swe) \
+    X(Tan) X(Tim) X(Trv) X(Typ) X(Vrt) X(Wrt)
 
 typedef enum
 {
@@ -280,7 +282,7 @@ typedef struct
     char* mnemonic;
     int64_t args;
 }
-Handle;
+Macro;
 
 static void*
 Malloc(int64_t size)
@@ -1992,6 +1994,8 @@ Class_ToString(Class self)
         return "function";
     case CLASS_FUNCTION_PROTOTYPE:
         return "function prototype";
+    case CLASS_FUNCTION_PROTOTYPE_NATIVE:
+        return "native function prototype";
     }
     return "N/A";
 }
@@ -2439,7 +2443,7 @@ Module_Name(CC* self, char* postfix)
     return name;
 }
 
-static Handle Handles[] = {
+static Macro Macros[] = {
     { "Abs",     "Abs", 1 },
     { "Acos",    "Aco", 1 },
     { "All",     "All", 1 },
@@ -2471,7 +2475,6 @@ static Handle Handles[] = {
     { "Sin",     "Sin", 1 },
     { "Sqrt",    "Sqr", 1 },
     { "Srand",   "Srd", 1 },
-    { "String",  "Str", 1 },
     { "Tan",     "Tan", 1 },
     { "Time",    "Tim", 0 },
     { "Type",    "Typ", 1 },
@@ -2479,24 +2482,24 @@ static Handle Handles[] = {
 };
 
 static int
-Handle_Compare(const void* a, const void* b)
+Macro_Compare(const void* a, const void* b)
 {
-    const Handle* aa = a;
-    const Handle* bb = b;
+    const Macro* aa = a;
+    const Macro* bb = b;
     return strcmp(aa->name, bb->name);
 }
 
 static void
-Handle_Sort(void)
+Macro_Sort(void)
 {
-    qsort(Handles, LEN(Handles), sizeof(Handle), Handle_Compare);
+    qsort(Macros, LEN(Macros), sizeof(Macro), Macro_Compare);
 }
 
-static Handle*
-Handle_Find(char* name)
+static Macro*
+Macro_Find(char* name)
 {
-    Handle key = { .name = name };
-    return bsearch(&key, Handles, LEN(Handles), sizeof(Handle), Handle_Compare);
+    Macro key = { .name = name };
+    return bsearch(&key, Macros, LEN(Macros), sizeof(Macro), Macro_Compare);
 }
 
 static void
@@ -2530,7 +2533,8 @@ static bool
 CC_IsFunction(Class class)
 {
     return class == CLASS_FUNCTION
-        || class == CLASS_FUNCTION_PROTOTYPE;
+        || class == CLASS_FUNCTION_PROTOTYPE
+        || class == CLASS_FUNCTION_PROTOTYPE_NATIVE;
 }
 
 static void
@@ -2544,11 +2548,11 @@ CC_Define(CC* self, Class class, int64_t stack, String* ident, String* path)
         {
             if(new->stack != old->stack)
                 CC_QUIT(self, "function %s with %ld argument(s) was previously defined in file %s as a function prototype with %ld argument(s)",
-                        ident->value, new->stack, old->path->value, old->stack);
+                    ident->value, new->stack, old->path->value, old->stack);
         }
         else
             CC_QUIT(self, "%s %s was already defined in file %s as a %s",
-                    Class_ToString(new->class), ident->value, old->path->value, Class_ToString(old->class));
+                Class_ToString(new->class), ident->value, old->path->value, Class_ToString(old->class));
     }
     Map_Set(self->identifiers, ident, new);
 }
@@ -2668,6 +2672,37 @@ CC_ParamRoll(CC* self)
     }
     CC_Match(self, ")");
     return params;
+}
+
+static void
+CC_PrototypeNative(CC* self, String* module)
+{
+    String* ident = CC_Ident(self);
+    Queue* params = CC_ParamRoll(self);
+    char* real = CC_RealPath(self, module);
+    CC_Define(self, CLASS_FUNCTION_PROTOTYPE_NATIVE, params->size, ident, String_Init(real));
+    Free(real);
+    Queue_Kill(params);
+}
+
+static void
+CC_Lib(CC* self)
+{
+    String* module = Module_Name(self, ".so");
+    CC_Match(self, "{");
+    while(CC_Next(self) != '}')
+    {
+        CC_PrototypeNative(self, module);
+        if(CC_Next(self) == ';')
+        {
+            CC_Match(self, ";");
+            continue;
+        }
+        else
+            break;
+    }
+    String_Kill(module);
+    CC_Match(self, "}");
 }
 
 static void
@@ -2916,16 +2951,36 @@ CC_Direct(CC* self, bool negative)
 }
 
 static void
+CC_Macro(CC* self, Macro* macro)
+{
+    CC_AssemB(self, String_Format("\t%s", macro->mnemonic));
+}
+
+static void
+CC_Native(CC* self, String* ident, Meta* meta)
+{
+    CC_AssemB(self, String_Format("\tPsh \"%s\"", meta->path->value));
+    CC_AssemB(self, String_Format("\tPsh \"%s\"", ident->value));
+    CC_AssemB(self, String_Format("\tPsh %ld", meta->stack));
+    CC_AssemB(self, String_Init("\tDll"));
+}
+
+static void
 CC_DirectCalling(CC* self, String* ident, Meta* meta)
 {
     int64_t size = CC_Args(self);
     if(size != meta->stack)
-        CC_QUIT(self, "calling function %s required %ld arguments but got %ld arguments", ident->value, meta->stack, size);
-    Handle* handle = Handle_Find(ident->value);
-    if(handle == NULL || (handle && handle->args == -1))
-        CC_Call(self, ident, size);
+        CC_QUIT(self, "function %s requires %ld arguments", ident->value, meta->stack);
+    if(meta->class == CLASS_FUNCTION_PROTOTYPE_NATIVE)
+        CC_Native(self, ident, meta);
     else
-        CC_AssemB(self, String_Format("\t%s", handle->mnemonic));
+    {
+        Macro* macro = Macro_Find(ident->value);
+        if(macro == NULL || macro->args == -1)
+            CC_Call(self, ident, size);
+        else
+            CC_Macro(self, macro);
+    }
 }
 
 static void
@@ -2936,8 +2991,7 @@ CC_Calling(CC* self, String* ident)
         CC_DirectCalling(self, ident, meta);
     else
     if(CC_IsVariable(meta->class))
-        // LEAVE A REFERENCE VALUE ON THE STACK FOR CC_RESOLVE TO HANDLE.
-        CC_Ref(self, ident);
+        CC_Ref(self, ident); // LEAVE A REFERENCE VALUE ON THE STACK FOR CC_RESOLVE TO HANDLE.
     else
         CC_QUIT(self, "identifier %s is not callable", ident->value);
 }
@@ -3539,6 +3593,12 @@ CC_Parse(CC* self)
             String_Kill(ident);
         }
         else
+        if(String_Equals(ident, "lib"))
+        {
+            CC_Lib(self);
+            String_Kill(ident);
+        }
+        else
         if(CC_Next(self) == '(')
             CC_Function(self, ident);
         else
@@ -3888,12 +3948,9 @@ VM_Ptr(VM* self, int64_t unused)
 {
     (void) unused;
     Value* back = Queue_Back(self->stack);
-    if(back->type != TYPE_FUNCTION)
-    {
-        Value* pointer = Value_Pointer(Pointer_Init(back));
-        VM_Pop(self, 1);
-        Queue_PshB(self->stack, pointer);
-    }
+    Value* pointer = Value_Pointer(Pointer_Init(back));
+    VM_Pop(self, 1);
+    Queue_PshB(self->stack, pointer);
 }
 
 static void
@@ -4248,13 +4305,17 @@ VM_Vrt(VM* self, int64_t unused)
     int64_t ofsize = size->of.number;
     VM_Pop(self, 1);
     Value* function = Queue_Get(self->stack, self->stack->size - ofsize - 1);
+    if(function->type == TYPE_POINTER)
+    {
+        function = function->of.pointer->value;
+    }
+    VM_TypeExpect(self, function->type, TYPE_FUNCTION);
     int64_t ofargs = function->of.function->size;
     if(ofsize != ofargs)
     {  
         char* name = function->of.function->name->value;
         VM_QUIT(self, "expected %ld arguments for indirect function call %s but encountered %ld arguments", ofsize, name, ofargs);
     }
-    VM_TypeExpect(self, function->type, TYPE_FUNCTION);
     int64_t sp = self->stack->size - ofsize;
     Queue_PshB(self->frame, Frame_Init(self->pc, sp, function->of.function->address));
     self->pc = function->of.function->address;
@@ -4814,6 +4875,88 @@ Queue_Index(Queue* self, int64_t from, void* value, Compare compare)
     return -1;
 }
 
+static void*
+VM_Nat(VM* self, int64_t at)
+{
+    Value* value = Queue_Get(self->stack, at);
+    switch(value->type)
+    {
+    case TYPE_NUMBER:
+        return &value->of.number;
+    case TYPE_BOOL:
+        return &value->of.boolean;
+    case TYPE_STRING:
+        return value->of.string->value;
+    case TYPE_CHAR:
+        return value->of.character->value;
+    default:
+        break;
+    }
+    return NULL;
+}
+
+static void
+VM_Dll(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* a = Queue_Get(self->stack, self->stack->size - 3); // SO lib.
+    Value* b = Queue_Get(self->stack, self->stack->size - 2); // Function.
+    Value* c = Queue_Get(self->stack, self->stack->size - 1); // Args.
+    VM_TypeExpect(self, a->type, TYPE_STRING);
+    VM_TypeExpect(self, b->type, TYPE_STRING);
+    VM_TypeExpect(self, c->type, TYPE_NUMBER);
+    void* so = dlopen(a->of.string->value, RTLD_NOW | RTLD_GLOBAL);
+    if(so == NULL)
+        VM_QUIT(self, "could not open shared object library %s\n", a->of.string->value);
+    void (*call)();
+    *(void**)(&call) = dlsym(so, b->of.string->value);
+    if(call == NULL)
+        VM_QUIT(self, "could not open shared object function %s from shared object library %s\n", b->of.string->value, a->of.string->value);
+    size_t params = 3;
+    size_t start = self->stack->size - params;
+    size_t args = c->of.number;
+    switch(args)
+    {
+    case 0:
+        call();
+        break;
+    case 1:
+        call(
+            VM_Nat(self, start - 1));
+        break;
+    case 2:
+        call(
+            VM_Nat(self, start - 2),
+            VM_Nat(self, start - 1));
+        break;
+    case 3:
+        call(
+            VM_Nat(self, start - 3),
+            VM_Nat(self, start - 2),
+            VM_Nat(self, start - 1));
+        break;
+    case 4:
+        call(
+            VM_Nat(self, start - 4),
+            VM_Nat(self, start - 3),
+            VM_Nat(self, start - 2),
+            VM_Nat(self, start - 1));
+        break;
+    case 5:
+        call(
+            VM_Nat(self, start - 5),
+            VM_Nat(self, start - 4),
+            VM_Nat(self, start - 3),
+            VM_Nat(self, start - 2),
+            VM_Nat(self, start - 1));
+        break;
+    default:
+        VM_QUIT(self, "native functions calls support 5 arguments max");
+    }
+    VM_Pop(self, params + args);
+    Queue_PshB(self->stack, Value_Null());
+}
+
 static Value*
 VM_QueueSlice(VM* self, Value* a, Value* b, Value* c)
 {
@@ -5068,10 +5211,10 @@ VM_Assemble(Queue* assembly, Queue* debug)
 static void
 CC_Reserve(CC* self)
 {
-    for(uint64_t i = 0; i < LEN(Handles); i++)
+    for(uint64_t i = 0; i < LEN(Macros); i++)
     {
-        Handle handle = Handles[i];
-        CC_Define(self, CLASS_FUNCTION, handle.args, String_Init(handle.name), String_Init("reserved"));
+        Macro macro = Macros[i];
+        CC_Define(self, CLASS_FUNCTION, macro.args, String_Init(macro.name), String_Init("reserved"));
     }
 }
 
@@ -5121,7 +5264,7 @@ Args_Help(void)
 int
 main(int argc, char* argv[])
 {
-    Handle_Sort();
+    Macro_Sort();
     Args args = Args_Parse(argc, argv);
     if(args.entry)
     {

@@ -8,7 +8,7 @@ endif
 
 WFLAGS = -Wall -Wextra -Wpedantic -Wshadow
 CC = gcc -std=gnu11 -pedantic
-LIBS = -lm
+LIBS = -lm -ldl
 
 TITLE = roman2
 BIN = $(TITLE)

@@ -11,8 +11,8 @@ Main()
     Assert((*e).key == 1);
     x := Main;
     xx := &Main;
-    Assert(x == xx);
-    Assert(Main == &Main);
+    Assert(x == *xx);
+    Assert(Main == *&Main);
     array := [3, 4, 5, 6];
     Assert(*&array[2] == 5);
     string := "asdf";

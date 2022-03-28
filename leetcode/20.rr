@@ -20,7 +20,7 @@
 # result[i] = [ri, ci] denotes that rain water can flow
 # from cell (ri, ci) to both the Pacific and Atlantic oceans.
 
-Dimensions(height)
+Dim(height)
 {
     ret {
         .rows : Len(height),
@@ -35,9 +35,9 @@ Get(height, point)
 
 OnGrid(height, point)
 {
-    dims := Dimensions(height);
-    ret (point.row >= 0) && (point.row < dims.rows)
-     && (point.col >= 0) && (point.col < dims.cols);
+    dim := Dim(height);
+    ret (point.row >= 0) && (point.row < dim.rows)
+     && (point.col >= 0) && (point.col < dim.cols);
 }
 
 IsPac(height, point)
@@ -48,9 +48,9 @@ IsPac(height, point)
 
 IsAtl(height, point)
 {
-    dims := Dimensions(height);
-    ret (point.col == dims.cols - 1)
-     || (point.row == dims.rows - 1);
+    dim := Dim(height);
+    ret (point.col == dim.cols - 1)
+     || (point.row == dim.rows - 1);
 }
 
 CanFlow(height, a, b)
@@ -66,7 +66,7 @@ Point(row, col)
     };
 }
 
-Point_Add(a, b)
+Add(a, b)
 {
     ret Point(a.row + b.row, a.col + b.col);
 }
@@ -79,31 +79,39 @@ Goal()
     };
 }
 
-Goal_Seek(self, height, now, from)
+Done(goal)
 {
-    if(IsPac(height, now)) { self.pac = true; }
-    if(IsAtl(height, now)) { self.atl = true; }
-    N := Point_Add(now, Point( 1,  0));
-    E := Point_Add(now, Point( 0,  1));
-    S := Point_Add(now, Point(-1,  0));
-    W := Point_Add(now, Point( 0, -1));
-    if(OnGrid(height, N) && (N != from)) { if(CanFlow(height, now, N)) { Goal_Seek(self, height, N, now); } }
-    if(OnGrid(height, E) && (E != from)) { if(CanFlow(height, now, E)) { Goal_Seek(self, height, E, now); } }
-    if(OnGrid(height, S) && (S != from)) { if(CanFlow(height, now, S)) { Goal_Seek(self, height, S, now); } }
-    if(OnGrid(height, W) && (W != from)) { if(CanFlow(height, now, W)) { Goal_Seek(self, height, W, now); } }
+    ret goal.pac && goal.atl;
+}
+
+Flow(goal, height, now, from)
+{
+    if(IsPac(height, now)) { goal.pac = true; }
+    if(IsAtl(height, now)) { goal.atl = true; }
+    if(!Done(goal))
+    {
+        N := Add(now, Point( 1,  0));
+        E := Add(now, Point( 0,  1));
+        S := Add(now, Point(-1,  0));
+        W := Add(now, Point( 0, -1));
+        if(OnGrid(height, N) && (N != from)) { if(CanFlow(height, now, N)) { Flow(goal, height, N, now); } }
+        if(OnGrid(height, E) && (E != from)) { if(CanFlow(height, now, E)) { Flow(goal, height, E, now); } }
+        if(OnGrid(height, S) && (S != from)) { if(CanFlow(height, now, S)) { Flow(goal, height, S, now); } }
+        if(OnGrid(height, W) && (W != from)) { if(CanFlow(height, now, W)) { Flow(goal, height, W, now); } }
+    }
 }
 
 Try(height, point)
 {
     goal := Goal();
-    Goal_Seek(goal, height, point, point);
+    Flow(goal, height, point, point);
     ret goal;
 }
 
 Test(height)
 {
     valid := [];
-    dim := Dimensions(height);
+    dim := Dim(height);
     for(row := 0; row < dim.rows; row += 1) {
     for(col := 0; col < dim.cols; col += 1) {
         goal := Try(height, Point(row, col));
