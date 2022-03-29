@@ -1,0 +1,55 @@
+# INVERT BINARY TREE
+
+# Given the root of a binary tree, invert the tree, and return its root.
+
+Node(value)
+{
+    ret &{
+        .value : value,
+        .l : null,
+        .r : null,
+    };
+}
+
+Node_Swap(node, data)
+{
+    left := node@l;
+    node@l = node@r;
+    node@r = left;
+}
+
+Node_Check(node, data)
+{
+    Assert(node@value == data[0]);
+    Del(data, 0);
+}
+
+Node_Iterate(nodes, exec, data)
+{
+    if(nodes != null)
+    {
+        exec(nodes, data);
+        Node_Iterate(nodes@l, exec, data);
+        Node_Iterate(nodes@r, exec, data);
+    }
+}
+
+Node_Build()
+{
+    nodes := Node(4);
+    nodes@l = Node(2);
+    nodes@l@l = Node(1);
+    nodes@l@r = Node(3);
+    nodes@r = Node(7);
+    nodes@r@l = Node(6);
+    nodes@r@r = Node(9);
+    ret nodes;
+}
+
+Main()
+{
+    nodes := Node_Build();
+    Node_Iterate(nodes, Node_Swap, null);
+    Node_Iterate(nodes, Node_Check, [4, 7, 9, 6, 2, 3, 1]);
+    ret 0;
+}

@@ -406,7 +406,7 @@ Main()
 Modules can be packaged and imported. Modules do not namespace and are recommended
 to include a suffix denoting the module name.
 
-Math.rr
+`Math.rr`
 ```
 Math_Add(a, b)
 {
@@ -414,21 +414,54 @@ Math_Add(a, b)
 }
 ```
 
-Main.rr
+`Main.rr`
 ```
 inc Math;
 
 Main()
 {
-    ret Math_Add(0, 1);
+    ret Math_Add(-1, 1);
 }
 ```
 Module inclusions are akin to C's `#include` preprocessor directive, performing a source copy-paste,
 with the caveat that modules are processed once even with multiple inclusions of the same module.
 
+### Shared Object Libraries
+
+Roman2 can call functions from native C shared objects libaries. Types sypported are `number`, `string`,
+and `bool`, mapping to types `double*`, `char*`, and `bool*`, respectively:
+
+Math.c
+```
+// gcc Math.c -o Math.so --shared -fpic
+
+void Math_Add(double* self, double* other)
+{
+    *self += *other;
+}
+```
+Main.rr
+
+```
+lib Math
+{
+    Math_Add(self, other);
+}
+
+Main()
+{
+    a := 1;
+    Math_Add(a, 2);
+    Assert(a == 3); 
+    ret 0;
+}
+
+```
+
 ### Built-In Macros
 
-Built in macros are exposed by the compiler. These macros cannot be pointed to by pointers.
+Built in macros are exposed by the compiler to present an include-free standard library.
+These macros cannot be pointed with pointer syntaxing.
 
 A `value` can either be a `number`, `queue`, `bool`, `string`, `map`, `function`, or `file`.
 

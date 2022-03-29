@@ -2538,8 +2538,18 @@ CC_IsFunction(Class class)
 }
 
 static void
+CC_ReservedKeywords(CC* self, String* ident)
+{
+    if(String_Equals(ident, "null")
+    || String_Equals(ident, "true")
+    || String_Equals(ident, "false"))
+        CC_QUIT(self, "%s is a reserved keyword", ident->value);
+}
+
+static void
 CC_Define(CC* self, Class class, int64_t stack, String* ident, String* path)
 {
+    CC_ReservedKeywords(self, ident);
     Meta* old = Map_Get(self->identifiers, ident->value);
     Meta* new = Meta_Init(class, stack, path);
     if(old)
@@ -4878,7 +4888,7 @@ Queue_Index(Queue* self, int64_t from, void* value, Compare compare)
 static void*
 VM_Nat(VM* self, int64_t at)
 {
-    Value* value = Queue_Get(self->stack, at);
+    Value* value = Queue_Get(self->stack, self->stack->size - at);
     switch(value->type)
     {
     case TYPE_NUMBER:
@@ -4890,6 +4900,7 @@ VM_Nat(VM* self, int64_t at)
     case TYPE_CHAR:
         return value->of.character->value;
     default:
+        VM_QUIT(self, "type %s cannot be passed to native functions", Type_ToString(value->type));
         break;
     }
     return NULL;
@@ -4912,48 +4923,53 @@ VM_Dll(VM* self, int64_t unused)
     *(void**)(&call) = dlsym(so, b->of.string->value);
     if(call == NULL)
         VM_QUIT(self, "could not open shared object function %s from shared object library %s\n", b->of.string->value, a->of.string->value);
-    size_t params = 3;
-    size_t start = self->stack->size - params;
-    size_t args = c->of.number;
+    int64_t args = c->of.number;
+    VM_Pop(self, 3);
     switch(args)
     {
     case 0:
         call();
         break;
     case 1:
-        call(
-            VM_Nat(self, start - 1));
+        call(VM_Nat(self, 1));
         break;
     case 2:
-        call(
-            VM_Nat(self, start - 2),
-            VM_Nat(self, start - 1));
+        call(VM_Nat(self, 2), VM_Nat(self, 1));
         break;
     case 3:
-        call(
-            VM_Nat(self, start - 3),
-            VM_Nat(self, start - 2),
-            VM_Nat(self, start - 1));
+        call(VM_Nat(self, 3), VM_Nat(self, 2), VM_Nat(self, 1));
         break;
     case 4:
-        call(
-            VM_Nat(self, start - 4),
-            VM_Nat(self, start - 3),
-            VM_Nat(self, start - 2),
-            VM_Nat(self, start - 1));
+        call(VM_Nat(self, 4), VM_Nat(self, 3), VM_Nat(self, 2),
+             VM_Nat(self, 1));
         break;
     case 5:
-        call(
-            VM_Nat(self, start - 5),
-            VM_Nat(self, start - 4),
-            VM_Nat(self, start - 3),
-            VM_Nat(self, start - 2),
-            VM_Nat(self, start - 1));
+        call(VM_Nat(self, 5), VM_Nat(self, 4), VM_Nat(self, 3),
+             VM_Nat(self, 2), VM_Nat(self, 1));
+        break;
+    case 6:
+        call(VM_Nat(self, 6), VM_Nat(self, 5), VM_Nat(self, 4),
+             VM_Nat(self, 3), VM_Nat(self, 2), VM_Nat(self, 1));
+        break;
+    case 7:
+        call(VM_Nat(self, 7), VM_Nat(self, 6), VM_Nat(self, 5),
+             VM_Nat(self, 4), VM_Nat(self, 3), VM_Nat(self, 2),
+             VM_Nat(self, 1));
+        break;
+    case 8:
+        call(VM_Nat(self, 8), VM_Nat(self, 7), VM_Nat(self, 6),
+             VM_Nat(self, 5), VM_Nat(self, 4), VM_Nat(self, 3),
+             VM_Nat(self, 2), VM_Nat(self, 1));
+        break;
+    case 9:
+        call(VM_Nat(self, 9), VM_Nat(self, 8), VM_Nat(self, 7),
+             VM_Nat(self, 6), VM_Nat(self, 5), VM_Nat(self, 4),
+             VM_Nat(self, 3), VM_Nat(self, 2), VM_Nat(self, 1));
         break;
     default:
-        VM_QUIT(self, "native functions calls support 5 arguments max");
+        VM_QUIT(self, "native functions calls support 9 arguments max");
     }
-    VM_Pop(self, params + args);
+    VM_Pop(self, args);
     Queue_PshB(self->stack, Value_Null());
 }
 
