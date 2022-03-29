@@ -5,31 +5,25 @@
 # minimum number of intervals you need to remove
 # to make the rest of the intervals non-overlapping.
 
-Key(num)
+Compare(a, b)
 {
-    ret "{0.0}" % [num];
+    ret a[1] < b[1];
 }
 
 Overlap(intervals)
 {
-    overlaps := [];
-    map := {};
-    foreach(pair : intervals)
+    overlap := [];
+    Qsort(intervals, Compare);
+    for(i := 0; i < Len(intervals) - 1; i += 1)
     {
-        for(i := pair[0]; i < pair[1]; i += 1)
-        {
-            if(map[Key(i)] == null)
-            {
-                map[Key(i)] := true;
-            }
-            else
-            {
-                overlaps += [ pair ];
-                break;
-            }
-        }
+         a := intervals[i + 0];
+         b := intervals[i + 1];
+         if(b[0] < a[1])
+         {
+             overlap += [ b ];
+         }
     }
-    ret overlaps;
+    ret overlap;
 }
 
 Main()
