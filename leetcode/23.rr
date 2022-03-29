@@ -1,0 +1,41 @@
+# NON-OVERLAPPING INTERVALS
+# 
+# Given an array of intervals intervals where
+# intervals[i] = [starti, endi], return the
+# minimum number of intervals you need to remove
+# to make the rest of the intervals non-overlapping.
+
+Key(num)
+{
+    ret "{0.0}" % [num];
+}
+
+Overlap(intervals)
+{
+    overlaps := [];
+    map := {};
+    foreach(pair : intervals)
+    {
+        for(i := pair[0]; i < pair[1]; i += 1)
+        {
+            if(map[Key(i)] == null)
+            {
+                map[Key(i)] := true;
+            }
+            else
+            {
+                overlaps += [ pair ];
+                break;
+            }
+        }
+    }
+    ret overlaps;
+}
+
+Main()
+{
+    Assert(Overlap([[1, 2], [2, 3], [3, 4], [1, 3]]) == [[1, 3]]);
+    Assert(Overlap([[1, 2], [1, 2], [1, 2]]) == [[1, 2], [1, 2]]);
+    Assert(Overlap([[1, 2], [2, 3]]) == []);
+    ret 0;
+}
