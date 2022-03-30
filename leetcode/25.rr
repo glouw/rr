@@ -1,0 +1,69 @@
+# CLONE GRAPH
+# 
+# Given a reference of a node in a connected undirected graph.
+# Return a deep copy (clone) of the graph. Each node in the
+# graph contains a value (int) and a list (List[Node]) of its neighbors.
+
+Node(value)
+{
+    ret &{
+        .value : value,
+        .neighbors : [],
+    };
+}
+
+Node_Setup()
+{
+    a := Node(1);
+    b := Node(2);
+    c := Node(3);
+    d := Node(4);
+    a@neighbors += b;
+    b@neighbors += c;
+    c@neighbors += d;
+    d@neighbors += a;
+    ret a;
+}
+
+Node_Copy(nodes, visited)
+{
+    copy := Node(nodes@value);
+    if(visited["{}" % [nodes]] == null)
+    {
+        visited["{}" % [nodes]] := true;
+        foreach(neighbor : nodes@neighbors)
+        {
+            copy@neighbors += Node_Copy(neighbor, visited);
+        }
+    }
+    ret copy;
+}
+
+Node_Validate(a, b)
+{
+    Assert(a@value == b@value);
+    Assert((a@value ? b@value) == false);
+    Assert(a != b);
+    Assert((a ? b) == false);
+}
+
+Node_Check(a, b, visited)
+{
+    if(visited["{}" % [a]] == null)
+    {
+        visited["{}" % [a]] := true;
+        Node_Validate(a, b);
+        for(i := 0; i < Len(a@neighbors); i += 1)
+        {
+            Node_Check(a@neighbors[i], b@neighbors[i], visited);
+        }
+    }
+}
+
+Main()
+{
+    nodes := Node_Setup();
+    copy := Node_Copy(nodes, {});
+    Node_Check(nodes, copy, {});
+    ret 0;
+}

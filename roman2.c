@@ -5075,8 +5075,20 @@ VM_Num(VM* self, int64_t unused)
 {
     (void) unused;
     Value* a = Queue_Back(self->stack);
-    VM_TypeExpect(self, a->type, TYPE_STRING);
-    double number = String_ToNumber(a->of.string->value);
+    double number = 0.0;
+    if(a->type == TYPE_STRING)
+        number = String_ToNumber(a->of.string->value);
+    else
+    if(a->type == TYPE_CHAR)
+    {
+        char c = a->of.character->value[0];
+        if(c >= '0' && c <= '9')
+            number = c - '0';
+        else
+            VM_QUIT(self, "%c is not a valid number", c);
+    }
+    else
+        VM_QUIT(self, "Num expects string or char types");
     VM_Pop(self, 1);
     Queue_PshB(self->stack, Value_Number(number));
 }

@@ -1,0 +1,54 @@
+# TOP K FREQUENT ELEMENTS
+# 
+# Given an integer array nums and an integer k,
+# return the k most frequent elements.
+# You may return the answer in any order.
+
+Compare(a, b)
+{
+    ret a.count > b.count;
+}
+
+Key(n)
+{
+    ret "{0.0}" % [n];
+}
+
+Freq(nums, k)
+{
+    rec := {};
+    foreach(n : nums)
+    {
+        if(rec[Key(n)] == null)
+        {
+            rec[Key(n)] := 1;
+        }
+        else
+        {
+            rec[Key(n)] += 1;
+        }
+    }
+    flat := [];
+    keys := Keys(rec);
+    foreach(key : keys)
+    {
+        flat += {
+            .num : key,
+            .count : rec[key],
+        };
+    }
+    Qsort(flat, Compare);
+    out := [];
+    for(i := 0; i < k; i += 1)
+    {
+        out += Num(flat[i].num);
+    }
+    ret out;
+}
+
+Main()
+{
+    Assert(Freq([1, 1, 1, 1, 2, 2, 2, 3], 2) == [1, 2]);
+    Assert(Freq([1], 1) == [1]);
+    ret 0;
+}

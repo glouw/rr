@@ -1,0 +1,88 @@
+# SERIALIZE AND DESERIALIZE BINARY TREE
+# 
+# Serialization is the process of converting a
+# data structure or object into a sequence of bits
+# so that it can be stored in a file or memory buffer,
+# or transmitted across a network connection link to
+# be reconstructed later in the same or another computer environment.
+# 
+# Design an algorithm to serialize and deserialize
+# a binary tree. There is no restriction on how your
+# serialization/deserialization algorithm should work.
+# You just need to ensure that a binary tree can be
+# serialized to a string and this string can be deserialized
+# to the original tree structure.
+# 
+# Clarification: The input/output format is the same as
+# how LeetCode serializes a binary tree. You do not necessarily
+# need to follow this format, so please be creative and
+# come up with different approaches yourself.
+
+Node(value)
+{
+    ret &{
+        .value : value,
+        .l : null,
+        .r : null,
+    };
+}
+
+Node_Setup()
+{
+    nodes := Node(1);
+    nodes@l := Node(2);
+    nodes@r := Node(8);
+    nodes@r@l := Node(8);
+    nodes@r@l@r := Node(8);
+    nodes@r@l@l := Node(8);
+    nodes@l@l := Node(3);
+    nodes@l@l@r := Node(3);
+    nodes@l@l@r@r := Node(9);
+    ret nodes;
+}
+
+Serialize(nodes, dir)
+{
+    if(nodes == null)
+    {
+        ret "";
+    }
+    else
+    {
+        string := "{0.0}" % [nodes@value];
+        string += Serialize(nodes@l, "L");
+        string += Serialize(nodes@r, "R");
+        string += dir;
+        ret string;
+    }
+}
+
+Deserialize(string)
+{
+    stack := [];
+    foreach(x : string)
+    {
+        if((x == "L") || (x == "R"))
+        {
+            a := stack[Len(stack) - 2];
+            b := stack[Len(stack) - 1];
+            if(x == "L") { a@l = b; }
+            if(x == "R") { a@r = b; }
+            Del(stack, -1);
+        }
+        else
+        {
+            stack += Node(Num(x));
+        }
+    }
+    ret stack[0];
+}
+
+Main()
+{
+    a := Serialize(Node_Setup(), "");
+    b := Deserialize(a);
+    c := Serialize(b, "");
+    Assert(a == c);
+    ret 0;
+}
