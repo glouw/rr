@@ -251,7 +251,6 @@ Main()
 
 Strings can be appended to with the `+` operator.
 Strings can be numerically compared with the `-` operator (eg. C's `strcmp`).
-Booleans returned from the `-` operator `<` and 
 String elements can be deleted with the `Del` keyword. String element deletion
 is O(1) from the back and O(N) from the middle and front.
 
