@@ -176,7 +176,7 @@ Class;
 
 #define OPCODES \
     X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Bol) X(Brf) X(Bsr) \
-    X(Cal) X(Cel) X(Cop) X(Cos) X(Del) X(Div) X(Dll) X(Drf) X(End) X(Eql) X(Ext) X(Flr) \
+    X(Cal) X(Cel) X(Cop) X(Cos) X(Del) X(Div) X(Dll) X(Drf) X(End) X(Eql) X(Exi) X(Ext) X(Flr) \
     X(Fls) X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) X(Jmp) X(Key) X(Len) \
     X(Loc) X(Lod) X(Log) X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) \
     X(Neq) X(Not) X(Num) X(Opn) X(Pop) X(Pow) X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) \
@@ -282,7 +282,7 @@ typedef struct
     char* mnemonic;
     int64_t args;
 }
-Macro;
+Keyword;
 
 static void*
 Malloc(int64_t size)
@@ -2446,7 +2446,7 @@ Module_Name(CC* self, char* postfix)
     return name;
 }
 
-static Macro Macros[] = {
+static Keyword Keywords[] = {
     { "Abs",     "Abs", 1 },
     { "Acos",    "Aco", 1 },
     { "All",     "All", 1 },
@@ -2460,6 +2460,7 @@ static Macro Macros[] = {
     { "Copy",    "Cop", 1 },
     { "Cos",     "Cos", 1 },
     { "Del",     "Del", 2 },
+    { "Exists",  "Exi", 2 },
     { "Exit",    "Ext", 1 },
     { "Floor",   "Flr", 1 },
     { "Keys",    "Key", 1 },
@@ -2485,24 +2486,24 @@ static Macro Macros[] = {
 };
 
 static int
-Macro_Compare(const void* a, const void* b)
+Keyword_Compare(const void* a, const void* b)
 {
-    const Macro* aa = a;
-    const Macro* bb = b;
+    const Keyword* aa = a;
+    const Keyword* bb = b;
     return strcmp(aa->name, bb->name);
 }
 
 static void
-Macro_Sort(void)
+Keyword_Sort(void)
 {
-    qsort(Macros, LEN(Macros), sizeof(Macro), Macro_Compare);
+    qsort(Keywords, LEN(Keywords), sizeof(Keyword), Keyword_Compare);
 }
 
-static Macro*
-Macro_Find(char* name)
+static Keyword*
+Keyword_Find(char* name)
 {
-    Macro key = { .name = name };
-    return bsearch(&key, Macros, LEN(Macros), sizeof(Macro), Macro_Compare);
+    Keyword key = { .name = name };
+    return bsearch(&key, Keywords, LEN(Keywords), sizeof(Keyword), Keyword_Compare);
 }
 
 static void
@@ -2950,9 +2951,9 @@ CC_Direct(CC* self, bool negative)
 }
 
 static void
-CC_Macro(CC* self, Macro* macro)
+CC_Keyword(CC* self, Keyword* keyword)
 {
-    CC_AssemB(self, String_Format("\t%s", macro->mnemonic));
+    CC_AssemB(self, String_Format("\t%s", keyword->mnemonic));
 }
 
 static void
@@ -2974,11 +2975,11 @@ CC_DirectCalling(CC* self, String* ident, Meta* meta)
         CC_Native(self, ident, meta);
     else
     {
-        Macro* macro = Macro_Find(ident->value);
-        if(macro == NULL || macro->args == -1)
+        Keyword* keyword = Keyword_Find(ident->value);
+        if(keyword == NULL || keyword->args == -1)
             CC_Call(self, ident, size);
         else
-            CC_Macro(self, macro);
+            CC_Keyword(self, keyword);
     }
 }
 
@@ -5093,6 +5094,21 @@ VM_Key(VM* self, int64_t unused)
 }
 
 static void
+VM_Exi(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value* a = Queue_Get(self->stack, self->stack->size - 2);
+    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    VM_TypeExpect(self, a->type, TYPE_MAP);
+    VM_TypeExpect(self, b->type, TYPE_STRING);
+    bool exists = false;
+    if(Map_Exists(a->of.map, b->of.string->value))
+        exists = true;
+    VM_Pop(self, 2);
+    Queue_PshB(self->stack, Value_Bool(exists));
+}
+
+static void
 VM_Ext(VM* self, int64_t unused)
 {
     (void) unused;
@@ -5200,10 +5216,10 @@ VM_Assemble(Queue* assembly, Queue* debug)
 static void
 CC_Reserve(CC* self)
 {
-    for(uint64_t i = 0; i < LEN(Macros); i++)
+    for(uint64_t i = 0; i < LEN(Keywords); i++)
     {
-        Macro macro = Macros[i];
-        CC_Define(self, CLASS_FUNCTION, macro.args, String_Init(macro.name), String_Init("reserved"));
+        Keyword keyword = Keywords[i];
+        CC_Define(self, CLASS_FUNCTION, keyword.args, String_Init(keyword.name), String_Init("reserved"));
     }
 }
 
@@ -5253,7 +5269,7 @@ Args_Help(void)
 int
 main(int argc, char* argv[])
 {
-    Macro_Sort();
+    Keyword_Sort();
     Args args = Args_Parse(argc, argv);
     if(args.entry)
     {

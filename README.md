@@ -4,7 +4,7 @@ Roman II is a dynamically typed programming language inspired by C, Python, and 
 
 Roman II is comprised of a recursive descent compiler, a virtual machine, and a garbage collector.
 
-Roman II strives to be dependency free.
+Roman II is dependency free.
 
 Roman II strives to be written in 5000 lines or less in one file titled `roman2.c`
 with the GNU11 dialect of C.
@@ -58,7 +58,7 @@ Flags passed to `roman2`:
 
 ### Program Entry
 
-Roman2 enters and starts execution from function `Main`. The `Main` function
+Roman II enters and starts execution from function `Main`. The `Main` function
 must return a number.
 
 ```
@@ -72,8 +72,8 @@ Main()
 ### Value Types
 
 Aside from numbers which are of double precision, Roman II supports maps,
-queues, files, strings, booleans, and pointer types which may point to
-functions or variables.
+queues, files, strings, booleans, nulls, and pointer, the latter which may
+point to functions or variables.
 
 #### Numbers
 
@@ -85,7 +85,7 @@ Main()
 {
     a := 1;
     a = 2;
-    Print(a);
+    Assert(a == 2);
     ret 0;
 }
 ```
@@ -101,6 +101,11 @@ Operators compatible with numbers include:
 ** : Power Of
 %% : Integer Modulus
 // : Integer Division
+```
+
+Boolean operators include:
+
+```
 == : Equal To
 != : Not Equal To
 <= : Less Than or Equal To
@@ -111,6 +116,8 @@ Operators compatible with numbers include:
 
 Each operator supports its relational variant: `+=`, `-=`, `/=`, `*=`, `%=`, `**=`, `%%=`, `//=`.
 
+Operators and relational variants can be supported with `queue`, `map`, and `string` types.
+
 #### Queues
 
 Queues, also known as lists (with O(1) front and back operations!), can store value types.
@@ -119,7 +126,6 @@ Queues, also known as lists (with O(1) front and back operations!), can store va
 Main()
 {
     queue := [0, 1, 2, 3, 4];
-    Print(queue);
     ret 0;
 }
 ```
@@ -146,7 +152,7 @@ Queues can access their elements with the `[]` operator:
 Main()
 {
     queue := [-1, 2, 3];
-    Print(queue[1]);
+    Assert(queue[1] == 2);
     ret 0;
 }
 ```
@@ -157,12 +163,13 @@ Queues can be sliced:
 Main()
 {
     queue := [0, 1, 2, 3]
-    slice := Print(queue[1:3]);
+    slice := Assert(queue[1:3] == [1, 2]);
     ret 0;
 }
 ```
 
 Queue slices are copies, so attempting to set a queue slice will have no effect:
+
 ```
 Main()
 {
@@ -174,6 +181,7 @@ Main()
 ```
 
 The back of the queue can be accessed with the [-1] operator:
+
 ```
 Main()
 {
@@ -243,6 +251,7 @@ Main()
 
 Strings can be appended to with the `+` operator.
 Strings can be numerically compared with the `-` operator (eg. C's `strcmp`).
+Booleans returned from the `-` operator `<` and 
 String elements can be deleted with the `Del` keyword. String element deletion
 is O(1) from the back and O(N) from the middle and front.
 
@@ -263,8 +272,8 @@ Strings can be formatted with the `%` operator:
 ```
 Main()
 {
-    formatted := "number : {5.2}, string : {}" % [1, "string"];
-    Print(formatted);
+    formatted := "number : {5.2}, string : {}" % [1, "Roman II"];
+    Assert(formatted == "number : 1.00, string : Roman II");
     ret 0;
 }
 ```
@@ -285,7 +294,7 @@ Main()
 }
 ```
 
-Short hand, C struct style map initialization is supported: 
+Short hand, C struct style map notation is supported: 
 
 ```
 Main()
@@ -299,7 +308,7 @@ Main()
 }
 ```
 
-Value types are interchangable. A map can associate strings to queues
+Value types are interchangeable. A map can associate strings to queues
 just as a queue can hold maps and queues:
 
 ```
@@ -315,7 +324,7 @@ Main()
     ret 0;
 }
 ```
-New keys can be inserted into a preexisting map with the `:=` operator.
+New keys can be inserted into a map with the `:=` operator.
 Pre-existing keys can be modified with the `=` operator. Should a key
 not exist, the `=` operator is a no-op.
 
@@ -347,7 +356,17 @@ Main()
 }
 ```
 
-Caution, values of type `null` can be inserted into maps.
+Caution, values of type `null` can be inserted into maps. The `Exists` keyword
+can be used to check for such `nulls` by checking for the existence of a key:
+
+```
+Main()
+{
+    map := { .key : null };
+    Assert(Exists(map, "key"));
+    ret 0;
+}
+```
 
 Two maps can be merged with the `+` operator.
 
@@ -372,10 +391,40 @@ Main()
 }
 ```
 
-#### Boolean Expressions
+Maps can be iterated with the `Keys` keyword: 
 
-Boolean expression are pascal-like requiring encolsed parenthesis
-per boolean expression. Boolean expressions do not short circuit.
+
+```
+Main()
+{
+    map := {
+        "a" : 1,
+        "b" : 2,
+        "c" : 3,
+        "d" : 4,
+        "e" : 5,
+    };  
+    keys := Keys(map);
+    foreach(key : keys)
+    {
+        map[key] += 1;
+    }
+    Assert(map == {
+        .a : 2,
+        .b : 3,
+        .c : 4,
+        .d : 5,
+        .e : 6,
+    });
+    ret 0;
+}
+```
+
+### Boolean Expressions
+
+Boolean expression are pascal-like requiring enclosed parenthesis
+per boolean expression. Operators `&&` and `||` evaluate expressions left and right.
+Boolean expressions do not short circuit.
 
 ```
 Main()
@@ -385,308 +434,409 @@ Main()
 }
 ```
 
-DOCS TODO:
+### Loops and Control Flow
 
-// ### Loops and Control Flow
-// 
-// Roman2 includes the standard `for` and `while` loop inspired by C,
-// as well as a queue iterator dubbed `foreach`. Looping with `foreach`
-// iterates by reference.
-// 
-// ```
-// Main()
-// {
-//     for(i := 0; i < 10; i += 1)
-//     {
-//         if(i == 0)
-//         {
-//             continue;
-//         }
-//         elif(i == 1)
-//         {
-//             break;
-//         }
-//         else
-//         {
-//             while(true)
-//             {
-//                 break;
-//             }
-//         }
-//     }
-//     queue := [ 0, 1, 2, 3 ];
-//     foreach(x : queue)
-//     {
-//         Print(x);
-//         x += 1;
-//     }
-//     # queue is now [ 1, 2, 3, 4 ]
-//     map := {
-//         "a" : 1,
-//         "b" : 2,
-//         "c" : 3,
-//     };
-//     keys := Keys(map);
-//     foreach(key : keys)
-//     {
-//         Print("{} : {}" % [key, map[key]]);
-//     }
-//     ret 0;
-// }
-// ```
-// 
-// ### Functions
-// 
-// Functions pass values by reference. Functions return `null` if
-// no specific return valule is specified.
-// 
-// ```
-// Increment(number)
-// {
-//     number := 1;
-// }
-// 
-// Add(a, b)
-// {
-//     ret a + b;
-// }
-// 
-// Main()
-// {
-//     a := Add(1, 3);
-//     b := Add({ .x = 1 }, { .y = 2 })
-//     c := Add([0, 1, 2, 3], [4, 5, 6, 7]);
-//     d := 1;
-//     Increment(d);
-//     # d is now 2.
-//     ret 0;
-// }
-// ```
-// #### Pointers
-// 
-// Variables 
-// 
-// ```
-// Main()
-// {
-//     f := 1;
-//     g := &f;
-//     Print(*g);
-// 
-//     h := { .key : 1 };
-//     Print(h.key)
-//     i := &h;
-//     Print((*i).key);
-//     Print(i@key); # Same as above but cleaner. See C's `->` arrow operator.
-//     ret 0;
-// }
-// ```
-// 
-// ### Function Pointers
-// 
-// Functions can be pointed to with pointer syntaxing.
-// 
-// ```
-// Fun(arg)
-// {
-//     Print(arg);
-// }
-// 
-// Main()
-// {
-//     a := &Fun;
-//     b := Fun;
-//     a(42); # Automatically dereferenced.
-//     b(42); # Same.
-//     (*a)(42); # Manual dereference works as well.
-//     ret 0;
-// }
-// ```
-// 
-// ### Sorting
-// 
-// Function pointers can be used as callbacks. For instance,
-// a built in Qsort macro takes a function pointer comparator.
-// 
-// ```
-// Compare(a, b)
-// {
-//     ret a < b;
-// }
-// 
-// Test(Comparator, a, b)
-// {
-//     return Comparator(a, b);
-// }
-// 
-// Main()
-// {
-//     Print(Test(Compare, 1, 2));
-//     a := [ 0, 5, 3, 2 ];
-//     b := [ "b", "c", "a", "f", "z"];
-//     Qsort(a, Compare);
-//     Qsort(b, Compare);
-//     ret 0;
-// }
-// ```
-// 
-// ### Binary Searching
-// 
-// Likewise, a queue of values, be it numbers, strings, booleans, maps, or queues themselves,
-// can be binary searched for a key if already sorted:
-// 
-// ```
-// Compare(a, b)
-// {
-//     ret a < b;
-// }
-// 
-// Diff(a, b)
-// {
-//     ret a - b;
-// }
-// 
-// Main()
-// {
-//     a := [ "b", "c", "a", "f", "z"];
-//     Qsort(a, Compare);
-//     found := Bsearch(a, "b", Diff);
-//     if(found != null)
-//     {
-//         Print(*found);
-//     }
-//     ret 0;
-// }
-// ```
-// A queue of maps, should they be treated conventionally like C structs,
-// can be sorted and searched:
-// 
-// ```
-// Diff(a, b)
-// {
-//     ret a.key - b.key;
-// }
-// 
-// Compare(a, b)
-// {
-//     ret a.key < b.key;
-// }
-// 
-// Main()
-// {
-//     want := 99; 
-//     a := [
-//         { .key : "b", .value : 99 },
-//         { .key : "a", .value :  2 },
-//         { .key : "d", .value :  3 },
-//         { .key : "c", .value :  4 },
-//         { .key : "z", .value :  5 },
-//         { .key : "f", .value :  6 },
-//     ];  
-//     Qsort(a, Compare);
-//     b := Bsearch(a, { .key : "b" }, Diff);
-//     Assert(b@value == 99);
-//     ret 0;
-// }
-// ```
-// ### Modules
-// 
-// Modules can be packaged and imported. Modules do not namespace and are recommended
-// to include a suffix denoting the module name.
-// 
-// `Math.rr`
-// ```
-// Math_Add(a, b)
-// {
-//     ret a + b;
-// }
-// ```
-// 
-// `Main.rr`
-// ```
-// inc Math;
-// 
-// Main()
-// {
-//     ret Math_Add(-1, 1);
-// }
-// ```
-// Module inclusions are akin to C's `#include` preprocessor directive, performing a source copy-paste,
-// with the caveat that modules are processed once even with multiple inclusions of the same module.
-// 
-// ### Shared Object Libraries
-// 
-// Roman2 can call functions from native C shared objects libaries. Types sypported are `number`, `string`,
-// and `bool`, mapping to types `double*`, `char*`, and `bool*`, respectively:
-// 
-// Math.c
-// ```
-// // gcc Math.c -o Math.so --shared -fpic
-// 
-// void Math_Add(double* self, double* other)
-// {
-//     *self += *other;
-// }
-// ```
-// Main.rr
-// 
-// ```
-// lib Math
-// {
-//     Math_Add(self, other);
-// }
-// 
-// Main()
-// {
-//     a := 1;
-//     Math_Add(a, 2);
-//     Assert(a == 3); 
-//     ret 0;
-// }
-// 
-// ```
-// 
-// ### Built-In Macros
-// 
-// Built in macros are exposed by the compiler to present an include-free standard library.
-// These macros cannot be pointed with pointer syntaxing.
-// 
-// A `value` can either be a `number`, `queue`, `bool`, `string`, `map`, `function`, or `file`.
-// 
-// ```
-// Abs     (number)
-// Acos    (number)
-// All     (queue)
-// Any     (queue)
-// Asin    (number)
-// Assert  (bool)
-// Atan    (number)
-// Bool    (string)
-// Bsearch (queue, value, function)
-// Ceil    (number)
-// Copy    (value)
-// Cos     (number)
-// Del     (value, value);
-// Exit    (number)
-// Floor   (number)
-// Keys    (map)
-// Len     (value)
-// Log     (number)
-// Num     (string)
-// Max     (value, value)
-// Min     (value, value)
-// Open    (file, string)
-// Pow     (number)
-// Print   (value)
-// Qsort   (queue, function)
-// Rand    ()
-// Read    (file, number)
-// Refs    (value)
-// Sin     (number)
-// Sqrt    (number)
-// Srand   (number)
-// Tan     (number)
-// Time    () # Returns Microsecond uptime.
-// Type    (value)
-// Write   (file, string)
-// ```
+Standard `for` and `while` loops can loop expression blocks.
+Continuing within a `for` loop will run it's advancement expression:
+`for(init; condition; advancement)`.
+
+The following two loops are equivalent:
+
+```
+Main()
+{
+    for(i := 0; i < 10; i += 1)
+    {
+        Print(i);
+    }
+    ret 0;
+}
+```
+
+```
+Main()
+{
+    i := 0;
+    while(i < 10)
+    {
+        Print(i);
+        i += 1;
+    }
+    ret 0;
+}
+```
+
+### Functions
+
+Functions pass values by reference. Functions return `null` if
+no specific return value is specified.
+
+```
+Increment(number)
+{
+    number := 1;
+}
+
+Add(a, b)
+{
+    ret a + b;
+}
+
+Main()
+{
+    a := Add(1, 3);
+    b := Add({ .x = 1 }, { .y = 2 })
+    c := Add([0, 1, 2, 3], [4, 5, 6, 7]);
+    d := 1;
+    Increment(d);
+    Assert(a == 4);
+    Assert(b == { .x = 1, .y = 2 });
+    Assert(c == [0, 1, 2, 3, 4, 5, 6, 7]);
+    Assert(d == 2);
+    ret 0;
+}
+```
+
+References passed to functions can be checked for aliasing with
+the `?` operator, to, for example, avoid a superfluous copy:
+
+```
+Set(value, with)
+{
+    if(value ? with)
+    {
+        ret;
+    }
+    else
+    {
+        value = with;
+    }
+}
+
+Main()
+{
+    a := 1;
+    Set(a, a);
+    ret 0;
+}
+```
+
+#### Pointers
+
+Variables and functions can be pointed to with pointer syntaxing.
+A variable pointer requires use of the address-of `&` operator, followed by
+a dereference `*` operator:
+
+```
+Main()
+{
+    f := 1;
+    g := &f;
+    Assert(*g == 1);
+    ret 0;
+}
+```
+
+All variable types can be pointer to, but to ease pointer syntaxing
+with maps using C struct notation, the `@` operator can be used:
+
+```
+Main()
+{
+    map := { .key : 1 };
+    pointer := &map;
+    Assert(map.key == 1)
+    Assert((*pointer).key == 1);
+    Assert(pointer@key == 1); # Same as above, but a little easier to use.
+    ret 0;
+}
+```
+
+Functions can also be pointed to with pointer syntaxing.
+
+```
+Fun(arg)
+{
+    Print(arg);
+}
+
+Main()
+{
+    a := &Fun;
+    b := Fun;
+    a(42); # `a` is automatically dereferenced.
+    b(42); # Same as above.
+    (*a)(42); # Manual dereferencing for `a` works as well.
+    ret 0;
+}
+```
+
+Function pointers can be used as callbacks.
+
+```
+Printer(text)
+{
+    Print(text);
+}
+
+Message(printer, text)
+{
+    printer(text);
+}
+
+Main()
+{
+    Message(Printer, "Hello, world!");
+    ret 0;
+}
+```
+
+### Sorting
+
+Function pointers are often used while quick sorting
+or binary searching.
+
+```
+Compare(a, b)
+{
+    ret a < b;
+}
+
+Main()
+{
+    a := [ 0, 5, 3, 2 ];
+    b := [ "b", "c", "a", "f", "z"];
+    Qsort(a, Compare);
+    Qsort(b, Compare);
+    ret 0;
+}
+```
+
+### File Input and Output
+
+Files can be opened, read, and written to, with built in calls `Open`, `Read`, and `Write`.
+
+```
+Main()
+{
+    file := Open("file.txt", "w");
+    Write(file, "testing!");
+    string := Read(file, 8);
+    Assert(string == "testing!");
+    ret 0;
+}
+```
+
+A file is automatically closed once it's reference count reaches 0.
+
+### Value Length
+
+Strings, numbers, and booleans can be compared with all boolean operators.
+Other value types, such as queues, maps, files, use their length (size) for comparison.
+
+The `Len` keyword returns the length (or size) of a queue, map, string, or file.
+
+```
+Main()
+{
+    Assert(Len("abc") == 3);
+    Assert(Len([1,2,3]) == 3);
+    Assert(Len({.a : 1}) == 1);
+    file := Open("file.txt", "r");
+    Assert(Len(file) == 42); # Assuming `file.txt` consists of 42 characters.
+    ret 0;
+}
+```
+### Binary Searching
+
+Likewise, as with sorting, a queue of values can be binary searched
+for a key if the queue is already sorted:
+
+```
+Comp(a, b) { ret a < b; }
+Diff(a, b) { ret a - b; }
+
+Main()
+{
+    a := [ "b", "c", "a", "f", "z"];
+    Qsort(a, Compare);
+    found := Bsearch(a, "b", Diff);
+    if(found != null)
+    {
+        Assert(*found == "b");
+    }
+    ret 0;
+}
+
+```
+A queue of maps can be sorted and searched:
+
+```
+Comp(a, b) { ret a.key < b.key; }
+Diff(a, b) { ret a.key - b.key; }
+
+Main()
+{
+    want := 99; 
+    a := [
+        { .key : "b", .value : 99 },
+        { .key : "a", .value :  2 },
+        { .key : "d", .value :  3 },
+        { .key : "c", .value :  4 },
+        { .key : "z", .value :  5 },
+        { .key : "f", .value :  6 },
+    ];  
+    Qsort(a, Compare);
+    b := Bsearch(a, { .key : "b" }, Diff);
+    Assert(b@value == 99);
+    ret 0;
+}
+```
+Note that the binary searching callback requires a difference function
+that returns 0 for a matching element, -1 for less than, and + 1 for greater than.
+In the above example, string subtraction within `Diff` is analogous to C's `strcmp`.
+
+### Modules
+
+Modules can be packaged and imported. Modules do not namespace and are recommended
+to include a suffix denoting the module name.
+
+`Math.rr`:
+```
+Math_Add(a, b)
+{
+    ret a + b;
+}
+```
+
+`Main.rr`:
+```
+inc Math;
+
+Main()
+{
+    ret Math_Add(-1, 1);
+}
+```
+Module inclusions are akin to C's `#include` preprocessor directive, which performs
+a source copy and paste. The caveat is that modules are processed only once, even
+with multiple inclusions of the same module.
+
+### Shared Object Libraries
+
+Roman II can call functions from native C shared objects libraries. Value types
+supported are `number`, `string`, and `bool`, mapping to types `double*`,
+`char*`, and `bool*`, respectively:
+
+`Math.c`:
+```
+// gcc Math.c -o Math.so --shared -fpic
+
+void Math_Add(double* self, double* other)
+{
+    *self += *other;
+}
+```
+`Main.rr`:
+
+```
+lib Math
+{
+    Math_Add(self, other);
+}
+
+Main()
+{
+    a := 1;
+    Math_Add(a, 2);
+    Assert(a == 3); 
+    ret 0;
+}
+
+```
+
+### Built-In Keywords
+
+Built in keywords are exposed by the compiler to present an include-free standard library.
+These keywords cannot be pointed with pointer syntaxing.
+
+A `value` can either be a `number`, `queue`, `bool`, `string`, `map`, `function`, or `file`.
+
+```
+KEYWORD  ARGUMENTS
+
+Abs      (number)
+Acos     (number)
+All      (queue)
+Any      (queue)
+Asin     (number)
+Assert   (bool)
+Atan     (number)
+Bool     (string)
+Bsearch  (queue, value, function)
+Ceil     (number)
+Copy     (value)
+Cos      (number)
+Del      (value, value);
+Exists   (map, string);
+Exit     (number)
+Floor    (number)
+Keys     (map)
+Len      (value)
+Log      (number)
+Num      (string)
+Max      (value, value)
+Min      (value, value)
+Open     (file, string)
+Pow      (number)
+Print    (value)
+Qsort    (queue, function)
+Rand     ()
+Read     (file, number)
+Refs     (value)
+Sin      (number)
+Sqrt     (number)
+Srand    (number)
+Tan      (number)
+Time     () # Microseconds.
+Type     (value)
+Write    (file, string)
+```
+
+## Garbage Collection
+
+While most values free when their internal reference counts reaches 0,
+values with cyclical references require garbage collector intervention.
+An example of a circular reference is that of two maps pointing to each other:
+
+```
+Main()
+{
+    a := {};
+    b := {};
+    # Ref count of `a` is now 1.
+    # Ref count of `b` is now 1.
+
+    a.ref := &b;
+    b.ref := &a;
+    # Ref count of `a` is now 2.
+    # Ref count of `b` is now 2.
+
+    ret 0;
+
+    # Return decrements `a` and `b` ref counts by 1.
+    # Ref count of `a` is now 1 and needs to be garbage collected.
+    # Ref count of `b` is now 1 and needs to be garbage collected.
+}
+```
+
+Roman II's garbage collector is tracked by an internal tracking value named `alloc_cap`.
+This value is set to an arbitrary buffer value (eg. 1024 values) at startup.
+Should the number of values allocated exceed `alloc_cap` all values are marked
+as either reachable or unreachable and the unreachable values are sweeped (freed).
+The new `alloc_cap` size is set to the current number of reachable values plus
+the arbitrary buffer value (eg. 1024).
+
+The garbage collector checks `alloc_cap` after every function call,
+`while` loop iteration, `for` loop iteration, and `foreach` loop iteration.
+One final mark and sweep is run at program exit.

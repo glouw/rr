@@ -1,9 +1,12 @@
 Main()
 {
     a := {
-        "key" : 1
+        "key" : 1,
+        "null" : null
     };
     Assert(a["key"] != null);
     Assert(a["yek"] == null);
+    Assert(Exists(a, "null"));
+    Assert(!Exists(a, "yek"));
     ret 0;
 }
