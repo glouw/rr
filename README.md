@@ -194,6 +194,7 @@ Main()
     Assert(queue == [1, 2]);
     ret 0;
 }
+```
 
 Finally, queues can be iterated over with the `foreach` loop.
 Indexing via `foreach` is done by reference.
