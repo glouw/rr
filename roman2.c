@@ -1033,7 +1033,6 @@ Queue_Print(Queue* self, int64_t indents)
         for(int64_t i = 0; i < size; i++)
         {
             String_Append(print, String_Indent(indents + 1));
-            String_Append(print, String_Format("[%ld] = ", i));
             String_Append(print, Value_Sprint(Queue_Get(self, i), false, indents + 1, -1, -1));
             if(i < size - 1)
                 String_Appends(print, ",");
@@ -1317,7 +1316,10 @@ Map_Append(Map* self, Map* other)
 static bool
 Map_Equal(Map* self, Map* other, Compare compare)
 {
-    if(self->size == other->size)
+    if(self->size != other->size)
+        return false;
+    else
+    {
         MAP_FOREACH(self, chain,
             void* got = Map_Get(other, chain->key->value);
             if(got == NULL)
@@ -1325,7 +1327,8 @@ Map_Equal(Map* self, Map* other, Compare compare)
             if(!compare(chain->value, got))
                 return false;
         )
-    return true;
+        return true;
+    }
 }
 
 static bool
@@ -2771,7 +2774,7 @@ CC_Ref(CC* self, String* ident)
         CC_AssemB(self, String_Format("\tLoc %ld", meta->stack));
 }
 
-static bool
+static void
 CC_Factor(CC*);
 
 static void
@@ -2844,17 +2847,13 @@ CC_NextOf(CC* self, char* any)
     return false;
 }
 
-static bool
+static void
 CC_Resolve(CC* self)
 {
-    bool storage = true;
     while(CC_NextOf(self, "[.@("))
     {
         if(CC_Next(self) == '(')
-        {
             CC_Vrt(self);
-            storage = false;
-        }
         else
         {
             bool slice = false;
@@ -2867,24 +2866,15 @@ CC_Resolve(CC* self)
                     CC_Match(self, ":");
                     CC_Expression(self);
                     slice = true;
-                    storage = false;
                 }
-                else
-                    storage = true;
                 CC_Match(self, "]");
             }
             else
             if(CC_Next(self) == '.')
-            {
                 CC_Dot(self);
-                storage = true;
-            }
             else
             if(CC_Next(self) == '@')
-            {
                 CC_At(self);
-                storage = true;
-            }
             if(CC_Next(self) == ':')
             {
                 CC_Assign(self);
@@ -2899,7 +2889,6 @@ CC_Resolve(CC* self)
             }
         }
     }
-    return storage;
 }
 
 static void
@@ -3006,24 +2995,19 @@ CC_Calling(CC* self, String* ident)
         CC_QUIT(self, "identifier %s is not callable", ident->value);
 }
 
-static bool
+static void
 CC_Referencing(CC* self, String* ident)
 {
     Meta* meta = CC_Meta(self, ident);
     if(CC_IsFunction(meta->class))
         CC_AssemB(self, String_Format("\tPsh @%s,%ld", ident->value, meta->stack));
     else
-    {
         CC_Ref(self, ident);
-        return true;
-    }
-    return false;
 }
 
-static bool
+static void
 CC_Identifier(CC* self)
 {
-    bool storage = false;
     String* ident = NULL;
     if(self->prime)
         String_Swap(&self->prime, &ident);
@@ -3038,9 +3022,8 @@ CC_Identifier(CC* self)
     if(CC_Next(self) == '(')
         CC_Calling(self, ident);
     else
-        storage = CC_Referencing(self, ident);
+        CC_Referencing(self, ident);
     String_Kill(ident);
-    return storage;
 }
 
 static void
@@ -3069,16 +3052,15 @@ CC_Deref(CC* self)
 static void
 CC_Not(CC*);
 
-static bool
+static void
 CC_Factor(CC* self)
 {
-    bool storage = false;
     int64_t next = CC_Next(self);
     if(CC_String_IsDigit(next))
         CC_Direct(self, false);
     else
     if(CC_String_IsIdent(next) || self->prime)
-        storage = CC_Identifier(self);
+        CC_Identifier(self);
     else switch(next)
     {
     case '!':
@@ -3104,7 +3086,6 @@ CC_Factor(CC* self)
         CC_String(self);
         break;
     case '*':
-        storage = true;
         CC_Deref(self);
         break;
     case '&':
@@ -3114,8 +3095,7 @@ CC_Factor(CC* self)
         CC_QUIT(self, "an unknown factor starting with `%c` was encountered", (char) next);
         break;
     }
-    storage &= CC_Resolve(self);
-    return storage;
+    CC_Resolve(self);
 }
 
 static void
@@ -3127,63 +3107,49 @@ CC_Not(CC* self)
 }
 
 static void
-CC_StorageCheck(CC* self, String* operator, bool storage)
-{
-    if(storage == false)
-        CC_QUIT(self, "the left hand side of operator %s must be storage", operator->value);
-}
-
-static bool
 CC_Term(CC* self)
 {
-    bool storage = CC_Factor(self);
+    CC_Factor(self);
     while(CC_NextOf(self, "*/%?|"))
     {
         String* operator = CC_Operator(self);
         if(String_Equals(operator, "*="))
         {
-            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tMul"));
         }
         else
         if(String_Equals(operator, "%%="))
         {
-            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tImd"));
         }
         else
         if(String_Equals(operator, "//="))
         {
-            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tIdv"));
         }
         else
         if(String_Equals(operator, "/="))
         {
-            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tDiv"));
         }
         else
         if(String_Equals(operator, "%="))
         {
-            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tMod"));
         }
         else
         if(String_Equals(operator, "**="))
         {
-            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tPow"));
         }
         else
         {
-            storage = false;
             if(String_Equals(operator, "?"))
             {
                 CC_Factor(self);
@@ -3219,33 +3185,29 @@ CC_Term(CC* self)
         }
         String_Kill(operator);
     }
-    return storage;
 }
 
 static void
 CC_Expression(CC* self)
 {
-    bool storage = CC_Term(self);
+    CC_Term(self);
     while(CC_NextOf(self, "+-=!?><&"))
     {
         String* operator = CC_Operator(self);
         if(String_Equals(operator, "="))
         {
-            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tMov"));
         }
         else
         if(String_Equals(operator, "+="))
         {
-            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tAdd"));
         }
         else
         if(String_Equals(operator, "-="))
         {
-            CC_StorageCheck(self, operator, storage);
             CC_Expression(self);
             CC_AssemB(self, String_Init("\tSub"));
         }
@@ -3287,7 +3249,6 @@ CC_Expression(CC* self)
         }
         else
         {
-            storage = false;
             CC_AssemB(self, String_Init("\tCop"));
             CC_Term(self);
             if(String_Equals(operator, "+"))
