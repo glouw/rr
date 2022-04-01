@@ -427,14 +427,14 @@ String_Indent(int64_t indents)
 }
 
 static int64_t
-String_ToUll(char* string)
+String_Toll(char* string)
 {
     errno = 0;
     char* end;
-    int64_t ull = strtoull(string, &end, 10);
+    int64_t ll = strtoll(string, &end, 10);
     if(*end != '\0' || errno != 0)
         QUIT("%s is not a valid number", string);
-    return ull;
+    return ll;
 }
 
 static double
@@ -3867,7 +3867,7 @@ VM_Store(VM* self, Map* labels, char* operand)
         if(ch == '@')
         {
             String* name = String_Init(strtok(operand + 1, ","));
-            int64_t size = String_ToUll(strtok(NULL, " \n"));
+            int64_t size = String_Toll(strtok(NULL, " \n"));
             int64_t* address = Map_Get(labels, name->value);
             if(address == NULL)
                 QUIT("assembler label %s not defined", name->value);
@@ -3909,7 +3909,7 @@ VM_Indirect(Opcode oc, Map* labels, char* label)
 static int64_t
 VM_Direct(Opcode oc, char* number)
 {
-    return (String_ToUll(number) << 8) | oc;
+    return (String_Toll(number) << 8) | oc;
 }
 
 static int64_t
@@ -5311,7 +5311,7 @@ main(int argc, char* argv[])
         }
         else
             VM_Run(vm, false);
-        int64_t retno = vm->retno;
+        int retno = vm->retno;
         VM_AssertRefs(vm);
         VM_Sweep(vm);
         VM_Kill(vm);
