@@ -1,0 +1,7 @@
+inc Json;
+
+Main()
+{
+    json := Json_Read("Chords.json");
+    ret 0;
+}

@@ -1,0 +1,231 @@
+JSON_LINE := 1;
+
+JSON_INDEX := 0;
+
+JSON_SEP := ",";
+
+JSON_WHITESPACE := { " ", "\n", "\r", "\t" };
+
+JSON_NUMBER := {
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+    ".", "-", "+"
+};
+
+JSON_IDENT := {
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+    "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+};
+
+Quit(message)
+{
+    Print("error: line {.0}: {}" % [JSON_LINE, message]);
+    Exit(1);
+}
+
+Json_IsSpace(c)
+{
+    ret JSON_WHITESPACE[c] != null;
+}
+
+Json_IsNumber(c)
+{
+    ret JSON_NUMBER[c] != null;
+}
+
+Json_IsIdent(c)
+{
+    ret JSON_IDENT[c] != null;
+}
+
+Json_Peek(stream)
+{
+    ret stream[JSON_INDEX];
+}
+
+Json_Pop(stream)
+{
+    c := Json_Peek(stream);
+    if(c == "\n")
+    {
+        JSON_LINE += 1;
+    }
+    JSON_INDEX += 1;
+}
+
+Json_Spin(stream)
+{
+    while(Json_IsSpace(Json_Peek(stream)))
+    {
+        Json_Pop(stream);
+    }
+}
+
+Json_Next(stream)
+{
+    Json_Spin(stream);
+    ret Json_Peek(stream);
+}
+
+Json_Match(stream, c)
+{
+    Assert(Json_Next(stream) == c);
+    Json_Pop(stream);
+}
+
+Json_Ident(stream)
+{
+    string := "";
+    while(Json_IsIdent(Json_Peek(stream)))
+    {
+        string += Json_Peek(stream);
+        Json_Pop(stream);
+    }
+    if(string == "null")
+    {
+        ret null;
+    }
+    if(string == "true")
+    {
+        ret true;
+    }
+    if(string == "false")
+    {
+        ret false;
+    }
+    Quit("bad identifier `{}`" % [string]);
+}
+
+Json_String(stream)
+{
+    A := "\"";
+    B := "\"";
+    Json_Match(stream, A);
+    string := "";
+    while(Json_Peek(stream) != A)
+    {
+        string += Json_Peek(stream);
+        Json_Pop(stream);
+    }
+    Json_Match(stream, B);
+    ret string;
+}
+
+Json_Number(stream)
+{
+    string := "";
+    while(Json_IsNumber(Json_Peek(stream)))
+    {
+        string += Json_Peek(stream);
+        Json_Pop(stream);
+    }
+    ret Num(string);
+}
+
+Json_Value(stream);
+
+Json_Array(stream)
+{
+    A := "[";
+    B := "]";
+    arr := [];
+    Json_Match(stream, A);
+    while(Json_Next(stream) != B)
+    {
+        appending := Json_Next(stream) == A;
+        val := Json_Value(stream);
+        if(appending)
+        {
+            val = [ val ];
+        }
+        arr += val;
+        if(Json_Next(stream) == JSON_SEP)
+        {
+            Json_Match(stream, JSON_SEP);
+            if(Json_Next(stream) == B)
+            {
+                Quit("trailing separator ({}) found" % [JSON_SEP]);
+            }
+        }
+    }
+    Json_Match(stream, B);
+    ret arr;
+}
+
+Json_Object(stream)
+{
+    A := "{";
+    B := "}";
+    associater := ":";
+    obj := {};
+    Json_Match(stream, A);
+    while(Json_Next(stream) != B)
+    {
+        key := Json_String(stream);
+        Json_Match(stream, associater);
+        val := Json_Value(stream);
+        obj[key] := val;
+        if(Json_Next(stream) == JSON_SEP)
+        {
+            Json_Match(stream, JSON_SEP);
+            if(Json_Next(stream) == B)
+            {
+                Quit("trailing separator ({}) found" % [JSON_SEP]);
+            }
+        }
+    }
+    Json_Match(stream, B);
+    ret obj;
+}
+
+Json_Value(stream)
+{
+    c := Json_Next(stream);
+    if(Json_IsNumber(c))
+    {
+        ret Json_Number(stream);
+    }
+    elif(c == "{")
+    {
+        ret Json_Object(stream);
+    }
+    elif(c == "[")
+    {
+        ret Json_Array(stream);
+    }
+    elif(c == "\"")
+    {
+        ret Json_String(stream);
+    }
+    elif(Json_IsIdent(c))
+    {
+        ret Json_Ident(stream);
+    }
+    else
+    {
+        Quit("bad character `{}`" % [c]);
+    }
+}
+
+Json_Write(path, json)
+{
+    file := Open(path, "w");
+    if(!Good(file))
+    {
+        Quit("could not open file ({})" % [file]);
+    }
+    Write(file, "{}" % [json]);
+}
+
+Json_Read(path)
+{
+    JSON_INDEX = 0;
+    file := Open(path, "r");
+    if(!Good(file))
+    {
+        Quit("could not open file ({})" % [file]);
+    }
+    stream := Read(file, Len(file));
+    ret Json_Value(stream);
+}

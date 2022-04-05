@@ -1,0 +1,7 @@
+Main()
+{
+    x := Value("\"string\"");
+    Print(x);
+    Print(Type(x));
+    ret 0;
+}
