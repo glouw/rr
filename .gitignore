@@ -2,3 +2,4 @@ roman2
 libroman2
 *.so
 cachegrind*
+chordman.txt

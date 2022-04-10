@@ -72,7 +72,7 @@ Deserialize(string)
         }
         else
         {
-            stack += Node(Num(x));
+            stack += Node(Value("{}" % [x]));
         }
     }
     ret stack[0];

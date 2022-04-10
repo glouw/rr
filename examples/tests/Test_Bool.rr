@@ -1,6 +1,8 @@
 Main()
 {
-    Assert(false == Bool("false"));
-    Assert(true == Bool("true"));
+    Assert(false == Value("{}" % ["false"]));
+    Assert(true == Value("{}" % ["true"]));
+    Assert(false == Value("false"));
+    Assert(true == Value("true"));
     ret 0;
 }

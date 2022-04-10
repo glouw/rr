@@ -1,0 +1,58 @@
+# BINARY TREE LEVEL ORDER TRAVERSAL
+# 
+# Given the root of a binary tree, return
+# the level order traversal of its nodes'
+# values. (i.e., from left to right, level by level).
+
+Node(value)
+{
+    ret &{
+        .l : null,
+        .r : null,
+        .value : value
+    };
+}
+
+Build()
+{
+    nodes := Node(1);
+    nodes@l = Node(2);
+    nodes@r = Node(3);
+    nodes@l@r = Node(4);
+    nodes@l@l = Node(9);
+    nodes@l@l@l = Node(2);
+    ret nodes;
+}
+
+Add(queue, level, value)
+{
+    if(level == Len(queue))
+    {
+        queue += [[]];
+    }
+    queue[level] += value;
+}
+
+Level(nodes, level, queue)
+{
+    if(nodes == null)
+    {
+        ret;
+    }
+    else
+    {
+        next := level + 1;
+        Add(queue, level, nodes@value);
+        Level(nodes@l, next, queue);
+        Level(nodes@r, next, queue);
+    }
+}
+
+Main()
+{
+    queue := [];
+    Level(Build(), 0, queue);
+    Print(queue);
+    Assert(queue == [ [1], [2, 3], [9, 4], [2] ]);
+    ret 0;
+}

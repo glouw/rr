@@ -1,7 +1,90 @@
-inc Json;
+# CHORDMAN takes a JSON of chord progressions
+# and outputs a text file containing said progressions
+# and every chord inversion.
+
+TABS_JSON := "Tabs.json";
+PROG_JSON := "Progression.json";
+
+ToTab(queue)
+{
+    str := "\t\t";
+    index := 0;
+    foreach(elem : queue)
+    {
+        str += "{3}" % [elem];
+        index += 1;
+    }
+    ret str;
+}
+
+Flatten(queue)
+{
+    str := "";
+    foreach(elem : queue)
+    {
+        str += elem + " ";
+    }
+    ret str;
+}
+
+File_Value(file)
+{
+    ret Value(Read(file, Len(file)));
+}
+
+Data()
+{
+    fa := Open(TABS_JSON, "r");
+    fb := Open(PROG_JSON, "r");
+    Assert(Good(fa));
+    Assert(Good(fb));
+    ret {
+        .tabs : File_Value(fa),
+        .prog : File_Value(fb),
+    };
+}
+
+Data_Verify(self)
+{
+    bad_tabs := [];
+    foreach(prog : self.prog)
+    {
+        foreach(chord : prog)
+        {
+            if(self.tabs[chord] == null)
+            {
+                bad_tabs += chord;
+            }
+        }
+    }
+    if(Len(bad_tabs) > 0)
+    {
+        Print("The following chords are not supported by {}" % [TABS_JSON]);
+        Print(bad_tabs);
+        Exit(1);
+    }
+}
 
 Main()
 {
-    json := Json_Read("Chords.json");
+    save := Open("chordman.txt", "w");
+    Assert(Good(save));
+    data := Data();
+    index := 0;
+    foreach(prog : data.prog)
+    {
+        Write(save, "Progression {.0} : {}\n" % [index, Flatten(prog)]);
+        foreach(chord : prog)
+        {
+            Write(save, "\t{}\n" % [chord]);
+            tab := data.tabs[chord];
+            foreach(map : tab)
+            {
+                Write(save, ToTab(map.positions) + "\n");
+            }
+        }
+        index += 1;
+        Write(save, "\n");
+    }
     ret 0;
 }

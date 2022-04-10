@@ -1,0 +1,66 @@
+# IMPLEMENT TRIE (PREFIX TREE)
+# 
+# A trie (pronounced as "try") or prefix tree is a
+# tree data structure used to efficiently store and retrieve
+# keys in a dataset of strings. There are various applications
+# of this data structure, such as autocomplete and spellchecker.
+
+Trie_Insert(self, string)
+{
+    node := &self;
+    foreach(c : string)
+    {
+        if((*node)[c] == null)
+        {
+            (*node)[c] := {};
+        }
+        node = &(*node)[c];
+    }
+    node@end := true;
+}
+
+Trie_Search(self, string)
+{
+    node := &self;
+    foreach(c : string)
+    {
+        node = &(*node)[c];
+        if(node == null)
+        {
+            break;
+        }
+    }
+    ret node@end == true;
+}
+
+Trie_Prefix(self, string)
+{
+    node := &self;
+    foreach(c : string)
+    {
+        node = &(*node)[c];
+        if(node == null)
+        {
+            break;
+        }
+    }
+    ret node != null;
+}
+
+Main()
+{
+    trie := {};
+    Trie_Insert(trie, "asdf");
+    Trie_Insert(trie, "asdfa");
+    Trie_Insert(trie, "asdfb");
+    Trie_Insert(trie, "asdfc");
+    Assert(Trie_Search(trie, "asdf") == true);
+    Assert(Trie_Search(trie, "asdfa") == true);
+    Assert(Trie_Search(trie, "asdfb") == true);
+    Assert(Trie_Search(trie, "asdfc") == true);
+    Assert(Trie_Prefix(trie, "asdf") == true);
+    Assert(Trie_Prefix(trie, "asdfa") == true);
+    Assert(Trie_Prefix(trie, "asdfb") == true);
+    Assert(Trie_Prefix(trie, "asdfc") == true);
+    ret 0;
+}

@@ -1,0 +1,77 @@
+# DESIGN ADD AND SEARCH WORDS DATA STRUCTURE
+# 
+# Design a data structure that supports adding new words
+# and finding if a string matches any previously added string.
+
+Trie_Insert(self, string)
+{
+    node := &self;
+    foreach(c : string)
+    {
+        if((*node)[c] == null)
+        {
+            (*node)[c] := {};
+        }
+        node = &(*node)[c];
+    }
+    node@_end := true;
+}
+
+Trie_Find(self, string);
+
+Trie_Dot(self, string)
+{
+    keys := Keys(self);
+    foreach(key : keys)
+    {
+        if(key == "_end") # NOT A VALID KEY.
+        {
+            continue;
+        }
+        if(Trie_Find(self[key], string))
+        {
+            ret true;
+        }
+    }
+    ret false;
+}
+
+Trie_Find(self, string)
+{
+    node := &self;
+    index := 0;
+    foreach(c : string)
+    {
+        if(c == ".")
+        {
+            next := string[index + 1 : Len(string)];
+            ret Trie_Dot(*node, next);
+        }
+        if(!Exists(*node, c))
+        {
+            ret false;
+        }
+        node = &(*node)[c];
+        index += 1;
+    }
+    ret node@_end == true;
+}
+
+Main()
+{
+    trie := {};
+    Trie_Insert(trie, "word");
+    Trie_Insert(trie, "woaa");
+    Trie_Insert(trie, "wobb");
+    Assert(Trie_Find(trie, "wo.d"));
+    Assert(Trie_Find(trie, "wo.a"));
+    Assert(Trie_Find(trie, "wo.b"));
+    Assert(Trie_Find(trie, "...d"));
+    Assert(Trie_Find(trie, "...a"));
+    Assert(Trie_Find(trie, "...b"));
+    Assert(Trie_Find(trie, "...."));
+    Assert(Trie_Find(trie, ".....") == false);
+    Assert(Trie_Find(trie, ".") == false);
+    Assert(Trie_Find(trie, "") == false);
+    ret 0;
+}

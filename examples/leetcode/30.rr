@@ -1,0 +1,77 @@
+# SUBTREE OF ANOTHER TREE
+# 
+# Given the roots of two binary trees root and subRoot,
+# return true if there is a subtree of root with the same
+# structure and node values of subRoot and false otherwise.
+# 
+# A subtree of a binary tree tree is a tree that consists
+# of a node in tree and all of this node's descendants.
+# The tree tree could also be considered as a subtree of itself.
+
+Node(value)
+{
+    ret &{
+        .value : value,
+        .l : null, 
+        .r : null,
+    };
+}
+
+Build()
+{
+    a := Node(1);
+    a@l := Node(1);
+    a@r := Node(2);
+    a@r@r := Node(3);
+    a@r@l := Node(4);
+    b := Node(2);
+    b@r := Node(3);
+    b@l := Node(4);
+    ret {
+        .a : a,
+        .b : b,
+    };
+}
+
+Same(a, b)
+{
+    if((a == null) && (b == null))
+    {
+        ret true;
+    }
+    elif((a == null) || (b == null))
+    {
+        ret false;
+    }
+    elif(a@value == b@value)
+    {
+        ret Same(a@l, b@l) && Same(a@r, b@r);
+    }
+    else
+    {
+        ret false;
+    }
+}
+
+IsSub(a, b)
+{
+    if(a != null)
+    {
+        if(a@value == b@value)
+        {
+            if(Same(a, b))
+            {
+                ret true;
+            }
+        }
+        ret IsSub(a@l, b) || IsSub(a@r, b);
+    }
+    ret false;
+}
+
+Main()
+{
+    nodes := Build();
+    Assert(IsSub(nodes.a, nodes.b));
+    ret 0;
+}

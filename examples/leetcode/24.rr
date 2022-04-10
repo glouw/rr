@@ -41,7 +41,7 @@ Freq(nums, k)
     out := [];
     for(i := 0; i < k; i += 1)
     {
-        out += Num(flat[i].num);
+        out += Value("{}" % [flat[i].num]);
     }
     ret out;
 }

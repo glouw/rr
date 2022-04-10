@@ -1,0 +1,51 @@
+# MAXIMUM DEPTH OF BINARY TREE
+# 
+# Given the root of a binary tree, return its maximum depth.
+# 
+# A binary tree's maximum depth is the number of
+# nodes along the longest path from the root node
+# down to the farthest leaf node.
+
+Node(val)
+{
+    ret &{
+        .val : val,
+        .l : null,
+        .r : null,
+    };
+}
+
+Build()
+{
+    node := Node(1);
+    node@l = Node(2);
+    node@l@l = Node(2);
+    node@l@l@l = Node(2);
+    node@l@l@l@l = Node(2);
+    node@r = Node(3);
+    node@r@r = Node(4);
+    node@r@r@l = Node(4);
+    node@r@r@l@l = Node(9);
+    node@r@r@l@l@r = Node(9);
+    node@r@r@l@l@l = Node(9);
+    node@r@r@l@l@l@r = Node(9);
+    ret node;
+}
+
+Depth(nodes)
+{
+    if(nodes != null)
+    {
+        ret Max(
+            Depth(nodes@l) + 1,
+            Depth(nodes@r) + 1);
+    }
+    ret 0;
+}
+
+Main()
+{
+    nodes := Build();
+    Assert(Depth(nodes) == 7);
+    ret 0;
+}

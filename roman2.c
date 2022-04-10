@@ -19,7 +19,7 @@
 #define QUEUE_BLOCK_SIZE (8)
 #define STRING_CAP_SIZE (64)
 #define MODULE_BUFFER_SIZE (8192)
-#define SWEEP_BUFFER_SIZE (1024)
+#define SWEEP_BUFFER_SIZE (4096)
 #define LEN(a) (sizeof(a) / sizeof(*a))
 
 typedef int64_t
@@ -171,11 +171,11 @@ typedef enum
 Class;
 
 #define OPCODES \
-    X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Bol) X(Brf) X(Bsr) \
-    X(Cal) X(Cel) X(Clo) X(Cop) X(Cos) X(Del) X(Div) X(Dll) X(Drf) X(End) X(Eql) X(Exi) \
+    X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Brf) X(Bsr) \
+    X(Cal) X(Cel) X(Cop) X(Cos) X(Del) X(Div) X(Dll) X(Drf) X(End) X(Eql) X(Exi) \
     X(Ext) X(Flr) X(Fls) X(Gar) X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) \
     X(Jmp) X(Key) X(Len) X(Loc) X(Lod) X(Log) X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) \
-    X(Mod) X(Mov) X(Mul) X(Neq) X(Not) X(Num) X(Opn) X(Pop) X(Pow) X(Prt) X(Psb) X(Psf) \
+    X(Mod) X(Mov) X(Mul) X(Neq) X(Not) X(Opn) X(Pop) X(Pow) X(Prt) X(Psb) X(Psf) \
     X(Psh) X(Ptr) X(Qso) X(Ran) X(Red) X(Ref) X(Ret) X(Sav) X(Sin) X(Slc) X(Spd) X(Sqr) \
     X(Srd) X(Sub) X(Tan) X(Tim) X(Trv) X(Typ) X(Val) X(Vrt) X(Wrt)
 
@@ -663,14 +663,16 @@ File_Equal(File* a, File* b)
         && stat1.st_ino == stat2.st_ino;
 }
 
-static void
+static double
 File_Kill(File* self)
 {
+    double out = 0;
     String_Kill(self->path);
     String_Kill(self->mode);
     if(self->file)
-        fclose(self->file);
+        out = fclose(self->file);
     Free(self);
+    return out;
 }
 
 static File*
@@ -1454,9 +1456,16 @@ Char_Init(Value* string, int64_t index)
 static String*
 Value_Key(Value* self)
 {
-    char buffer[32];
-    sprintf(buffer, "%p", (void*) self);
-    return String_Init(buffer + 2); // SKIP THE 0x
+    String* buffer = String_Init("");
+    uint64_t temp = (uint64_t) self;
+    while(temp > 0)
+    {
+        char c = temp % 10 + '0';
+        String_PshB(buffer, c);
+        temp /= 10;
+    }
+    String_PshB(buffer, '\0');
+    return buffer;
 }
 
 static void
@@ -2445,10 +2454,8 @@ static Keyword Keywords[] = {
     { "Asin",    "Asi", 1 },
     { "Assert",  "Asr", 1 },
     { "Atan",    "Ata", 1 },
-    { "Bool",    "Bol", 1 },
     { "Bsearch", "Bsr", 3 },
     { "Ceil",    "Cel", 1 },
-    { "Close",   "Clo", 1 },
     { "Copy",    "Cop", 1 },
     { "Cos",     "Cos", 1 },
     { "Del",     "Del", 2 },
@@ -2459,7 +2466,6 @@ static Keyword Keywords[] = {
     { "Keys",    "Key", 1 },
     { "Len",     "Len", 1 },
     { "Log",     "Log", 1 },
-    { "Num",     "Num", 1 },
     { "Max",     "Max", 2 },
     { "Min",     "Min", 2 },
     { "Open",    "Opn", 2 },
@@ -2811,6 +2817,7 @@ CC_Vrt(CC* self)
     CC_AssemB(self, String_Format("\tPsh %ld", size));
     CC_AssemB(self, String_Init("\tVrt"));
     CC_AssemB(self, String_Init("\tTrv"));
+    CC_AssemB(self, String_Init("\tGar"));
 }
 
 static void
@@ -2947,6 +2954,13 @@ CC_Direct(CC* self, bool negative)
 static void
 CC_Keyword(CC* self, Keyword* keyword)
 {
+    if(Equals(keyword->name, "Open"))
+    {
+        // OPEN CALLS ARE BINDED TO SOURCE FILE DIR, NOT COMMAND LINE ENTRY DIR.
+        String* base = String_Base(CC_CurrentFile(self));
+        CC_AssemB(self, String_Format("\tPsh \"%s\"", base->value));
+        String_Kill(base);
+    }
     CC_AssemB(self, String_Format("\t%s", keyword->mnemonic));
 }
 
@@ -3699,12 +3713,6 @@ VM_CapAllocs(VM* self)
     self->alloc_cap = GC_Alloc->size + SWEEP_BUFFER_SIZE;
 }
 
-static void
-VM_LetAllocs(VM* self)
-{
-    self->alloc_cap *= 2;
-}
-
 static VM*
 VM_Init(int64_t size, Queue* debug, Queue* addresses)
 {
@@ -4013,12 +4021,8 @@ VM_GarbageCollect(VM* self)
     Map* marked = VM_Mark(self);
     double t1 = Microseconds();
     if(marked->size > 0)
-    {
         Map_Sweep(marked);
-        VM_CapAllocs(self);
-    }
-    else
-        VM_LetAllocs(self);
+    VM_CapAllocs(self);
     double t2 = Microseconds();
     Map_Kill(marked);
     double t3 = Microseconds();
@@ -4288,7 +4292,7 @@ VM_Vrt(VM* self, int64_t unused)
 }
 
 static void
-VM_Run(VM*, bool arbitrary);
+VM_Run(VM*);
 
 static Value*
 Array_Get(Value* self, int64_t a)
@@ -4317,7 +4321,7 @@ VM_BSearch(VM* self, Value* value, Value* key, Value* comparator)
         Queue_PshB(self->stack, now);
         Queue_PshB(self->stack, Value_Number(2));
         VM_Vrt(self, 0);
-        VM_Run(self, true);
+        VM_Run(self);
         // POPS COMPARATOR - THIS IS A VIRTUAL (VRT) CALL - SEE OPCODE (TRV).
         VM_Pop(self, 1);
         VM_TypeExpect(self, self->ret->type, TYPE_NUMBER);
@@ -4397,7 +4401,7 @@ VM_RangedSort(VM* self, Value* value, Value* comparator, int64_t left, int64_t r
         Queue_PshB(self->stack, b);
         Queue_PshB(self->stack, Value_Number(2));
         VM_Vrt(self, 0);
-        VM_Run(self, true);
+        VM_Run(self);
         // POPS comparator - THIS IS A VIRTUAL (VRT) CALL - SEE OPCODE (TRV).
         VM_Pop(self, 1);
         VM_TypeExpect(self, self->ret->type, TYPE_BOOL);
@@ -4781,26 +4785,21 @@ VM_Mem(VM* self, int64_t unused)
 }
 
 static void
-VM_Clo(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 1);
-    VM_TypeExpect(self, a->type, TYPE_FILE);
-    double ret = fclose(a->of.file->file);
-    VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_Number(ret));
-}
-
-static void
 VM_Opn(VM* self, int64_t unused)
 {
     (void) unused;
-    Value* a = Queue_Get(self->stack, self->stack->size - 2);
-    Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    Value* a = Queue_Get(self->stack, self->stack->size - 3);
+    Value* b = Queue_Get(self->stack, self->stack->size - 2);
+    Value* c = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_STRING);
     VM_TypeExpect(self, b->type, TYPE_STRING);
-    File* file = File_Init(String_Copy(a->of.string), String_Copy(b->of.string));
-    VM_Pop(self, 2);
+    VM_TypeExpect(self, c->type, TYPE_STRING);
+    String* dir = String_Init("");
+    String_Appends(dir, c->of.string->value);
+    String_Appends(dir, "/");
+    String_Appends(dir, a->of.string->value);
+    File* file = File_Init(dir, String_Copy(b->of.string));
+    VM_Pop(self, 3);
     Queue_PshB(self->stack, Value_File(file));
 }
 
@@ -5038,45 +5037,6 @@ VM_Slc(VM* self, int64_t unused)
 }
 
 static void
-VM_Num(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Back(self->stack);
-    double number = 0.0;
-    if(a->type == TYPE_STRING)
-        number = String_ToNumber(a->of.string->value);
-    else
-    if(a->type == TYPE_CHAR)
-    {
-        char c = a->of.character->value[0];
-        if(c >= '0' && c <= '9')
-            number = c - '0';
-        else
-            VM_QUIT(self, "%c is not a valid number", c);
-    }
-    else
-        VM_QUIT(self, "Num expects string or char types");
-    VM_Pop(self, 1);
-    Queue_PshB(self->stack, Value_Number(number));
-}
-
-static void
-VM_Bol(VM* self, int64_t unused)
-{
-    (void) unused;
-    Value* a = Queue_Back(self->stack);
-    VM_TypeExpect(self, a->type, TYPE_STRING);
-    if(String_IsBoolean(a->of.string))
-    {
-        bool boolean = String_Equals(a->of.string, "true");
-        VM_Pop(self, 1);
-        Queue_PshB(self->stack, Value_Bool(boolean));
-    }
-    else
-        VM_QUIT(self, "cannot convert %s to boolean", a->of.string->value);
-}
-
-static void
 VM_God(VM* self, int64_t unused)
 {
     (void) unused;
@@ -5105,12 +5065,24 @@ VM_Exi(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     VM_TypeExpect(self, a->type, TYPE_MAP);
-    VM_TypeExpect(self, b->type, TYPE_STRING);
-    bool exists = false;
-    if(Map_Exists(a->of.map, b->of.string->value))
-        exists = true;
-    VM_Pop(self, 2);
-    Queue_PshB(self->stack, Value_Bool(exists));
+    if(b->type == TYPE_STRING || b->type == TYPE_CHAR)
+    {
+        bool exists = false;
+        if(b->type == TYPE_STRING)
+        {
+            exists = Map_Exists(a->of.map, b->of.string->value);
+        }
+        else
+        {
+            char temp[2] = {'\0'};
+            temp[0] =  *b->of.character->value;
+            exists = Map_Exists(a->of.map, temp);
+        }
+        VM_Pop(self, 2);
+        Queue_PshB(self->stack, Value_Bool(exists));
+    }
+    else
+        VM_QUIT(self, "second argument expected string or char type");
 }
 
 static void
@@ -5134,22 +5106,26 @@ VM_Tim(VM* self, int64_t unused)
 typedef struct
 {
     String* string;
+    VM* vm;
     int64_t index;
+    int64_t line;
 }
 Stream;
-
-static void
-Stream_Advance(Stream* self)
-{
-    if(self->index == self->string->size)
-        QUIT("STREAM_ADVANCE OUT OF RANGE");
-    self->index += 1;
-}
 
 static char
 Stream_Peek(Stream* self)
 {
     return self->string->value[self->index];
+}
+
+static void
+Stream_Advance(Stream* self)
+{
+    if(self->index == self->string->size)
+        VM_QUIT(self->vm, "stream line %ld: stream index advanced out of bounds", self->line);
+    if(Stream_Peek(self) == '\n')
+        self->line += 1;
+    self->index += 1;
 }
 
 static void
@@ -5170,8 +5146,16 @@ static void
 Stream_Match(Stream* self, char c)
 {
     if(Stream_Next(self) != c)
-        QUIT("STREAM_MATCH EXPECTED %c", c);
+        VM_QUIT(self->vm, "stream line %ld: expected %c", self->line, c);
     Stream_Advance(self);
+}
+
+static char
+Stream_Read(Stream* self)
+{
+    char c = Stream_Peek(self);
+    Stream_Advance(self);
+    return c;
 }
 
 static Value*
@@ -5181,10 +5165,7 @@ Stream_String(Stream* self)
     Stream_Spin(self);
     Stream_Match(self, '\"');
     while(Stream_Peek(self) != '\"')
-    {
-        String_PshB(str, Stream_Peek(self));
-        Stream_Advance(self);
-    }
+        String_PshB(str, Stream_Read(self));
     Stream_Match(self, '\"');
     return Value_String(str);
 }
@@ -5194,10 +5175,7 @@ Stream_Number(Stream* self)
 {
     String* str = String_Init("");
     while(IsNumber(Stream_Next(self)))
-    {
-        String_PshB(str, Stream_Peek(self));
-        Stream_Advance(self);
-    }
+        String_PshB(str, Stream_Read(self));
     Value* value = Value_Number(String_ToNumber(str->value));
     String_Kill(str);
     return value;
@@ -5208,10 +5186,7 @@ Stream_Ident(Stream* self)
 {
     String* str = String_Init("");
     while(IsIdent(Stream_Next(self)))
-    {
-        String_PshB(str, Stream_Peek(self));
-        Stream_Advance(self);
-    }
+        String_PshB(str, Stream_Read(self));
     Value* value = NULL;
     if(String_Equals(str, "true"))
         value = Value_Bool(true);
@@ -5223,7 +5198,7 @@ Stream_Ident(Stream* self)
         value = Value_Null();
     String_Kill(str);
     if(value == NULL)
-        QUIT("STREAM_IDENT PARSE ERROR");
+        VM_QUIT(self->vm, "stream line %ld: expected either true, false, or null", self->line);
     return value;
 }
 
@@ -5256,8 +5231,7 @@ Stream_Array(Stream* self)
     Stream_Match(self, '[');
     while(Stream_Next(self) != ']')
     {
-        Value* value = Stream_Value(self);
-        Queue_PshB(array->of.queue, value);
+        Queue_PshB(array->of.queue, Stream_Value(self));
         if(Stream_Next(self) == ',')
             Stream_Match(self, ',');
     }
@@ -5285,7 +5259,7 @@ Stream_Value(Stream* self)
         return Stream_Array(self);
     else
     {
-        QUIT("STREAM_VALUE PARSAE ERROR");
+        VM_QUIT(self->vm, "stream line %ld: unknown character %c", self->line, c);
         return NULL;
     }
 }
@@ -5296,7 +5270,7 @@ VM_Val(VM* self, int64_t unused)
     (void) unused;
     Value* string = Queue_Back(self->stack);
     VM_TypeExpect(self, string->type, TYPE_STRING);
-    Stream stream = { string->of.string, 0 };
+    Stream stream = { string->of.string, self, 0, 1 };
     Value* value = Stream_Value(&stream);
     VM_Pop(self, 1);
     Queue_PshB(self->stack, value);
@@ -5401,17 +5375,17 @@ CC_Reserve(CC* self)
 }
 
 static void
-VM_Run(VM* self, bool arbitrary)
+VM_Run(VM* self)
 {
-    while(self->done == false)
+    int64_t frame = self->frame->size;
+    while(!self->done)
     {
         uint64_t instruction = self->instructions[self->pc];
         self->pc += 1;
         Opcode oc = instruction & 0xFF;
         Gens[oc].exec(self, instruction >> 8);
-        if(arbitrary)
-            if(oc == OPCODE_Ret || oc == OPCODE_Fls)
-                break;
+        if(self->frame->size < frame)
+            break;
     }
 }
 
@@ -5463,7 +5437,7 @@ main(int argc, char* argv[])
             VM_Data(vm);
         }
         else
-            VM_Run(vm, false);
+            VM_Run(vm);
         int retno = vm->retno;
         VM_AssertRefs(vm);
         VM_GarbageCollect(vm);
