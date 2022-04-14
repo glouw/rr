@@ -16,8 +16,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define QUEUE_BLOCK_SIZE (8)
-#define STRING_CAP_SIZE (64)
+#define QUEUE_BLOCK_SIZE (16)
+#define STRING_CAP_SIZE (24)
 #define MODULE_BUFFER_SIZE (8192)
 #define SWEEP_BUFFER_SIZE (4096)
 #define LEN(a) (sizeof(a) / sizeof(*a))
@@ -173,11 +173,12 @@ Class;
 #define OPCODES \
     X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Brf) X(Bsr) \
     X(Cal) X(Cel) X(Cop) X(Cos) X(Del) X(Div) X(Dll) X(Drf) X(End) X(Eql) X(Exi) \
-    X(Ext) X(Flr) X(Fls) X(Gar) X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) X(Imd) X(Ins) \
-    X(Jmp) X(Key) X(Len) X(Loc) X(Lod) X(Log) X(Lor) X(Lst) X(Lte) X(Max) X(Mem) X(Min) \
-    X(Mod) X(Mov) X(Mul) X(Neq) X(Not) X(Opn) X(Pop) X(Pow) X(Prt) X(Psb) X(Psf) \
-    X(Psh) X(Ptr) X(Qso) X(Ran) X(Red) X(Ref) X(Ret) X(Sav) X(Sin) X(Slc) X(Spd) X(Sqr) \
-    X(Srd) X(Sub) X(Tan) X(Tim) X(Trv) X(Typ) X(Val) X(Vrt) X(Wrt)
+    X(Ext) X(Flr) X(Fls) X(Gar) X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) X(Imd) \
+    X(Ins) X(Jmp) X(Key) X(Len) X(Loc) X(Lod) X(Log) X(Lor) X(Lst) X(Lte) X(Max) \
+    X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) X(Not) X(Opn) X(Pop) X(Pow) X(Prt) \
+    X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) X(Red) X(Ref) X(Ret) X(Sav) X(Sin) \
+    X(Slc) X(Spd) X(Sqr) X(Srd) X(Sub) X(Tan) X(Tim) X(Trv) X(Typ) X(Val) X(Vrt) \
+    X(Wrt)
 
 typedef enum
 {
@@ -216,9 +217,9 @@ Module;
 
 typedef struct
 {
+    String* path;
     Class class;
     int64_t stack;
-    String* path;
 }
 Meta;
 
@@ -241,6 +242,15 @@ typedef struct
     bool done;
 }
 VM;
+
+typedef struct
+{
+    String* string;
+    VM* vm;
+    int64_t index;
+    int64_t line;
+}
+Stream;
 
 typedef struct
 {
@@ -280,9 +290,22 @@ typedef struct
 }
 Keyword;
 
-static Map* GC_Alloc;
+typedef struct Link
+{
+    struct Link* l;
+    struct Link* r;
+    struct Link* p;
+    Value* value;
+    int64_t color;
+}
+Link;
 
-static bool ASM_Assembled;
+typedef struct Cache
+{
+    Link* root;
+    int64_t size;
+}
+Cache;
 
 static void*
 Malloc(int64_t size)
@@ -314,6 +337,430 @@ Delete(Kill kill, void* value)
     if(kill)
         kill(value);
 }
+
+static Link*
+Link_Min(Link* self)
+{
+    if(self != NULL)
+        while(self->l)
+            self = self->l;
+    return self;
+}
+
+static Link*
+Link_Max(Link* self)
+{
+    if(self != NULL)
+        while(self->r)
+            self = self->r;
+    return self;
+}
+
+static Link*
+Link_Next(Link* self)
+{
+    if(self->r)
+    {
+        self = self->r;
+        while(self->l)
+            self = self->l;
+    }
+    else
+    {
+        Link* parent = self->p;
+        while(parent && self == parent->r)
+        {
+            self = parent;
+            parent = parent->p;
+        }
+        self = parent;
+    }
+    return self;
+}
+
+static Cache*
+Cache_Init(void)
+{
+    Cache* self = Malloc(sizeof(*self));
+    self->root = NULL;
+    self->size = 0;
+    return self;
+}
+
+static int64_t
+Link_Color(Link* self)
+{
+    return self ? self->color : 1;
+}
+
+static bool
+Link_IsBlk(Link* self)
+{
+    return Link_Color(self) == 1;
+}
+
+static bool
+Link_IsRed(Link* self)
+{
+    return Link_Color(self) == 0;
+}
+
+static Link*
+Link_Grandfather(Link* self)
+{
+    return self->p->p;
+}
+
+static Link*
+Link_Sibling(Link* self)
+{
+    if(self == self->p->l)
+        return self->p->r;
+    else
+        return self->p->l;
+}
+
+static Link*
+Link_Uncle(Link* self)
+{
+    return Link_Sibling(self->p);
+}
+
+static Link*
+Link_Init(Value* value, int64_t color)
+{
+    Link* self = (Link*) Malloc(sizeof(Link));
+    self->value = value;
+    self->color = color;
+    self->l = self->r = self->p = NULL;
+    return self;
+}
+
+static int
+Cache_Comp(Value* a, Value* b)
+{
+    return (a == b) ? 0 : (a < b) ? -1 : 1;
+}
+
+static Link*
+Cache_At(Cache* self, Value* value)
+{
+    Link* link = self->root;
+    while(link)
+    {
+        int64_t diff = Cache_Comp(value, link->value);
+        if(diff == 0)
+            return link;
+        else
+        if(diff < 0)
+            link = link->l;
+        else
+            link = link->r;
+    }
+    return NULL;
+}
+
+static void
+Link_Replace(Cache* self, Link* a, Link* b)
+{
+    if(a->p)
+    {
+        if(a == a->p->l)
+            a->p->l = b;
+        else
+            a->p->r = b;
+    }
+    else
+        self->root = b;
+    if(b)
+        b->p = a->p;
+}
+
+static void
+Cache_RotateL(Cache* self, Link* link)
+{
+    Link* r = link->r;
+    Link_Replace(self, link, r);
+    link->r = r->l;
+    if(r->l)
+        r->l->p = link;
+    r->l = link;
+    link->p = r;
+}
+
+static void
+Cache_RotateR(Cache* self, Link* link)
+{
+    Link* l = link->l;
+    Link_Replace(self, link, l);
+    link->l = l->r;
+    if(l->r)
+        l->r->p = link;
+    l->r = link;
+    link->p = l;
+}
+
+static void
+Cache_Set1(Cache*, Link*),
+Cache_Set2(Cache*, Link*),
+Cache_Set3(Cache*, Link*),
+Cache_Set4(Cache*, Link*),
+Cache_Set5(Cache*, Link*);
+
+static Link*
+Cache_Set(Cache* self, Value* value)
+{
+    Link* insert = Link_Init(value, 0);
+    if(self->root)
+    {
+        Link* link = self->root;
+        while(1)
+        {
+            int64_t diff = Cache_Comp(value, link->value);
+            if(diff == 0)
+            {
+                Free(insert);
+                return NULL;
+            }
+            else
+            if(diff < 0)
+            {
+                if(link->l)
+                    link = link->l;
+                else
+                {
+                    link->l = insert;
+                    break;
+                }
+            }
+            else
+            {
+                if(link->r)
+                    link = link->r;
+                else
+                {
+                    link->r = insert;
+                    break;
+                }
+            }
+        }
+        insert->p = link;
+    }
+    else
+        self->root = insert;
+    Cache_Set1(self, insert);
+    self->size += 1;
+    return insert;
+}
+
+static void
+Cache_Set1(Cache* self, Link* link)
+{
+    if(link->p)
+        Cache_Set2(self, link);
+    else
+        link->color = 1;
+}
+
+static void
+Cache_Set2(Cache* self, Link* link)
+{
+    if(Link_IsBlk(link->p))
+        return;
+    else
+       Cache_Set3(self, link);
+}
+
+static void
+Cache_Set3(Cache* self, Link* link)
+{
+    if(Link_IsRed(Link_Uncle(link)))
+    {
+        link->p->color = 1;
+        Link_Uncle(link)->color = 1;
+        Link_Grandfather(link)->color = 0;
+        Cache_Set1(self, Link_Grandfather(link));
+    }
+    else
+        Cache_Set4(self, link);
+}
+
+static void
+Cache_Set4(Cache* self, Link* link)
+{
+    if(link == link->p->r && link->p == Link_Grandfather(link)->l)
+    {
+        Cache_RotateL(self, link->p);
+        link = link->l;
+    }
+    else
+    if(link == link->p->l && link->p == Link_Grandfather(link)->r)
+    {
+        Cache_RotateR(self, link->p);
+        link = link->r;
+    }
+    Cache_Set5(self, link);
+}
+
+static void
+Cache_Set5(Cache* self, Link* link)
+{
+    link->p->color = 1;
+    Link_Grandfather(link)->color = 0;
+    if(link == link->p->l && link->p == Link_Grandfather(link)->l)
+        Cache_RotateR(self, Link_Grandfather(link));
+    else
+        Cache_RotateL(self, Link_Grandfather(link));
+}
+
+static void
+Cache_Del1(Cache*, Link*),
+Cache_Del2(Cache*, Link*),
+Cache_Del3(Cache*, Link*),
+Cache_Del4(Cache*, Link*),
+Cache_Del5(Cache*, Link*),
+Cache_Del6(Cache*, Link*);
+
+static void
+Cache_DelLink(Cache* self, Link* link)
+{
+    if(link->l && link->r)
+    {
+        Link* pred = Link_Max(link->l);
+        Value* temp = link->value;
+        link->value = pred->value;
+        pred->value = temp;
+        link = pred;
+    }
+    Link* child = link->r ? link->r : link->l;
+    if(Link_IsBlk(link))
+    {
+        link->color = Link_Color(child);
+        Cache_Del1(self, link);
+    }
+    Link_Replace(self, link, child);
+    if(link->p == NULL && child)
+        child->color = 1;
+    Free(link);
+    self->size -= 1;
+}
+
+static void
+Cache_Del(Cache* self, Value* value)
+{
+    Link* link = Cache_At(self, value);
+    if(link)
+        Cache_DelLink(self, link);
+}
+
+static void
+Cache_Del1(Cache* self, Link* link)
+{
+    if(link->p)
+        Cache_Del2(self, link);
+}
+
+static void
+Cache_Del2(Cache* self, Link* link)
+{
+    if(Link_IsRed(Link_Sibling(link)))
+    {
+        link->p->color = 0;
+        Link_Sibling(link)->color = 1;
+        if(link == link->p->l)
+            Cache_RotateL(self, link->p);
+        else
+            Cache_RotateR(self, link->p);
+    }
+    Cache_Del3(self, link);
+}
+
+static void
+Cache_Del3(Cache* self, Link* link)
+{
+    if(Link_IsBlk(link->p)
+    && Link_IsBlk(Link_Sibling(link))
+    && Link_IsBlk(Link_Sibling(link)->l)
+    && Link_IsBlk(Link_Sibling(link)->r))
+    {
+        Link_Sibling(link)->color = 0;
+        Cache_Del1(self, link->p);
+    }
+    else
+        Cache_Del4(self, link);
+}
+
+static void
+Cache_Del4(Cache* self, Link* link)
+{
+    if(Link_IsRed(link->p)
+    && Link_IsBlk(Link_Sibling(link))
+    && Link_IsBlk(Link_Sibling(link)->l)
+    && Link_IsBlk(Link_Sibling(link)->r))
+    {
+        Link_Sibling(link)->color = 0;
+        link->p->color = 1;
+    }
+    else
+        Cache_Del5(self, link);
+}
+
+static void
+Cache_Del5(Cache* self, Link* link)
+{
+    if(link == link->p->l
+    && Link_IsBlk(Link_Sibling(link))
+    && Link_IsRed(Link_Sibling(link)->l)
+    && Link_IsBlk(Link_Sibling(link)->r))
+    {
+        Link_Sibling(link)->color = 0;
+        Link_Sibling(link)->l->color = 1;
+        Cache_RotateR(self, Link_Sibling(link));
+    }
+    else
+    if(link == link->p->r
+    && Link_IsBlk(Link_Sibling(link))
+    && Link_IsRed(Link_Sibling(link)->r)
+    && Link_IsBlk(Link_Sibling(link)->l))
+    {
+        Link_Sibling(link)->color = 0;
+        Link_Sibling(link)->r->color = 1;
+        Cache_RotateL(self, Link_Sibling(link));
+    }
+    Cache_Del6(self, link);
+}
+
+static void
+Cache_Del6(Cache* self, Link* link)
+{
+    Link_Sibling(link)->color = Link_Color(link->p);
+    link->p->color = 1;
+    if(link == link->p->l)
+    {
+        Link_Sibling(link)->r->color = 1;
+        Cache_RotateL(self, link->p);
+    }
+    else
+    {
+        Link_Sibling(link)->l->color = 1;
+        Cache_RotateR(self, link->p);
+    }
+}
+
+static void
+Cache_Kill(Cache* self)
+{
+    while(self->size != 0)
+        Cache_Del(self, self->root->value);
+    Free(self);
+}
+
+#define CACHE_FOREACH(self, link) \
+    for(Link* link = Link_Min(self->root); link; link = Link_Next(link))
+
+static Cache* GC_Alloc;
+
+static bool ASM_Assembled;
 
 static bool
 Equals(char* a, char* b)
@@ -613,8 +1060,8 @@ String_Format(char* format, ...)
 static char*
 String_Get(String* self, int64_t index)
 {
-    if(index == -1)
-        return &self->value[self->size - 1];
+    if(index < 0)
+        return &self->value[self->size + index];
     if(index >= self->size || index < 0)
         return NULL;
     return &self->value[index];
@@ -623,11 +1070,8 @@ String_Get(String* self, int64_t index)
 static bool
 String_Del(String* self, int64_t index)
 {
-    if(index == -1)
-    {
-        String_PopB(self);
-        return true;
-    }
+    if(index < 0)
+        return String_Del(self, self->size + index);
     else
     if(String_Get(self, index))
     {
@@ -810,10 +1254,13 @@ Queue_At(Queue* self, int64_t index)
 static void*
 Queue_Get(Queue* self, int64_t index)
 {
+    if(index < 0)
+        return Queue_Get(self, self->size + index);
+    else
     if(index == 0)
         return Queue_Front(self);
     else
-    if(index == self->size - 1 || index == -1)
+    if(index == self->size - 1)
         return Queue_Back(self);
     else
     {
@@ -955,10 +1402,13 @@ Queue_PopBSoft(Queue* self)
 static bool
 Queue_Del(Queue* self, int64_t index)
 {
+    if(index < 0)
+        return Queue_Del(self, self->size + index);
+    else
     if(index == 0)
         Queue_PopF(self);
     else
-    if(index == self->size - 1 || index == -1)
+    if(index == self->size - 1)
         Queue_PopB(self);
     else
     {
@@ -1036,13 +1486,13 @@ Queue_Consume(Queue* self, Queue* other)
 }
 
 static bool
-Queue_Equal(Queue* self, Queue* other, Comp compare)
+Queue_Equal(Queue* self, Queue* other, Comp comp)
 {
     if(self->size != other->size)
         return false;
     else
         for(int64_t i = 0; i < self->size; i++)
-            if(!compare(Queue_Get(self, i), Queue_Get(other, i)))
+            if(!comp(Queue_Get(self, i), Queue_Get(other, i)))
                 return false;
     return true;
 }
@@ -1058,7 +1508,7 @@ Queue_Swap(Queue* self, int64_t a, int64_t b)
 }
 
 static void
-Queue_RangedSort(Queue* self, Comp compare, int64_t left, int64_t right)
+Queue_RangedSort(Queue* self, Comp comp, int64_t left, int64_t right)
 {
     if(left >= right)
         return;
@@ -1068,18 +1518,18 @@ Queue_RangedSort(Queue* self, Comp compare, int64_t left, int64_t right)
     {
         void* a = Queue_Get(self, i);
         void* b = Queue_Get(self, left);
-        if(compare(a, b))
+        if(comp(a, b))
              Queue_Swap(self, ++last, i);
     }
    Queue_Swap(self, left, last);
-   Queue_RangedSort(self, compare, left, last - 1);
-   Queue_RangedSort(self, compare, last + 1, right);
+   Queue_RangedSort(self, comp, left, last - 1);
+   Queue_RangedSort(self, comp, last + 1, right);
 }
 
 static void
-Queue_Sort(Queue* self, Comp compare)
+Queue_Sort(Queue* self, Comp comp)
 {
-    Queue_RangedSort(self, compare, 0, self->size - 1);
+    Queue_RangedSort(self, comp, 0, self->size - 1);
 }
 
 static String*
@@ -1203,22 +1653,15 @@ Map_Init(Kill kill, Copy copy)
     return self;
 }
 
-#define MAP_FOREACH(map, node, ...)               \
+#define MAP_FOREACH(map, node, ...) \
     for(int64_t i = 0; i < Map_Buckets(map); i++) \
-    {                                             \
-        Node* node = map->bucket[i];              \
-        while(node)                               \
-        {                                         \
-            Node* next = node->next;              \
-            __VA_ARGS__                           \
-            node = next;                          \
-        }                                         \
-    }
+    for(Node* next, *node = map->bucket[i]; next = node ? node->next : NULL, node; node = next)
 
 static void
 Map_Kill(Map* self)
 {
-    MAP_FOREACH(self, node, Node_Kill(node, self->kill);)
+    MAP_FOREACH(self, node)
+        Node_Kill(node, self->kill);
     Free(self->bucket);
     Free(self);
 }
@@ -1261,7 +1704,8 @@ Map_Rehash(Map* self)
 {
     Map* other = Map_Init(self->kill, self->copy);
     Map_Alloc(other, self->prime_index + 1);
-    MAP_FOREACH(self, node, Map_Emplace(other, node->key, node);)
+    MAP_FOREACH(self, node)
+        Map_Emplace(other, node->key, node);
     Free(self->bucket);
     *self = *other;
     Free(other);
@@ -1357,33 +1801,36 @@ static Map*
 Map_Copy(Map* self)
 {
     Map* copy = Map_Init(self->kill, self->copy);
-    MAP_FOREACH(self, chain,
+    MAP_FOREACH(self, chain)
+    {
         Node* node = Node_Copy(chain, copy->copy);
         Map_Emplace(copy, node->key, node);
-    )
+    }
     return copy;
 }
 
 static void
 Map_Append(Map* self, Map* other)
 {
-    MAP_FOREACH(other, chain, Map_Set(self, String_Copy(chain->key), self->copy ? self->copy(chain->value) : chain->value);)
+    MAP_FOREACH(other, chain)
+        Map_Set(self, String_Copy(chain->key), self->copy ? self->copy(chain->value) : chain->value);
 }
 
 static bool
-Map_Equal(Map* self, Map* other, Comp compare)
+Map_Equal(Map* self, Map* other, Comp comp)
 {
     if(self->size != other->size)
         return false;
     else
     {
-        MAP_FOREACH(self, chain,
+        MAP_FOREACH(self, chain)
+        {
             void* got = Map_Get(other, chain->key->value);
             if(got == NULL)
                 return false;
-            if(!compare(chain->value, got))
+            if(!comp(chain->value, got))
                 return false;
-        )
+        }
         return true;
     }
 }
@@ -1401,7 +1848,8 @@ static Value*
 Map_Key(Map* self)
 {
     Value* queue = Value_Queue();
-    MAP_FOREACH(self, chain, Queue_PshB(queue->of.queue, Value_String(String_Copy(chain->key)));)
+    MAP_FOREACH(self, chain)
+        Queue_PshB(queue->of.queue, Value_String(String_Copy(chain->key)));
     Queue_Sort(queue->of.queue, (Comp) Value_LessThan);
     return queue;
 }
@@ -1453,121 +1901,8 @@ Char_Init(Value* string, int64_t index)
     return NULL;
 }
 
-static String*
-Value_Key(Value* self)
-{
-    String* buffer = String_Init("");
-    uint64_t temp = (uint64_t) self;
-    while(temp > 0)
-    {
-        char c = temp % 10 + '0';
-        String_PshB(buffer, c);
-        temp /= 10;
-    }
-    String_PshB(buffer, '\0');
-    return buffer;
-}
-
-static void
-Value_Untrack(Value* self)
-{
-    if(ASM_Assembled)
-    {
-        String* key = Value_Key(self);
-        Map_Del(GC_Alloc, key->value);
-        String_Kill(key);
-    }
-}
-
-static void
-Value_Track(Value* self)
-{
-    if(ASM_Assembled)
-        Map_Set(GC_Alloc, Value_Key(self), self);
-}
-
-static void
-Value_Reach(Value*, Map*, bool deep);
-
-static void
-Queue_Reach(Queue* self, Map* reach, bool deep)
-{
-    for(int64_t i = 0; i < self->size; i++)
-        Value_Reach(Queue_Get(self, i), reach, deep);
-}
-
-static void
-Map_Reach(Map* self, Map* reach, bool deep)
-{
-    MAP_FOREACH(self, node, Value_Reach(node->value, reach, deep);)
-}
-
-static void
-Value_Reach(Value* self, Map* reach, bool deep)
-{
-    String* key = Value_Key(self);
-    if(Map_Exists(reach, key->value))
-        String_Kill(key);
-    else
-    {
-        Map_Set(reach, key, self);
-        switch(self->type)
-        {
-        case TYPE_QUEUE:
-            Queue_Reach(self->of.queue, reach, deep);
-            break;
-        case TYPE_MAP:
-            Map_Reach(self->of.map, reach, deep);
-            break;
-        case TYPE_CHAR:
-            Value_Reach(self->of.character->string, reach, deep);
-            break;
-        case TYPE_POINTER:
-            if(deep)
-                Value_Reach(self->of.pointer->value, reach, deep);
-            break;
-        default:
-            break;
-        }
-    }
-}
-
-static void
-Map_Diff(Map* self, Map* other)
-{
-    MAP_FOREACH(other, node, Map_Del(self, node->key->value);)
-}
-
-static Map*
-Map_Children(Map* marked)
-{
-    Map* children = Map_Init((Kill) NULL, (Copy) NULL);
-    MAP_FOREACH(marked, node,
-        Map* temp = Map_Init((Kill) NULL, (Copy) NULL);
-        Value* value = node->value;
-        Value_Reach(value, temp, false);
-        Map_Del(temp, node->key->value);
-        Map_Append(children, temp);
-        Map_Kill(temp);
-    )
-    return children;
-}
-
 static void
 Value_Collect(Value*);
-
-static void
-Map_Sweep(Map* marked)
-{
-    Map* children = Map_Children(marked);
-    MAP_FOREACH(marked, node,
-        bool child = Map_Exists(children, node->key->value);
-        bool parent = !child;
-        if(parent)
-            Value_Collect(node->value);
-    )
-    Map_Kill(children);
-}
 
 static void
 Char_Kill(Char* self)
@@ -1737,6 +2072,20 @@ Value_Len(Value* self)
         break;
     }
     return 0;
+}
+
+static void
+Value_Untrack(Value* self)
+{
+    if(ASM_Assembled)
+        Cache_Del(GC_Alloc, self);
+}
+
+static void
+Value_Track(Value* self)
+{
+    if(ASM_Assembled)
+        Cache_Set(GC_Alloc, self);
 }
 
 static void
@@ -2247,23 +2596,6 @@ CC_Match(CC* self, char* expect)
     }
 }
 
-static int64_t
-EscToByte(int64_t ch)
-{
-    switch(ch)
-    {
-    case '"' : return '\"';
-    case '\\': return '\\';
-    case '/' : return '/';
-    case 'b' : return '\b';
-    case 'f' : return '\f';
-    case 'n' : return '\n';
-    case 'r' : return '\r';
-    case 't' : return '\t';
-    }
-    return -1;
-}
-
 static String*
 CC_Build(CC* self, bool clause(int64_t))
 {
@@ -2298,13 +2630,30 @@ CC_Number(CC* self)
     return CC_Build(self, IsNumber);
 }
 
+static int64_t
+EscToByte(int64_t ch)
+{
+    switch(ch)
+    {
+    case '"' : return '\"';
+    case '\\': return '\\';
+    case '/' : return '/';
+    case 'b' : return '\b';
+    case 'f' : return '\f';
+    case 'n' : return '\n';
+    case 'r' : return '\r';
+    case 't' : return '\t';
+    }
+    return -1;
+}
+
 static String*
 CC_EscString(CC* self)
 {
     String* str = String_Init("");
     CC_Spin(self);
     CC_Match(self, "\"");
-    while(CC_Peak(self) != '"')
+    while(CC_Peak(self) != '\"')
     {
         int64_t ch = CC_Read(self);
         String_PshB(str, ch);
@@ -3333,7 +3682,6 @@ CC_While(CC* self, int64_t scoping)
     CC_AssemB(self, String_Format("\tBrf @l%ld", B));
     CC_Match(self, ")");
     CC_Block(self, A, B, scoping, true);
-    CC_AssemB(self, String_Init("\tGar"));
     CC_AssemB(self, String_Format("\tJmp @l%ld", A));
     CC_AssemB(self, String_Format("@l%ld:", B));
 }
@@ -3379,7 +3727,6 @@ CC_Foreach(CC* self, int64_t scoping)
     CC_AssemB(self, String_Init("\tPsh 1"));
     CC_AssemB(self, String_Init("\tAdd"));
     CC_AssemB(self, String_Init("\tPop 1"));
-    CC_AssemB(self, String_Init("\tGar"));
     CC_AssemB(self, String_Format("\tJmp @l%ld", A));
     CC_AssemB(self, String_Format("@l%ld:", B));
     CC_PopScope(self, init);
@@ -3408,7 +3755,6 @@ CC_For(CC* self, int64_t scoping)
     CC_AssemB(self, String_Format("\tJmp @l%ld", A));
     CC_AssemB(self, String_Format("@l%ld:", C));
     CC_Block(self, B, D, scoping, true);
-    CC_AssemB(self, String_Init("\tGar"));
     CC_AssemB(self, String_Format("\tJmp @l%ld", B));
     CC_AssemB(self, String_Format("@l%ld:", D));
     CC_PopScope(self, init);
@@ -3621,11 +3967,12 @@ static Queue*
 ASM_Flatten(Map* labels)
 {
     Queue* addresses = Queue_Init((Kill) Stack_Kill, (Copy) NULL);
-    MAP_FOREACH(labels, chain,
+    MAP_FOREACH(labels, chain)
+    {
         int64_t* address = Map_Get(labels, chain->key->value);
         Stack* stack = Stack_Init(String_Init(chain->key->value), *address);
         Queue_PshB(addresses, stack);
-    )
+    }
     Queue_Sort(addresses, (Comp) Stack_Comp);
     return addresses;
 }
@@ -4002,29 +4349,105 @@ VM_Sav(VM* self, int64_t unused)
     VM_Pop(self, 1);
 }
 
-static Map*
+static void
+Value_Reach(Value*, Cache*, bool deep);
+
+static void
+Queue_Reach(Queue* self, Cache* reach, bool deep)
+{
+    for(int64_t i = 0; i < self->size; i++)
+        Value_Reach(Queue_Get(self, i), reach, deep);
+}
+
+static void
+Map_Reach(Map* self, Cache* reach, bool deep)
+{
+    MAP_FOREACH(self, node)
+        Value_Reach(node->value, reach, deep);
+}
+
+static void
+Value_Reach(Value* self, Cache* reach, bool deep)
+{
+    Link* set = Cache_Set(reach, self);
+    if(set == NULL)
+        return;
+    switch(self->type)
+    {
+    case TYPE_QUEUE:
+        Queue_Reach(self->of.queue, reach, deep);
+        break;
+    case TYPE_MAP:
+        Map_Reach(self->of.map, reach, deep);
+        break;
+    case TYPE_CHAR:
+        Value_Reach(self->of.character->string, reach, deep);
+        break;
+    case TYPE_POINTER:
+        if(deep)
+            Value_Reach(self->of.pointer->value, reach, deep);
+        break;
+    default:
+        break;
+    }
+}
+
+static Cache*
+Cache_Children(Cache* marked)
+{
+    Cache* children = Cache_Init();
+    CACHE_FOREACH(marked, link)
+    {
+        Cache* temp = Cache_Init();
+        Value_Reach(link->value, temp, false);
+        Cache_Del(temp, link->value);
+        CACHE_FOREACH(temp, child)
+            Cache_Set(children, child->value);
+        Cache_Kill(temp);
+    }
+    return children;
+}
+
+static void
+Cache_Sweep(Cache* marked)
+{
+    Cache* children = Cache_Children(marked);
+    CACHE_FOREACH(marked, node)
+    {
+        bool parent = Cache_At(children, node->value) == NULL;
+        if(parent)
+            Value_Collect(node->value);
+    }
+    Cache_Kill(children);
+}
+
+static Cache*
 VM_Mark(VM* self)
 {
-    Map* reachable = Map_Init((Kill) NULL, (Copy) NULL);
+    Cache* reachable = Cache_Init();
     for(int64_t i = 0; i < self->stack->size; i++)
         Value_Reach(Queue_Get(self->stack, i), reachable, true);
-    Map* alloc = Map_Copy(GC_Alloc);
-    Map_Diff(alloc, reachable); // garbage = alloc - reachable.
-    Map_Kill(reachable);
-    return alloc;
+    Cache* garbage = Cache_Init();
+    CACHE_FOREACH(GC_Alloc, link)
+        if(Cache_At(reachable, link->value))
+            continue;
+        else
+            Cache_Set(garbage, link->value);
+    Cache_Kill(reachable);
+    return garbage;
 }
 
 static void
 VM_GarbageCollect(VM* self)
 {
     double t0 = Microseconds();
-    Map* marked = VM_Mark(self);
+    Cache* marked = VM_Mark(self);
     double t1 = Microseconds();
     if(marked->size > 0)
-        Map_Sweep(marked);
+        Cache_Sweep(marked);
     VM_CapAllocs(self);
     double t2 = Microseconds();
-    Map_Kill(marked);
+    Cache_Kill(marked);
     double t3 = Microseconds();
     printf(">>> GC: MARK %f: SWEEP %f: KILL %f\n", t1 - t0, t2 - t1, t3 - t2);
 }
@@ -4743,19 +5166,19 @@ VM_Del(VM* self, int64_t unused)
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
     if(b->type == TYPE_NUMBER)
     {
-        int64_t ind = b->of.number;
+        int64_t index = b->of.number;
         if(a->type == TYPE_QUEUE)
         {
-            bool success = Queue_Del(a->of.queue, ind);
+            bool success = Queue_Del(a->of.queue, index);
             if(success == false)
-                VM_QUIT(self, "queue element deletion out of bounds with index %ld", ind);
+                VM_QUIT(self, "queue element deletion out of bounds with index %ld", index);
         }
         else
         if(a->type == TYPE_STRING)
         {
-            bool success = String_Del(a->of.string, ind);
+            bool success = String_Del(a->of.string, index);
             if(success == false)
-                VM_QUIT(self, "string character deletion out of bounds with index %ld", ind);
+                VM_QUIT(self, "string character deletion out of bounds with index %ld", index);
         }
         else
             VM_QUIT(self, "type %s cannot be indexed for deletion", Type_ToString(a->type));
@@ -4843,10 +5266,10 @@ VM_Wrt(VM* self, int64_t unused)
 }
 
 static int64_t
-Queue_Index(Queue* self, int64_t from, void* value, Comp compare)
+Queue_Index(Queue* self, int64_t from, void* value, Comp comp)
 {
     for(int64_t x = from; x < self->size; x++)
-        if(compare(Queue_Get(self, x), value))
+        if(comp(Queue_Get(self, x), value))
             return x;
     return -1;
 }
@@ -4948,8 +5371,8 @@ VM_QueueSlice(VM* self, Value* a, Value* b, Value* c)
     int64_t len = a->of.queue->size;
     int64_t x = b->of.number;
     int64_t y = c->of.number;
-    if(x == -1) x = len - 1;
-    if(y == -1) y = len - 1;
+    if(x < 0) x = len + x;
+    if(y < 0) y = len + y;
     if(x > y || x < 0)
         VM_QUIT(self, "queue slice [%ld : %ld] not possible", x, y);
     if(y > len)
@@ -4969,8 +5392,8 @@ VM_StringSlice(VM* self, Value* a, Value* b, Value* c)
     int64_t len = a->of.string->size;
     int64_t x = b->of.number;
     int64_t y = c->of.number;
-    if(x == -1) x = len - 1;
-    if(y == -1) y = len - 1;
+    if(x < 0) x = len + x;
+    if(y < 0) y = len + y;
     if(x > y || x < 0)
         VM_QUIT(self, "string slice [%ld : %ld] not possible", x, y);
     if(y > len)
@@ -5103,17 +5526,8 @@ VM_Tim(VM* self, int64_t unused)
     Queue_PshB(self->stack, Value_Number(Microseconds()));
 }
 
-typedef struct
-{
-    String* string;
-    VM* vm;
-    int64_t index;
-    int64_t line;
-}
-Stream;
-
 static char
-Stream_Peek(Stream* self)
+Stream_Peak(Stream* self)
 {
     return self->string->value[self->index];
 }
@@ -5123,7 +5537,7 @@ Stream_Advance(Stream* self)
 {
     if(self->index == self->string->size)
         VM_QUIT(self->vm, "stream line %ld: stream index advanced out of bounds", self->line);
-    if(Stream_Peek(self) == '\n')
+    if(Stream_Peak(self) == '\n')
         self->line += 1;
     self->index += 1;
 }
@@ -5131,7 +5545,7 @@ Stream_Advance(Stream* self)
 static void
 Stream_Spin(Stream* self)
 {
-    while(IsSpace(Stream_Peek(self)))
+    while(IsSpace(Stream_Peak(self)))
         Stream_Advance(self);
 }
 
@@ -5139,7 +5553,7 @@ static char
 Stream_Next(Stream* self)
 {
     Stream_Spin(self);
-    return Stream_Peek(self);
+    return Stream_Peak(self);
 }
 
 static void
@@ -5153,7 +5567,7 @@ Stream_Match(Stream* self, char c)
 static char
 Stream_Read(Stream* self)
 {
-    char c = Stream_Peek(self);
+    char c = Stream_Peak(self);
     Stream_Advance(self);
     return c;
 }
@@ -5164,8 +5578,19 @@ Stream_String(Stream* self)
     String* str = String_Init("");
     Stream_Spin(self);
     Stream_Match(self, '\"');
-    while(Stream_Peek(self) != '\"')
-        String_PshB(str, Stream_Read(self));
+    while(Stream_Peak(self) != '\"')
+    {
+        int64_t ch = Stream_Read(self);
+        String_PshB(str, ch);
+        if(ch == '\\')
+        {
+            ch = Stream_Read(self);
+            int64_t byte = EscToByte(ch);
+            if(byte == -1)
+                VM_QUIT(self->vm, "an unknown escape char 0x%02lX was encountered", ch);
+            String_PshB(str, ch);
+        }
+    }
     Stream_Match(self, '\"');
     return Value_String(str);
 }
@@ -5246,21 +5671,21 @@ Stream_Value(Stream* self)
     if(IsNumber(c))
         return Stream_Number(self);
     else
-    if(c == 't' || c == 'f' || c =='n')
-        return Stream_Ident(self);
-    else
-    if(c == '\"')
-        return Stream_String(self);
-    else
-    if(c == '{')
-        return Stream_Object(self);
-    else
-    if(c == '[')
-        return Stream_Array(self);
-    else
+    switch(c)
     {
-        VM_QUIT(self->vm, "stream line %ld: unknown character %c", self->line, c);
-        return NULL;
+        case 't':
+        case 'f':
+        case 'n':
+            return Stream_Ident(self);
+        case '\"':
+            return Stream_String(self);
+        case '{':
+            return Stream_Object(self);
+        case '[':
+            return Stream_Array(self);
+        default:
+            VM_QUIT(self->vm, "stream line %ld: unknown character %c", self->line, c);
+            return NULL;
     }
 }
 
@@ -5424,7 +5849,7 @@ main(int argc, char* argv[])
     Args args = Args_Parse(argc, argv);
     if(args.entry)
     {
-        GC_Alloc = Map_Init(NULL, NULL);
+        GC_Alloc = Cache_Init();
         String* entry = String_Init(args.entry);
         CC* cc = CC_Init();
         CC_Reserve(cc);
@@ -5444,7 +5869,7 @@ main(int argc, char* argv[])
         VM_Kill(vm);
         CC_Kill(cc);
         String_Kill(entry);
-        Map_Kill(GC_Alloc);
+        Cache_Kill(GC_Alloc);
         return retno;
     }
     else

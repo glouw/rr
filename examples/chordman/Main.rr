@@ -44,32 +44,12 @@ Data()
     };
 }
 
-Data_Verify(self)
-{
-    bad_tabs := [];
-    foreach(prog : self.prog)
-    {
-        foreach(chord : prog)
-        {
-            if(self.tabs[chord] == null)
-            {
-                bad_tabs += chord;
-            }
-        }
-    }
-    if(Len(bad_tabs) > 0)
-    {
-        Print("The following chords are not supported by {}" % [TABS_JSON]);
-        Print(bad_tabs);
-        Exit(1);
-    }
-}
-
 Main()
 {
     save := Open("chordman.txt", "w");
     Assert(Good(save));
     data := Data();
+    data.tabs.ref := &data.tabs;
     index := 0;
     foreach(prog : data.prog)
     {

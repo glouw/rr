@@ -1,0 +1,129 @@
+# MERGE K SORTED LISTS
+# 
+# You are given an array of k linked-lists lists,
+# each linked-list is sorted in ascending order.
+# 
+# Merge all the linked-lists into one sorted
+# linked-list and return it.
+
+Node(val)
+{
+    ret &{
+        .val : val,
+        .next : null,
+    };
+}
+
+Push(nodes, node)
+{
+    node@next = nodes;
+    nodes = node;
+}
+
+Pop(nodes)
+{
+    popping := nodes;
+    nodes = nodes@next;
+    ret popping;
+}
+
+Build()
+{
+    a := Node(9);
+    Push(a, Node(8));
+    Push(a, Node(2));
+    Push(a, Node(1));
+    b := Node(8);
+    Push(b, Node(4));
+    Push(b, Node(2));
+    Push(b, Node(1));
+    c := Node(3);
+    Push(c, Node(2));
+    Push(c, Node(1));
+    Push(c, Node(-1));
+    ret [ a, b, c ];
+}
+
+Empty(list)
+{
+    empty := true;
+    foreach(x : list)
+    {
+        empty = empty && (x == null);
+    }
+    ret empty;
+}
+
+Minim(list)
+{
+    min := 2147483647;
+    index := 0;
+    at := 0;
+    foreach(x : list)
+    {
+        if(x != null)
+        {
+            if(x@val < min)
+            {
+                at = index;
+                min = x@val;
+            }
+        }
+        index += 1;
+    }
+    ret at;
+}
+
+Take(list)
+{
+    index := Minim(list);
+    node := Pop(list[index]);
+    node@next = null;
+    ret node;
+}
+
+Dump(nodes)
+{
+    node := nodes;
+    while(node != null)
+    {
+        Print(*node);
+        node = node@next;
+    }
+}
+
+Merge(list)
+{
+    out := null;
+    last := null;
+    while(!Empty(list))
+    {
+        if(out == null)
+        {
+            out = Take(list);
+            last = &out@next;
+        }
+        else
+        {
+            *last = Take(list);
+            last = &(*last)@next;
+        }
+    }
+    ret out;
+}
+
+Verify(nodes, with)
+{
+    index := 0;
+    for(node := nodes; node != null; node = node@next)
+    {
+        Assert(node@val == with[index]);
+        index += 1;
+    }
+}
+
+Main()
+{
+    Verify(Merge(Build()), [-1, 1, 1, 1, 2, 2, 2, 3, 4, 8, 8, 9]);
+    ret 0; 
+}

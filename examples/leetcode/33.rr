@@ -1,0 +1,142 @@
+# KTH SMALLEST ELEMENT IN A BST
+# 
+# Given the root of a binary search tree, and an integer k,
+# return the kth smallest value (1-indexed) of all the
+# values of the nodes in the tree.
+
+PQ_Less(x, y)
+{
+    ret *x < *y;
+}
+
+PQ(compare)
+{
+    ret {
+        .value : [],
+        .compare : compare,
+    };
+}
+
+PQ_Swap(x, y)
+{
+    temp := *x;
+    *x = *y;
+    *y = temp;
+}
+
+PQ_Up(self, n)
+{
+    if(n > 0)
+    {
+        p := Floor((n - 1) / 2);
+        x := &self.value[n];
+        y := &self.value[p];
+        if(self.compare(x, y))
+        {
+            PQ_Swap(x, y);
+            PQ_Up(self, p);
+        }
+    }
+}
+
+PQ_Down(self, n)
+{
+    min := 2;
+    if(Len(self.value) < min)
+    {
+        ret;
+    }
+    elif(Len(self.value) == min)
+    {
+        a := &self.value[0];
+        b := &self.value[1];
+        if(!self.compare(a, b))
+        {
+            PQ_Swap(a, b);
+        }
+    }
+    else
+    {
+        l := 2 * n + 1;
+        r := 2 * n + 2;
+        if(r < Len(self.value))
+        {
+            index := l;
+            if(self.compare(&self.value[r], &self.value[l]))
+            {
+                index = r;
+            }
+            x := &self.value[index];
+            y := &self.value[n];
+            if(self.compare(x, y))
+            {
+                PQ_Swap(x, y);
+                PQ_Down(self, index);
+            }
+        }
+    }
+}
+
+PQ_Push(self, value)
+{
+    self.value += value;
+    PQ_Up(self, Len(self.value) - 1);
+}
+
+PQ_Pop(self)
+{
+    PQ_Swap(&self.value[0], &self.value[-1]);
+    Del(self.value, -1);
+    PQ_Down(self, 0);
+}
+
+Tree_Node(value)
+{
+    ret &{
+        .value : value,
+        .l : null, 
+        .r : null,
+    };
+}
+
+Tree_Build()
+{
+    self := Tree_Node(5);
+    self@r := Tree_Node(6);
+    self@l := Tree_Node(3);
+    self@l@r := Tree_Node(4);
+    self@l@l := Tree_Node(2);
+    self@l@l@l := Tree_Node(1);
+    ret self;
+}
+
+Tree_Collect(self, pq)
+{
+    if(self == null)
+    {
+        ret;
+    }
+    else
+    {
+        PQ_Push(pq, self@value);
+        Tree_Collect(self@l, pq);
+        Tree_Collect(self@r, pq);
+    }
+}
+
+KthSmallest(tree, k) # N LOGN
+{
+    pq := PQ(PQ_Less);
+    Tree_Collect(tree, pq);
+    for(i := 0; i < k - 1; i += 1)
+    {
+        PQ_Pop(pq);
+    }
+    ret pq.value[0];
+}
+
+Main()
+{
+    Print(KthSmallest(Tree_Build(), 3));
+    ret 0;
+}

@@ -7,7 +7,7 @@ CFLAGS = -O3 -march=native
 endif
 
 WFLAGS = -Wall -Wextra -Wpedantic -Wshadow
-CC = gcc -std=gnu11 -pedantic
+CC = gcc -std=gnu11 -pedantic -Wfatal-errors
 LIBS = -lm -ldl
 
 TITLE = roman2

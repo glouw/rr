@@ -63,6 +63,7 @@ Main()
     Trie_Insert(trie, "word");
     Trie_Insert(trie, "woaa");
     Trie_Insert(trie, "wobb");
+    Assert(Trie_Find(trie, "wor") == false);
     Assert(Trie_Find(trie, "wo.d"));
     Assert(Trie_Find(trie, "wo.a"));
     Assert(Trie_Find(trie, "wo.b"));

@@ -1,18 +1,7 @@
 # The ROMAN II Programming Language
 
-Roman II is a dynamically typed programming language inspired by C, Python, and Pascal.
-
-Roman II is comprised of a recursive descent compiler, a virtual machine, and a garbage collector.
-
-Roman II is dependency free.
-
-Roman II strives to be written in 5000 lines or less in one file titled `roman2.c`
-with the GNU11 dialect of C.
-
-Roman II strives to match the runtime performance and type system of idiomatic Python.
-
-Roman II strives to be highly modifiable and portable and is intended to be used as
-general purpose scripting language for desktop, server, and embedded systems.
+Roman II is a dynamic programming language with a naive mark and sweep garbage
+collector, all written from the ground up in about 5000 lines of the GNU11 dialect of C.
 
 
 ```
@@ -72,7 +61,7 @@ Main()
 ### Value Types
 
 Aside from numbers which are of double precision, Roman II supports maps,
-queues, files, strings, booleans, nulls, and pointer, the latter which may
+queues, files, strings, booleans, nulls, and pointers, the latter which may
 point to functions or variables.
 
 #### Numbers
@@ -116,11 +105,11 @@ Boolean operators include:
 
 Each operator supports its relational variant: `+=`, `-=`, `/=`, `*=`, `%=`, `**=`, `%%=`, `//=`.
 
-Operators and relational variants can be supported with `queue`, `map`, and `string` types.
+Operators and relational variants have optional support for `queue`, `map`, and `string` types.
 
 #### Queues
 
-Queues, also known as lists (with O(1) front and back operations!), can store value types.
+Queues (also known as lists with O(1) front and back operations), can store value types:
 
 ```
 Main()
@@ -204,7 +193,7 @@ Main()
 }
 ```
 
-Finally, queues can be iterated over with the `foreach` loop.
+Queues can be iterated over with the `foreach` loop.
 Indexing via `foreach` is done by reference.
 
 ```
@@ -219,6 +208,8 @@ Main()
     ret 0;
 }
 ```
+
+Any value type may be inserted into a queue.
 
 #### Strings
 
@@ -334,10 +325,10 @@ Main()
     map["key"] := 1;
     map["key"] = 2;
     map.door := 3;
-    map.door = 4;
+    map.door = 4; # No-op.
     map.ceiling = 99;
     Assert(map.key == 2);
-    Assert(map.door == 4); # No-op.
+    Assert(map.door == 4);
     Assert(map.ceiling == null);
     ret 0;
 }
@@ -355,7 +346,7 @@ Main()
 }
 ```
 
-Caution, values of type `null` can be inserted into maps. The `Exists` keyword
+Values of type `null` can be inserted into maps. The `Exists` keyword
 can be used to check for such `nulls` by checking for the existence of a key:
 
 ```
@@ -369,7 +360,7 @@ Main()
 
 Two maps can be merged with the `+` operator.
 
-Maps can be sliced like queues. Like a queue slice, The last element of a
+Maps can be sliced like queues. Like a queue slice, the last element of a
 map slice is not included.
 
 ```
@@ -422,8 +413,8 @@ Main()
 ### Boolean Expressions
 
 Boolean expression are pascal-like requiring enclosed parenthesis
-per boolean expression. Operators `&&` and `||` evaluate expressions left and right.
-Boolean expressions do not short circuit.
+per boolean expression. Operators `&&` and `||` evaluate expressions to
+then left and then the right. Boolean expressions do not short circuit.
 
 ```
 Main()
@@ -436,8 +427,7 @@ Main()
 ### Loops and Control Flow
 
 Standard `for` and `while` loops can loop expression blocks.
-Continuing within a `for` loop will run it's advancement expression:
-`for(init; condition; advancement)`.
+Continuing within a `for` loop will run it's advancement expression.
 
 The following two loops are equivalent:
 
@@ -497,7 +487,7 @@ Main()
 ```
 
 References passed to functions can be checked for aliasing with
-the `?` operator, to, for example, avoid a superfluous copy:
+the `?` operator to avoid a superfluous copies:
 
 ```
 Set(value, with)
@@ -516,6 +506,7 @@ Main()
 {
     a := 1;
     Set(a, a);
+    Assert(a == 1);
     ret 0;
 }
 ```
@@ -536,8 +527,8 @@ Main()
 }
 ```
 
-All variable types can be pointer to, but to ease pointer syntaxing
-with maps using C struct notation, the `@` operator can be used:
+All variable types can be pointed to, but to ease pointer syntaxing
+with maps using C struct notation the `@` operator can be employed:
 
 ```
 Main()
@@ -546,7 +537,7 @@ Main()
     pointer := &map;
     Assert(map.key == 1)
     Assert((*pointer).key == 1);
-    Assert(pointer@key == 1); # Same as above, but a little easier to use.
+    Assert(pointer@key == 1); # Same as above but a little easier on the programmer.
     ret 0;
 }
 ```
@@ -592,8 +583,8 @@ Main()
 
 ### Sorting
 
-Function pointers are often used while quick sorting
-or binary searching.
+Function pointers (in this case, a comparison function pointer)
+are often used while quick sorting:
 
 ```
 Compare(a, b)
@@ -632,8 +623,7 @@ A file is automatically closed once it's reference count reaches 0.
 
 Strings, numbers, and booleans can be compared with all boolean operators.
 Other value types, such as queues, maps, files, use their length (size) for comparison.
-
-The `Len` keyword returns the length (or size) of a queue, map, string, or file.
+The `Len` keyword returns the length (or size) of a queue, map, string, or file:
 
 ```
 Main()
@@ -648,8 +638,9 @@ Main()
 ```
 ### Binary Searching
 
-Likewise, as with sorting, a queue of values can be binary searched
-for a key if the queue is already sorted:
+As with sorting, a queue of values can be binary searched
+for a key if the queue is already sorted. Bsearch requires
+a difference function that returns 0 with a match.
 
 ```
 Comp(a, b) { ret a < b; }
@@ -666,9 +657,10 @@ Main()
     }
     ret 0;
 }
-
 ```
-A queue of maps can be sorted and searched:
+
+A queue of maps can be sorted and searched with a minor
+adjustment to the Comparison and Difference functions:
 
 ```
 Comp(a, b) { ret a.key < b.key; }
@@ -691,16 +683,16 @@ Main()
     ret 0;
 }
 ```
-Note that the binary searching callback requires a difference function
-that returns 0 for a matching element, -1 for less than, and + 1 for greater than.
-In the above example, string subtraction within `Diff` is analogous to C's `strcmp`.
+
+In the above example, string subtraction within `Diff` is analogous to C's `strcmp`,
+returning 0 with a string match.
 
 ### Modules
 
 Modules can be packaged and imported. Modules do not namespace and are recommended
-to include a suffix denoting the module name.
+to include a suffix denoting the module name:
 
-`Math.rr`:
+Math.rr:
 ```
 Math_Add(a, b)
 {
@@ -708,7 +700,7 @@ Math_Add(a, b)
 }
 ```
 
-`Main.rr`:
+Main.rr:
 ```
 inc Math;
 
@@ -718,8 +710,8 @@ Main()
 }
 ```
 Module inclusions are akin to C's `#include` preprocessor directive, which performs
-a source copy and paste. The caveat is that modules are processed only once, even
-with multiple inclusions of the same module.
+a source copy and paste. Modules are processed only once, even with multiple
+inclusions of the same module.
 
 ### Shared Object Libraries
 
@@ -727,7 +719,7 @@ Roman II can call functions from native C shared objects libraries. Value types
 supported are `number`, `string`, and `bool`, mapping to types `double*`,
 `char*`, and `bool*`, respectively:
 
-`Math.c`:
+Math.c:
 ```
 // gcc Math.c -o Math.so --shared -fpic
 
@@ -736,7 +728,7 @@ void Math_Add(double* self, double* other)
     *self += *other;
 }
 ```
-`Main.rr`:
+Main.rr:
 
 ```
 lib Math
@@ -751,15 +743,12 @@ Main()
     Assert(a == 3); 
     ret 0;
 }
-
 ```
 
 ### Built-In Keywords
 
 Built in keywords are exposed by the compiler to present an include-free standard library.
-These keywords cannot be pointed with pointer syntaxing.
-
-A `value` can either be a `number`, `queue`, `bool`, `string`, `map`, `function`, or `file`.
+These keywords cannot be pointed to with pointer syntaxing:
 
 ```
 KEYWORD  ARGUMENTS
@@ -803,7 +792,7 @@ Write    (file, string)
 ## Garbage Collection
 
 While most values free when their internal reference counts reaches 0,
-values with cyclical references require garbage collector intervention.
+values with cyclical references require the intervention of the garbage collector.
 An example of a circular reference is that of two maps pointing to each other:
 
 ```
@@ -834,6 +823,5 @@ as either reachable or unreachable and the unreachable values are sweeped (freed
 The new `alloc_cap` size is set to the current number of reachable values plus
 the arbitrary buffer value (eg. 1024).
 
-The garbage collector checks `alloc_cap` after every function call,
-`while` loop iteration, `for` loop iteration, and `foreach` loop iteration.
-One final mark and sweep is run at program exit.
+The garbage collector checks `alloc_cap` after every direct or indirect function call.
+One final mark and sweep runs at program exit.
