@@ -7,7 +7,7 @@ Fun()
 Main()
 {
     Fun(); # Should cleanup.
-    Assert(Type(Fun()) == "string"); # PROMOTION.
+    Assert(Type(Fun()) == "char");
     x := Fun();
     Assert(Type(x) == "string");
     str := "string";

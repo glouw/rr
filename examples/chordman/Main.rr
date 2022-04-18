@@ -2,9 +2,6 @@
 # and outputs a text file containing said progressions
 # and every chord inversion.
 
-TABS_JSON := "Tabs.json";
-PROG_JSON := "Progression.json";
-
 ToTab(queue)
 {
     str := "\t\t";
@@ -34,37 +31,42 @@ File_Value(file)
 
 Data()
 {
-    fa := Open(TABS_JSON, "r");
-    fb := Open(PROG_JSON, "r");
+    fa := Open("Tabs.json", "r");
+    fb := Open("Prog.json", "r");
+    fc := Open("chordman.txt", "w");
     Assert(Good(fa));
     Assert(Good(fb));
+    Assert(Good(fc));
     ret {
         .tabs : File_Value(fa),
         .prog : File_Value(fb),
+        .save : fc,
     };
+}
+
+Data_Process(self)
+{
+    index := 0;
+    foreach(prog : self.prog)
+    {
+        Write(self.save, "Progression {.0} : {}\n" % [index, Flatten(prog)]);
+        foreach(chord : prog)
+        {
+            Write(self.save, "\t{}\n" % [chord]);
+            tab := self.tabs[chord];
+            foreach(map : tab)
+            {
+                Write(self.save, ToTab(map.positions) + "\n");
+            }
+        }
+        index += 1;
+        Write(self.save, "\n");
+    }
 }
 
 Main()
 {
-    save := Open("chordman.txt", "w");
-    Assert(Good(save));
-    data := Data();
-    data.tabs.ref := &data.tabs;
-    index := 0;
-    foreach(prog : data.prog)
-    {
-        Write(save, "Progression {.0} : {}\n" % [index, Flatten(prog)]);
-        foreach(chord : prog)
-        {
-            Write(save, "\t{}\n" % [chord]);
-            tab := data.tabs[chord];
-            foreach(map : tab)
-            {
-                Write(save, ToTab(map.positions) + "\n");
-            }
-        }
-        index += 1;
-        Write(save, "\n");
-    }
+    const data $= Data();
+    Data_Process(data);
     ret 0;
 }

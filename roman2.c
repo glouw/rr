@@ -144,6 +144,7 @@ struct Value
     Type type;
     Of of;
     int64_t refs;
+    bool constant;
 };
 
 typedef enum
@@ -172,13 +173,13 @@ Class;
 
 #define OPCODES \
     X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Brf) X(Bsr) \
-    X(Cal) X(Cel) X(Cop) X(Cos) X(Del) X(Div) X(Dll) X(Drf) X(End) X(Eql) X(Exi) \
-    X(Ext) X(Flr) X(Fls) X(Gar) X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) X(Imd) \
-    X(Ins) X(Jmp) X(Key) X(Len) X(Loc) X(Lod) X(Log) X(Lor) X(Lst) X(Lte) X(Max) \
-    X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) X(Not) X(Opn) X(Pop) X(Pow) X(Prt) \
-    X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) X(Red) X(Ref) X(Ret) X(Sav) X(Sin) \
-    X(Slc) X(Spd) X(Sqr) X(Srd) X(Sub) X(Tan) X(Tim) X(Trv) X(Typ) X(Val) X(Vrt) \
-    X(Wrt)
+    X(Cal) X(Cel) X(Con) X(Cop) X(Cos) X(Del) X(Div) X(Dll) X(Drf) X(End) X(Eql) \
+    X(Exi) X(Ext) X(Flr) X(Fls) X(Gar) X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) \
+    X(Imd) X(Ins) X(Jmp) X(Key) X(Len) X(Loc) X(Lod) X(Log) X(Lor) X(Lst) X(Lte) \
+    X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) X(Not) X(Opn) X(Pop) X(Pow) \
+    X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) X(Red) X(Ref) X(Ret) X(Sav) \
+    X(Sin) X(Slc) X(Spd) X(Sqr) X(Srd) X(Sub) X(Tan) X(Tim) X(Trv) X(Typ) X(Val) \
+    X(Vrt) X(Wrt)
 
 typedef enum
 {
@@ -1889,10 +1890,10 @@ static void Value_Inc(Value* self) { self->refs += 1; }
 static Char*
 Char_Init(Value* string, int64_t index)
 {
-    Value_Inc(string);
     char* value = String_Get(string->of.string, index);
     if(value)
     {
+        Value_Inc(string);
         Char* self = Malloc(sizeof(*self));
         self->string = string;
         self->value = value;
@@ -2226,6 +2227,7 @@ Value_Init(Of of, Type type)
     self->type = type;
     self->refs = 0;
     self->of = of;
+    self->constant = false;
     Value_Track(self);
     return self;
 }
@@ -2273,11 +2275,13 @@ Value_Function(Function* function)
 }
 
 static Value*
-Value_Char(Char* character)
+Value_Char(Char* character, bool constant)
 {
     Of of;
     of.character = character;
-    return Value_Init(of, TYPE_CHAR);
+    Value* self = Value_Init(of, TYPE_CHAR);
+    self->constant = constant;
+    return self;
 }
 
 static Value*
@@ -2372,10 +2376,8 @@ Value_Print(Value* self, int64_t width, int64_t preci)
 }
 
 static void
-Value_SubStr(Value* a, Value* b)
+CharCopy(char* x, char* y)
 {
-    char* x = a->of.character->value;
-    char* y = b->of.string->value;
     while(*x && *y)
     {
         *x = *y;
@@ -2636,8 +2638,6 @@ EscToByte(int64_t ch)
     switch(ch)
     {
     case '"' : return '\"';
-    case '\\': return '\\';
-    case '/' : return '/';
     case 'b' : return '\b';
     case 'f' : return '\f';
     case 'n' : return '\n';
@@ -2648,7 +2648,7 @@ EscToByte(int64_t ch)
 }
 
 static String*
-CC_EscString(CC* self)
+CC_Escape(CC* self)
 {
     String* str = String_Init("");
     CC_Spin(self);
@@ -2662,7 +2662,7 @@ CC_EscString(CC* self)
             ch = CC_Read(self);
             int64_t byte = EscToByte(ch);
             if(byte == -1)
-                CC_QUIT(self, "an unknown escape char 0x%02lX was encountered", ch);
+                CC_QUIT(self, "unknown escape char 0x%02lXn", ch);
             String_PshB(str, ch);
         }
     }
@@ -2984,9 +2984,17 @@ CC_ConsumeExpression(CC* self)
 static void
 CC_Assign(CC* self)
 {
-    CC_Match(self, ":=");
-    CC_Expression(self);
-    CC_AssemB(self, String_Init("\tCop"));
+    if(CC_Next(self) == '$')
+    {
+        CC_Match(self, "$=");
+        CC_Expression(self);
+    }
+    else
+    {
+        CC_Match(self, ":=");
+        CC_Expression(self);
+        CC_AssemB(self, String_Init("\tCop"));
+    }
 }
 
 static void
@@ -2997,21 +3005,26 @@ CC_Local(CC* self, String* ident)
 }
 
 static void
-CC_AssignLocal(CC* self, String* ident)
+CC_AssignLocal(CC* self, String* ident, bool constant)
 {
     CC_Assign(self);
     CC_Match(self, ";");
     CC_Local(self, ident);
+    if(constant)
+        CC_AssemB(self, String_Init("\tCon"));
+    CC_AssemB(self, String_Init("\tGar"));
 }
 
 static String*
-CC_Global(CC* self, String* ident)
+CC_Global(CC* self, String* ident, bool constant)
 {
     String* label = String_Format("!%s", ident->value);
     CC_AssemB(self, String_Format("%s:", label->value));
     CC_Assign(self);
     CC_Match(self, ";");
     CC_Define(self, CLASS_VARIABLE_GLOBAL, self->globals, ident, String_Copy(CC_CurrentFile(self)));
+    if(constant)
+        CC_AssemB(self, String_Init("\tCon"));
     CC_AssemB(self, String_Init("\tRet"));
     self->globals += 1;
     return label;
@@ -3138,7 +3151,7 @@ CC_Pointer(CC* self)
 static void
 CC_String(CC* self)
 {
-    String* string = CC_EscString(self);
+    String* string = CC_Escape(self);
     CC_AssemB(self, String_Format("\tPsh \"%s\"", string->value));
     String_Kill(string);
 }
@@ -3166,7 +3179,6 @@ CC_Vrt(CC* self)
     CC_AssemB(self, String_Format("\tPsh %ld", size));
     CC_AssemB(self, String_Init("\tVrt"));
     CC_AssemB(self, String_Init("\tTrv"));
-    CC_AssemB(self, String_Init("\tGar"));
 }
 
 static void
@@ -3249,7 +3261,6 @@ CC_Call(CC* self, String* ident, int64_t args)
         CC_AssemB(self, String_Init("\tSpd"));
     CC_AssemB(self, String_Format("\tCal %s", ident->value));
     CC_AssemB(self, String_Init("\tLod"));
-    CC_AssemB(self, String_Init("\tGar"));
 }
 
 static void
@@ -3743,7 +3754,7 @@ CC_For(CC* self, int64_t scoping)
     CC_Match(self, "(");
     String* ident = CC_Ident(self);
     Queue_PshB(init, String_Copy(ident));
-    CC_AssignLocal(self, ident);
+    CC_AssignLocal(self, ident, false);
     CC_AssemB(self, String_Format("@l%ld:", A));
     CC_Expression(self);
     CC_Match(self, ";");
@@ -3832,10 +3843,18 @@ CC_Block(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
                     CC_QUIT(self, "the keyword break can only be used within a while, for, or foreach loop");
             }
             else
-            if(CC_Next(self) == ':')
+            if(String_Equals(ident, "const"))
+            {
+                String* next = CC_Ident(self);
+                Queue_PshB(scope, next);
+                CC_AssignLocal(self, String_Copy(next), true);
+            }
+            else
+            if(CC_Next(self) == ':'
+            || CC_Next(self) == '$')
             {
                 Queue_PshB(scope, String_Copy(ident));
-                CC_AssignLocal(self, String_Copy(ident));
+                CC_AssignLocal(self, String_Copy(ident), false);
             }
             else
             {
@@ -3913,6 +3932,14 @@ CC_Parse(CC* self)
     while(CC_Peak(self) != EOF)
     {
         String* ident = CC_Ident(self);
+        if(String_Equals(ident, "const"))
+        {
+            String* next = CC_Ident(self);
+            String* label = CC_Global(self, next, true);
+            Queue_PshB(start, label);
+            String_Kill(ident);
+        }
+        else
         if(String_Equals(ident, "inc"))
         {
             CC_Include(self);
@@ -3930,7 +3957,7 @@ CC_Parse(CC* self)
         else
         if(CC_Next(self) == ':')
         {
-            String* label = CC_Global(self, ident);
+            String* label = CC_Global(self, ident, false);
             Queue_PshB(start, label);
         }
         else
@@ -4142,7 +4169,7 @@ VM_ConvertEscs(VM* self, char* chars)
             int64_t esc = chars[i];
             ch = EscToByte(esc);
             if(ch == -1)
-                VM_QUIT(self, "an unknown escape character 0x%02lX was encountered\n", esc);
+                VM_QUIT(self, "unknown escape char 0x%02lX", esc);
         }
         String_PshB(string, ch);
     }
@@ -4152,15 +4179,12 @@ VM_ConvertEscs(VM* self, char* chars)
 static int64_t
 VM_Store(VM* self, Map* labels, char* operand)
 {
-    String* key = String_Init(operand);
-    int64_t* index = Map_Get(self->data_dups, key->value);
+    int64_t* index = Map_Get(self->data_dups, operand);
     if(index)
-    {
-        String_Kill(key);
         return *index;
-    }
     else
     {
+        String* key = String_Init(operand);
         Value* value = NULL;
         char ch = operand[0];
         if(ch == '[')
@@ -4195,6 +4219,7 @@ VM_Store(VM* self, Map* labels, char* operand)
             value = Value_Number(String_ToNumber(operand));
         else
             QUIT("assembler unknown psh operand %s encountered", operand);
+        value->constant = true;
         Map_Set(self->data_dups, key, Int_Init(self->data->size));
         Queue_PshB(self->data, value);
         return self->data->size - 1;
@@ -4345,7 +4370,9 @@ static void
 VM_Sav(VM* self, int64_t unused)
 {
     (void) unused;
-    self->ret = Value_Copy(Queue_Back(self->stack));
+    Value* ret = Queue_Back(self->stack);
+    Value_Inc(ret);
+    self->ret = ret;
     VM_Pop(self, 1);
 }
 
@@ -4422,17 +4449,39 @@ Cache_Sweep(Cache* marked)
 }
 
 static Cache*
-VM_Mark(VM* self)
+VM_Reach(VM* self)
 {
     Cache* reachable = Cache_Init();
     for(int64_t i = 0; i < self->stack->size; i++)
-        Value_Reach(Queue_Get(self->stack, i), reachable, true);
+    {
+        Value* value = Queue_Get(self->stack, i);
+        if(value->constant)
+            continue;
+        Value_Reach(value, reachable, true);
+    }
+    return reachable;
+}
+
+static Cache*
+Cache_Separate(Cache* reachable)
+{
     Cache* garbage = Cache_Init();
     CACHE_FOREACH(GC_Alloc, link)
+    {
+        if(link->value->constant)
+            continue;
         if(Cache_At(reachable, link->value))
             continue;
-        else
-            Cache_Set(garbage, link->value);
+        Cache_Set(garbage, link->value);
+    }
+    return garbage;
+}
+
+static Cache*
+VM_Mark(VM* self)
+{
+    Cache* reachable = VM_Reach(self);
+    Cache* garbage = Cache_Separate(reachable);
     Cache_Kill(reachable);
     return garbage;
 }
@@ -4481,13 +4530,23 @@ VM_Mov(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
-    if(a->type == TYPE_CHAR && b->type == TYPE_STRING)
-        Value_SubStr(a, b);
+    if(a->constant)
+        VM_QUIT(self, "cannot modify (=) const values");
     else
     if(a != b)
     {
-        Type_Kill(a->type, &a->of);
-        Type_Copy(a, b);
+        if(a->type == TYPE_CHAR
+        && b->type == TYPE_STRING)
+            CharCopy(a->of.character->value, b->of.string->value);
+        else
+        if(a->type == TYPE_CHAR
+        && b->type == TYPE_CHAR)
+            *a->of.character->value = *b->of.character->value;
+        else
+        {
+            Type_Kill(a->type, &a->of);
+            Type_Copy(a, b);
+        }
     }
     VM_Pop(self, 1);
 }
@@ -4497,6 +4556,8 @@ VM_Operate(VM* self, double (*exec)(double, double), char* operator)
 {
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    if(a->constant)
+        VM_QUIT(self, "cannot modify (%s) const values", operator);
     VM_TypeExpect(self, a->type, TYPE_NUMBER);
     VM_TypeAllign(self, a->type, b->type, operator);
     a->of.number = exec(a->of.number, b->of.number);
@@ -4583,6 +4644,9 @@ VM_Add(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    if(a->constant)
+        VM_QUIT(self, "cannot modify (+=) const values");
+    else
     if(a->type == TYPE_QUEUE && b->type != TYPE_QUEUE)
         VM_Psb(self, unused);
     else
@@ -4641,6 +4705,9 @@ VM_Sub(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    if(a->constant)
+        VM_QUIT(self, "cannot modify (-=) const values");
+    else
     if(a->type == TYPE_QUEUE && b->type != TYPE_QUEUE)
         VM_Psf(self, unused);
     else
@@ -4755,7 +4822,7 @@ VM_BSearch(VM* self, Value* value, Value* key, Value* comparator)
         if(cmp == 0)
         {
             if(value->type == TYPE_STRING)
-                now = Value_Char(Char_Init(value, mid));
+                now = Value_Char(Char_Init(value, mid), value->constant);
             return Value_Pointer(Pointer_Init(now));
         }
         else
@@ -4993,6 +5060,8 @@ VM_Ins(VM* self, int64_t unused)
     Value* a = Queue_Get(self->stack, self->stack->size - 3);
     Value* b = Queue_Get(self->stack, self->stack->size - 2);
     Value* c = Queue_Get(self->stack, self->stack->size - 1);
+    if(a->constant)
+        VM_QUIT(self, "cannot modify (:=) const values");
     VM_TypeExpect(self, a->type, TYPE_MAP);
     if(b->type == TYPE_CHAR)
         Value_PromoteChar(b);
@@ -5035,7 +5104,7 @@ VM_IndexString(VM* self, Value* string, Value* index)
     Char* character = Char_Init(string, ind);
     if(character == NULL)
         VM_QUIT(self, "string character access out of bounds with index %ld", ind);
-    return Value_Char(character);
+    return Value_Char(character, string->constant);
 }
 
 static Value*
@@ -5092,6 +5161,9 @@ VM_Mod(VM* self, int64_t unused)
     (void) unused;
     Value* a = Queue_Get(self->stack, self->stack->size - 2);
     Value* b = Queue_Get(self->stack, self->stack->size - 1);
+    if(a->constant)
+        VM_QUIT(self, "cannot modify (%%=) const values");
+    else
     if(a->type == TYPE_NUMBER && b->type == TYPE_NUMBER)
     {
         a->of.number = fmod(a->of.number, b->of.number);
@@ -5587,7 +5659,7 @@ Stream_String(Stream* self)
             ch = Stream_Read(self);
             int64_t byte = EscToByte(ch);
             if(byte == -1)
-                VM_QUIT(self->vm, "an unknown escape char 0x%02lX was encountered", ch);
+                VM_QUIT(self->vm, "unknown escape char 0x%02lX", ch);
             String_PshB(str, ch);
         }
     }
@@ -5687,6 +5759,35 @@ Stream_Value(Stream* self)
             VM_QUIT(self->vm, "stream line %ld: unknown character %c", self->line, c);
             return NULL;
     }
+}
+
+static void
+Value_Const(Value* self, VM* vm)
+{
+    self->constant = true;
+    switch(self->type)
+    {
+    case TYPE_POINTER:
+        VM_QUIT(vm, "pointers cannot be constants");
+        break;
+    case TYPE_QUEUE:
+        for(int64_t i = 0; i < self->of.queue->size; i++)
+            Value_Const(Queue_Get(self->of.queue, i), vm);
+        break;
+    case TYPE_MAP:
+        MAP_FOREACH(self->of.map, node)
+            Value_Const(node->value, vm);
+        break;
+    default:
+        break;
+    }
+}
+
+static void
+VM_Con(VM* self, int64_t unused)
+{
+    (void) unused;
+    Value_Const(Queue_Back(self->stack), self);
 }
 
 static void

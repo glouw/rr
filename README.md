@@ -79,6 +79,21 @@ Main()
 }
 ```
 
+Reference assignment is done with the `$=` operator. References
+cannot be reassigned; modifying a reference modifies the referencing
+value.
+
+```
+Main()
+{
+    a := 1;
+    b $= a;
+    b = 2;
+    Assert(a == 2);
+    ret 0;
+}
+```
+
 Operators compatible with numbers include:
 
 ```
@@ -713,6 +728,13 @@ Module inclusions are akin to C's `#include` preprocessor directive, which perfo
 a source copy and paste. Modules are processed only once, even with multiple
 inclusions of the same module.
 
+Modules within directories can be included with the dot `.` operator. Dot operators
+prefixing a module reference modules one up from the current directory:
+
+```
+inc ..Lib.Basic.Math; # "../../Lib/Basic/Math.rr"
+```
+
 ### Shared Object Libraries
 
 Roman II can call functions from native C shared objects libraries. Value types
@@ -803,8 +825,8 @@ Main()
     # Ref count of `a` is now 1.
     # Ref count of `b` is now 1.
 
-    a.ref := &b;
-    b.ref := &a;
+    a.pointer := &b;
+    b.pointer := &a;
     # Ref count of `a` is now 2.
     # Ref count of `b` is now 2.
 
@@ -823,5 +845,24 @@ as either reachable or unreachable and the unreachable values are sweeped (freed
 The new `alloc_cap` size is set to the current number of reachable values plus
 the arbitrary buffer value (eg. 1024).
 
-The garbage collector checks `alloc_cap` after every direct or indirect function call.
-One final mark and sweep runs at program exit.
+The garbage collector checks `alloc_cap` with every new local variable assignation.
+
+## Constant Values
+
+Objects marked with the `const` keyword escape garbage collection (eg. cyclical reference checks).
+`const` objects may not hold pointers. Functions returning large
+objects are best assigned as `const` references (`$=`) to both escape
+future garbage collection as well as the extra copy normally
+associated with the assignment `:=` operator:
+
+
+```
+Main()
+{
+    path := "path/to/a/very/large/file.json"; # This is a 300MB JSON.
+    const json $= Value(Read(path, Len(path)));
+    ret 0;
+}
+```
+
+Nevertheless, an ideal program will have all values initialized as `const` references.
