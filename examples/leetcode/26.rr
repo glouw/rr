@@ -18,26 +18,19 @@
 # need to follow this format, so please be creative and
 # come up with different approaches yourself.
 
-Node(value)
-{
-    ret &{
-        .value : value,
-        .l : null,
-        .r : null,
-    };
-}
+inc lib.Tree;
 
-Node_Setup()
+Nodes()
 {
-    nodes := Node(1);
-    nodes@l := Node(2);
-    nodes@r := Node(8);
-    nodes@r@l := Node(8);
-    nodes@r@l@r := Node(8);
-    nodes@r@l@l := Node(8);
-    nodes@l@l := Node(3);
-    nodes@l@l@r := Node(3);
-    nodes@l@l@r@r := Node(9);
+    nodes := Tree_Node(1);
+    nodes@l := Tree_Node(2);
+    nodes@r := Tree_Node(8);
+    nodes@r@l := Tree_Node(8);
+    nodes@r@l@r := Tree_Node(8);
+    nodes@r@l@l := Tree_Node(8);
+    nodes@l@l := Tree_Node(3);
+    nodes@l@l@r := Tree_Node(3);
+    nodes@l@l@r@r := Tree_Node(9);
     ret nodes;
 }
 
@@ -72,7 +65,7 @@ Deserialize(string)
         }
         else
         {
-            stack += Node(Value("{}" % [x]));
+            stack += Tree_Node(Value("{}" % [x]));
         }
     }
     ret stack[0];
@@ -80,7 +73,7 @@ Deserialize(string)
 
 Main()
 {
-    a := Serialize(Node_Setup(), "");
+    a := Serialize(Nodes(), "");
     b := Deserialize(a);
     c := Serialize(b, "");
     Assert(a == c);

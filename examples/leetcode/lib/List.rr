@@ -1,0 +1,48 @@
+# ------------------------------------------------------------------------
+# LINKED LIST (SINGLY)
+# ------------------------------------------------------------------------
+
+List_Node(value)
+{
+    ret &{
+        .value : value,
+        .next : null
+    };
+}
+
+List_Push(nodes, node)
+{
+    node@next = nodes;
+    nodes = node;
+}
+
+List_Equal(a, b)
+{
+    x := a;
+    y := b;
+    while((x != null) && (y != null))
+    {
+        if(x@value != y@value)
+        {
+            ret false;
+        }
+        x = x@next;
+        y = y@next;
+        if((x != null) && (y == null))
+        {
+            ret false;
+        }
+        if((x == null) && (y != null))
+        {
+            ret false;
+        }
+    }
+    ret true;
+}
+
+List_Pop(nodes)
+{
+    popping := nodes;
+    nodes = nodes@next;
+    ret popping;
+}

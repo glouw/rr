@@ -6,29 +6,22 @@
 # nodes along the longest path from the root node
 # down to the farthest leaf node.
 
-Node(val)
-{
-    ret &{
-        .val : val,
-        .l : null,
-        .r : null,
-    };
-}
+inc lib.Tree;
 
 Build()
 {
-    node := Node(1);
-    node@l = Node(2);
-    node@l@l = Node(2);
-    node@l@l@l = Node(2);
-    node@l@l@l@l = Node(2);
-    node@r = Node(3);
-    node@r@r = Node(4);
-    node@r@r@l = Node(4);
-    node@r@r@l@l = Node(9);
-    node@r@r@l@l@r = Node(9);
-    node@r@r@l@l@l = Node(9);
-    node@r@r@l@l@l@r = Node(9);
+    node := Tree_Node(1);
+    node@l = Tree_Node(2);
+    node@l@l = Tree_Node(2);
+    node@l@l@l = Tree_Node(2);
+    node@l@l@l@l = Tree_Node(2);
+    node@r = Tree_Node(3);
+    node@r@r = Tree_Node(4);
+    node@r@r@l = Tree_Node(4);
+    node@r@r@l@l = Tree_Node(9);
+    node@r@r@l@l@r = Tree_Node(9);
+    node@r@r@l@l@l = Tree_Node(9);
+    node@r@r@l@l@l@r = Tree_Node(9);
     ret node;
 }
 

@@ -1,0 +1,32 @@
+# ------------------------------------------------------------------------
+# TREE (UNBALANCED BINARY)
+# ------------------------------------------------------------------------
+
+Tree_Node(value)
+{
+    ret &{
+        .value : value,
+        .l : null,
+        .r : null,
+    };
+}
+
+Tree_Same(a, b)
+{
+    if((a == null) && (b == null))
+    {
+        ret true;
+    }
+    elif((a == null) || (b == null))
+    {
+        ret false;
+    }
+    elif(a@value == b@value)
+    {
+        ret Tree_Same(a@l, b@l) && Tree_Same(a@r, b@r);
+    }
+    else
+    {
+        ret false;
+    }
+}

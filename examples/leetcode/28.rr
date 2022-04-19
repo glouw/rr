@@ -6,43 +6,16 @@
 # Two binary trees are considered the same if they
 # are structurally identical, and the nodes have the same value.
 
-Node(val)
-{
-    ret &{
-        .l : null,
-        .r : null,
-        .val : val
-    };
-}
-
-Same(a, b)
-{
-    if((a == null) && (b == null))
-    {
-        ret true;
-    }
-    elif((a == null) || (b == null))
-    {
-        ret false;
-    }
-    elif(a@value == b@value)
-    {
-        ret Same(a@l, b@l) && Same(a@r, b@r);
-    }
-    else
-    {
-        ret false;
-    }
-}
+inc lib.Tree;
 
 A()
 {
-    a := Node(1);
-    a@l = Node(2);
-    a@r = Node(3);
-    b := Node(1);
-    b@l = Node(2);
-    b@r = Node(3);
+    a := Tree_Node(1);
+    a@l = Tree_Node(2);
+    a@r = Tree_Node(3);
+    b := Tree_Node(1);
+    b@l = Tree_Node(2);
+    b@r = Tree_Node(3);
     ret {
         .a : a,
         .b : b,
@@ -51,24 +24,23 @@ A()
 
 B()
 {
-    a := Node(1);
-    a@l = Node(2);
-    a@l = Node(3);
-    b := Node(1);
-    b@l = Node(2);
-    b@r = Node(3);
+    a := Tree_Node(1);
+    a@l = Tree_Node(2);
+    a@l = Tree_Node(3);
+    b := Tree_Node(1);
+    b@l = Tree_Node(2);
+    b@r = Tree_Node(3);
     ret {
         .a : a,
         .b : b,
     };
 }
 
-
 Main()
 {
     a := A();
     b := B();
-    Assert(Same(a.a, a.b));
-    Assert(!Same(b.a, b.b));
+    Assert(Tree_Same(a.a, a.b));
+    Assert(!Tree_Same(b.a, b.b));
     ret 0;
 }

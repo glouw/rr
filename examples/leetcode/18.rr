@@ -3,49 +3,16 @@
 # Given the head of a linked list, remove the nth
 # node from the end of the list and return its head.
 
-Node(value)
-{
-    ret &{ .value : value, .next : null };
-}
-
-Push(nodes, node)
-{
-    node@next = nodes;
-    nodes = node;
-}
+inc lib.List;
 
 Populate(values)
 {
     nodes := null;
     for(i := Len(values) - 1; i >= 0; i -= 1)
     {
-        Push(nodes, Node(values[i]));
+        List_Push(nodes, List_Node(values[i]));
     }
     ret nodes;
-}
-
-Equal(a, b)
-{
-    x := a;
-    y := b;
-    while((x != null) && (y != null))
-    {
-        if(x@value != y@value)
-        {
-            ret false;
-        }
-        x = x@next;
-        y = y@next;
-        if((x != null) && (y == null))
-        {
-            ret false;
-        }
-        if((x == null) && (y != null))
-        {
-            ret false;
-        }
-    }
-    ret true;
 }
 
 DelFromBack(nodes, from)
@@ -83,7 +50,7 @@ Test(a, b, from)
     x := Populate(a);
     y := Populate(b);
     DelFromBack(x, from);
-    ret Equal(x, y);
+    ret List_Equal(x, y);
 }
 
 Main()

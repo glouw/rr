@@ -11,16 +11,7 @@
 # Return true if there is a cycle in the linked list.
 # Otherwise, return false.
 
-Node(value)
-{
-    ret &{ .value : value, .next : null };
-}
-
-Push(nodes, node)
-{
-    node@next := nodes;
-    nodes = node;
-}
+inc lib.List;
 
 HasCycle(nodes)
 {
@@ -46,23 +37,22 @@ HasCycle(nodes)
     ret false;
 }
 
-Build()
+Nodes()
 {
-    nodes := Node(1);
-    Push(nodes, Node(2));
+    nodes := List_Node(1);
+    List_Push(nodes, List_Node(2));
     loop := nodes;
-    Push(nodes, Node(3));
-    Push(nodes, Node(4));
-    Push(nodes, Node(5));
-    Push(nodes, Node(6));
-    Push(nodes, Node(7));
-    Push(nodes, loop);
+    List_Push(nodes, List_Node(3));
+    List_Push(nodes, List_Node(4));
+    List_Push(nodes, List_Node(5));
+    List_Push(nodes, List_Node(6));
+    List_Push(nodes, List_Node(7));
+    List_Push(nodes, loop);
     ret nodes;
 }
 
 Main()
 {
-    nodes := Build();
-    Assert(HasCycle(nodes));
+    Assert(HasCycle(Nodes()));
     ret 0;
 }

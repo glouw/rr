@@ -4,23 +4,16 @@
 # the level order traversal of its nodes'
 # values. (i.e., from left to right, level by level).
 
-Node(value)
-{
-    ret &{
-        .l : null,
-        .r : null,
-        .value : value
-    };
-}
+inc lib.Tree;
 
-Build()
+Nodes()
 {
-    nodes := Node(1);
-    nodes@l = Node(2);
-    nodes@r = Node(3);
-    nodes@l@r = Node(4);
-    nodes@l@l = Node(9);
-    nodes@l@l@l = Node(2);
+    nodes := Tree_Node(1);
+    nodes@l = Tree_Node(2);
+    nodes@r = Tree_Node(3);
+    nodes@l@r = Tree_Node(4);
+    nodes@l@l = Tree_Node(9);
+    nodes@l@l@l = Tree_Node(2);
     ret nodes;
 }
 
@@ -51,7 +44,7 @@ Level(nodes, level, queue)
 Main()
 {
     queue := [];
-    Level(Build(), 0, queue);
+    Level(Nodes(), 0, queue);
     Print(queue);
     Assert(queue == [ [1], [2, 3], [9, 4], [2] ]);
     ret 0;

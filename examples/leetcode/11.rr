@@ -3,16 +3,7 @@
 # Given the head of a singly linked list,
 # reverse the list, and return the reversed list.
 
-Node(value)
-{
-    ret &{ .value : value, .next : null };
-}
-
-Push(nodes, node)
-{
-    node@next = nodes;
-    nodes = node;
-}
+inc lib.List;
 
 Reverse(nodes)
 {
@@ -20,7 +11,7 @@ Reverse(nodes)
     node := nodes;
     while(node != null)
     {
-        Push(rev, Node(node@value));
+        List_Push(rev, List_Node(node@value));
         node = node@next;
     }
     ret rev;
@@ -31,38 +22,14 @@ Populate(with)
     nodes := null;
     for(i := Len(with) - 1; i >= 0; i -= 1)
     {
-        Push(nodes, Node(with[i]));
+        List_Push(nodes, List_Node(with[i]));
     }
     ret nodes;
 }
 
-Equal(a, b)
-{
-    x := a;
-    y := b;
-    while((x != null) && (y != null))
-    {
-        if(x@value != y@value)
-        {
-            ret false;
-        }
-        x = x@next;
-        y = y@next;
-        if((x != null) && (y == null))
-        {
-            ret false;
-        }
-        if((x == null) && (y != null))
-        {
-            ret false;
-        }
-    }
-    ret true;
-}
-
 Test(a, b)
 {
-    ret Equal(Reverse(Populate(a)), Populate(b));
+    ret List_Equal(Reverse(Populate(a)), Populate(b));
 }
 
 Main()

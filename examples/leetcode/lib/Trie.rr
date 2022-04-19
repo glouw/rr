@@ -1,0 +1,45 @@
+# ------------------------------------------------------------------------
+# TRIE (PREFIX)
+# ------------------------------------------------------------------------
+
+Trie_Insert(self, string)
+{
+    node := &self;
+    foreach(c : string)
+    {
+        if((*node)[c] == null)
+        {
+            (*node)[c] := {};
+        }
+        node = &(*node)[c];
+    }
+    node@end := true;
+}
+
+Trie_Search(self, string)
+{
+    node := &self;
+    foreach(c : string)
+    {
+        node = &(*node)[c];
+        if(node == null)
+        {
+            break;
+        }
+    }
+    ret node@end == true;
+}
+
+Trie_Prefix(self, string)
+{
+    node := &self;
+    foreach(c : string)
+    {
+        node = &(*node)[c];
+        if(node == null)
+        {
+            break;
+        }
+    }
+    ret node != null;
+}

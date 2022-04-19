@@ -1,0 +1,79 @@
+# ------------------------------------------------------------------------
+# PRIORITY QUEUE (MIN / MAX HEAP)
+# ------------------------------------------------------------------------
+
+inc STD;
+
+__PQ_Up(self, n)
+{
+    if(n > 0)
+    {
+        p := Floor((n - 1) / 2);
+        x := &self.value[n];
+        y := &self.value[p];
+        if(self.compare(x, y))
+        {
+            STD_Swap(x, y);
+            __PQ_Up(self, p);
+        }
+    }
+}
+
+__PQ_Down(self, n)
+{
+    min := 2;
+    if(Len(self.value) < min)
+    {
+        ret;
+    }
+    elif(Len(self.value) == min)
+    {
+        a := &self.value[0];
+        b := &self.value[1];
+        if(!self.compare(a, b))
+        {
+            STD_Swap(a, b);
+        }
+    }
+    else
+    {
+        l := 2 * n + 1;
+        r := 2 * n + 2;
+        if(r < Len(self.value))
+        {
+            index := l;
+            if(self.compare(&self.value[r], &self.value[l]))
+            {
+                index = r;
+            }
+            x := &self.value[index];
+            y := &self.value[n];
+            if(self.compare(x, y))
+            {
+                STD_Swap(x, y);
+                __PQ_Down(self, index);
+            }
+        }
+    }
+}
+
+PQ(compare)
+{
+    ret {
+        .value : [],
+        .compare : compare,
+    };
+}
+
+PQ_Push(self, value)
+{
+    self.value += value;
+    __PQ_Up(self, Len(self.value) - 1);
+}
+
+PQ_Pop(self)
+{
+    STD_Swap(&self.value[0], &self.value[-1]);
+    Del(self.value, -1);
+    __PQ_Down(self, 0);
+}

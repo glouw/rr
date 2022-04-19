@@ -1,55 +1,49 @@
 # INVERT BINARY TREE
 
-# Given the root of a binary tree, invert the tree, and return its root.
+# Given the root of a binary tree, invert the tree,
+# and return its root.
 
-Node(value)
-{
-    ret &{
-        .value : value,
-        .l : null,
-        .r : null,
-    };
-}
+inc lib.Tree;
 
-Node_Swap(node, data)
+Swap(node, data)
 {
     left := node@l;
     node@l = node@r;
     node@r = left;
 }
 
-Node_Check(node, data)
+Check(node, data)
 {
     Assert(node@value == data[0]);
     Del(data, 0);
 }
 
-Node_Iterate(nodes, exec, data)
+Iterate(nodes, exec, data)
 {
     if(nodes != null)
     {
         exec(nodes, data);
-        Node_Iterate(nodes@l, exec, data);
-        Node_Iterate(nodes@r, exec, data);
+        Iterate(nodes@l, exec, data);
+        Iterate(nodes@r, exec, data);
     }
 }
 
-Node_Build()
+Nodes()
 {
-    nodes := Node(4);
-    nodes@l = Node(2);
-    nodes@l@l = Node(1);
-    nodes@l@r = Node(3);
-    nodes@r = Node(7);
-    nodes@r@l = Node(6);
-    nodes@r@r = Node(9);
+    nodes := Tree_Node(4);
+    nodes@l = Tree_Node(2);
+    nodes@l@l = Tree_Node(1);
+    nodes@l@r = Tree_Node(3);
+    nodes@r = Tree_Node(7);
+    nodes@r@l = Tree_Node(6);
+    nodes@r@r = Tree_Node(9);
     ret nodes;
 }
 
 Main()
 {
-    nodes := Node_Build();
-    Node_Iterate(nodes, Node_Swap, null);
-    Node_Iterate(nodes, Node_Check, [4, 7, 9, 6, 2, 3, 1]);
+    nodes := Nodes();
+    Iterate(nodes, Swap, null);
+    Iterate(nodes, Check, [4, 7, 9, 6, 2, 3, 1]);
     ret 0;
 }

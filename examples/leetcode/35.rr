@@ -1,98 +1,10 @@
-PQ_Less(x, y)
-{
-    ret *x < *y;
-}
-
-PQ(compare)
-{
-    ret {
-        .value : [],
-        .compare : compare,
-    };
-}
-
-PQ_Swap(x, y)
-{
-    temp := *x;
-
-    Print(*y);
-    Print(*x);
-    Print(temp);
-
-    *x = *y;
-    *y = temp;
-}
-
-PQ_Up(self, n)
-{
-    if(n > 0)
-    {
-        p := Floor((n - 1) / 2);
-        x := &self.value[n];
-        y := &self.value[p];
-        if(self.compare(x, y))
-        {
-            PQ_Swap(x, y);
-            PQ_Up(self, p);
-        }
-    }
-}
-
-PQ_Down(self, n)
-{
-    min := 2;
-    if(Len(self.value) < min)
-    {
-        ret;
-    }
-    elif(Len(self.value) == min)
-    {
-        a := &self.value[0];
-        b := &self.value[1];
-        if(!self.compare(a, b))
-        {
-            PQ_Swap(a, b);
-        }
-    }
-    else
-    {
-        l := 2 * n + 1;
-        r := 2 * n + 2;
-        if(r < Len(self.value))
-        {
-            index := l;
-            if(self.compare(&self.value[r], &self.value[l]))
-            {
-                index = r;
-            }
-            x := &self.value[index];
-            y := &self.value[n];
-            if(self.compare(x, y))
-            {
-                PQ_Swap(x, y);
-                PQ_Down(self, index);
-            }
-        }
-    }
-}
-
-PQ_Push(self, value)
-{
-    self.value += value;
-    PQ_Up(self, Len(self.value) - 1);
-}
-
-PQ_Pop(self)
-{
-    PQ_Swap(&self.value[0], &self.value[-1]);
-    Del(self.value, -1);
-    PQ_Down(self, 0);
-}
+inc lib.PQU;
 
 Main()
 {
     string := "asdf";
-    PQ_Swap(&string[0], &string[1]);
-    Print(string);
+    temp := [0, 1];
+    STD_Swap(&temp[0], &temp[1]);
+    Print(temp);
     ret 0;
 }

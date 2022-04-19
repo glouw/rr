@@ -12,7 +12,7 @@ Node(value)
     };
 }
 
-Node_Setup()
+Nodes()
 {
     a := Node(1);
     b := Node(2);
@@ -25,7 +25,7 @@ Node_Setup()
     ret a;
 }
 
-Node_Copy(nodes, visited)
+Dup(nodes, visited)
 {
     copy := Node(nodes@value);
     if(visited["{}" % [nodes]] == null)
@@ -33,13 +33,13 @@ Node_Copy(nodes, visited)
         visited["{}" % [nodes]] := true;
         foreach(neighbor : nodes@neighbors)
         {
-            copy@neighbors += Node_Copy(neighbor, visited);
+            copy@neighbors += Dup(neighbor, visited);
         }
     }
     ret copy;
 }
 
-Node_Validate(a, b)
+Validate(a, b)
 {
     Assert(a@value == b@value);
     Assert((a@value ? b@value) == false);
@@ -47,23 +47,23 @@ Node_Validate(a, b)
     Assert((a ? b) == false);
 }
 
-Node_Check(a, b, visited)
+Check(a, b, visited)
 {
     if(visited["{}" % [a]] == null)
     {
         visited["{}" % [a]] := true;
-        Node_Validate(a, b);
+        Validate(a, b);
         for(i := 0; i < Len(a@neighbors); i += 1)
         {
-            Node_Check(a@neighbors[i], b@neighbors[i], visited);
+            Check(a@neighbors[i], b@neighbors[i], visited);
         }
     }
 }
 
 Main()
 {
-    nodes := Node_Setup();
-    copy := Node_Copy(nodes, {});
-    Node_Check(nodes, copy, {});
+    nodes := Nodes();
+    copy := Dup(nodes, {});
+    Check(nodes, copy, {});
     ret 0;
 }

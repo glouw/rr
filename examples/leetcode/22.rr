@@ -6,26 +6,19 @@
 #   * The right subtree of a node contains only nodes with keys greater than the node's key.
 #   * Both the left and right subtrees must also be binary search trees.
 
-Node(value)
-{
-    ret &{
-        .value : value,
-        .l : null,
-        .r : null,
-    };
-}
+inc lib.Tree;
 
-Node_Build()
+Nodes()
 {
-    nodes := Node(5);
-    nodes@l = Node(1);
-    nodes@r = Node(4);
-    nodes@r@l = Node(3);
-    nodes@r@r = Node(6);
+    nodes := Tree_Node(5);
+    nodes@l = Tree_Node(1);
+    nodes@r = Tree_Node(4);
+    nodes@r@l = Tree_Node(3);
+    nodes@r@r = Tree_Node(6);
     ret nodes;
 }
 
-Node_Valid(nodes)
+Valid(nodes)
 {
     if(nodes == null)
     {
@@ -44,13 +37,13 @@ Node_Valid(nodes)
             r = nodes@r@value > nodes@value;
         }
         good := l && r;
-        ret good && Node_Valid(nodes@l);
-        ret good && Node_Valid(nodes@r);
+        ret good && Valid(nodes@l);
+        ret good && Valid(nodes@r);
     }
 }
 
 Main()
 {
-    Assert(Node_Valid(Node_Build()) == false);
+    Assert(Valid(Nodes()) == false);
     ret 0;
 }

@@ -3,32 +3,20 @@
 # Design a data structure that supports adding new words
 # and finding if a string matches any previously added string.
 
-Trie_Insert(self, string)
-{
-    node := &self;
-    foreach(c : string)
-    {
-        if((*node)[c] == null)
-        {
-            (*node)[c] := {};
-        }
-        node = &(*node)[c];
-    }
-    node@_end := true;
-}
+inc lib.Trie;
 
-Trie_Find(self, string);
+Find(self, string);
 
-Trie_Dot(self, string)
+Dot(self, string)
 {
     keys := Keys(self);
     foreach(key : keys)
     {
-        if(key == "_end") # NOT A VALID KEY.
+        if(key == "end") # NOT A VALID KEY.
         {
             continue;
         }
-        if(Trie_Find(self[key], string))
+        if(Find(self[key], string))
         {
             ret true;
         }
@@ -36,7 +24,7 @@ Trie_Dot(self, string)
     ret false;
 }
 
-Trie_Find(self, string)
+Find(self, string)
 {
     node := &self;
     index := 0;
@@ -45,7 +33,7 @@ Trie_Find(self, string)
         if(c == ".")
         {
             next := string[index + 1 : Len(string)];
-            ret Trie_Dot(*node, next);
+            ret Dot(*node, next);
         }
         if(!Exists(*node, c))
         {
@@ -54,7 +42,7 @@ Trie_Find(self, string)
         node = &(*node)[c];
         index += 1;
     }
-    ret node@_end == true;
+    ret node@end == true;
 }
 
 Main()
@@ -63,16 +51,16 @@ Main()
     Trie_Insert(trie, "word");
     Trie_Insert(trie, "woaa");
     Trie_Insert(trie, "wobb");
-    Assert(Trie_Find(trie, "wor") == false);
-    Assert(Trie_Find(trie, "wo.d"));
-    Assert(Trie_Find(trie, "wo.a"));
-    Assert(Trie_Find(trie, "wo.b"));
-    Assert(Trie_Find(trie, "...d"));
-    Assert(Trie_Find(trie, "...a"));
-    Assert(Trie_Find(trie, "...b"));
-    Assert(Trie_Find(trie, "...."));
-    Assert(Trie_Find(trie, ".....") == false);
-    Assert(Trie_Find(trie, ".") == false);
-    Assert(Trie_Find(trie, "") == false);
+    Assert(Find(trie, "wor") == false);
+    Assert(Find(trie, "wo.d"));
+    Assert(Find(trie, "wo.a"));
+    Assert(Find(trie, "wo.b"));
+    Assert(Find(trie, "...d"));
+    Assert(Find(trie, "...a"));
+    Assert(Find(trie, "...b"));
+    Assert(Find(trie, "...."));
+    Assert(Find(trie, ".....") == false);
+    Assert(Find(trie, ".") == false);
+    Assert(Find(trie, "") == false);
     ret 0;
 }
