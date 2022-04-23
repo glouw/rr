@@ -71,9 +71,26 @@ PQ_Push(self, value)
     __PQ_Up(self, Len(self.value) - 1);
 }
 
+PQ_Front(self)
+{
+    ret &self.value[0];
+}
+
 PQ_Pop(self)
 {
+    front := *PQ_Front(self);
     STD_Swap(&self.value[0], &self.value[-1]);
     Del(self.value, -1);
     __PQ_Down(self, 0);
+    ret &front;
+}
+
+PQ_Len(self)
+{
+    ret Len(self.value);
+}
+
+PQ_Empty(self)
+{
+    ret PQ_Len(self) == 0;
 }

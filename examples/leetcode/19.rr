@@ -33,6 +33,7 @@ CountPaliSubs(s)
 
 Main()
 {
-    Print(CountPaliSubs("aaabaaa"));
+    Assert(CountPaliSubs("abc") == 3);
+    Assert(CountPaliSubs("aaa") == 6);
     ret 0;
 }

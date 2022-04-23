@@ -1,0 +1,62 @@
+# INSERT INTERVAL
+# 
+# You are given an array of non-overlapping
+# intervals intervals where intervals[i] = [starti, endi]
+# represent the start and the end of the ith interval and
+# intervals is sorted in ascending order by starti. You are
+# also given an interval newInterval = [start, end] that represents
+# the start and end of another interval.
+# 
+# Insert newInterval into intervals such that intervals is
+# still sorted in ascending order by starti and intervals
+# still does not have any overlapping intervals
+# (merge overlapping intervals if necessary).
+# 
+# Return intervals after the insertion.
+ 
+inc lib.PQ;
+
+Set(pq, int)
+{
+    for(i := int[0]; i <= int[1]; i += 1)
+    {
+        PQ_Push(pq, i);
+    }
+}
+
+PCompare(x, y)
+{
+    ret *x < *y;
+}
+
+Insert(ints, new)
+{
+    pq := PQ(PCompare);
+    foreach(int : ints)
+    {
+        Set(pq, int);
+    }
+    Set(pq, new);
+    x := *PQ_Pop(pq);
+    y := x;
+    z := x;
+    range := [];
+    while(!PQ_Empty(pq))
+    {
+        y = *PQ_Pop(pq);
+        if(y - z > 1)
+        {
+            range += [[x, z]];
+            x = y;
+        }
+        z = y;
+    }
+    range += [[x, z]];
+    ret range;
+}
+
+Main()
+{
+    Assert(Insert([[1,3], [6,9], [11,13]], [2,8]) == [[1,9], [11, 13]]);
+    ret 0;
+}

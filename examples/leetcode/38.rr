@@ -1,0 +1,83 @@
+# WORD SEARCH II
+#
+# Given an m x n board of characters and
+# a list of strings words, return all words on the board.
+#
+# Each word must be constructed from letters of
+# sequentially adjacent cells, where adjacent cells
+# are horizontally or vertically neighboring.
+# The same letter cell may not be used more than once in a word.
+
+inc lib.Trie;
+
+DFS(grid, p, word, words);
+
+const BLOCK := "$";
+
+Pt(x, y)
+{
+    ret { .x : x, .y : y };
+}
+
+Add(p, o)
+{
+    ret {
+        .x : p.x + o.x,
+        .y : p.y + o.y,
+    };
+}
+
+InBounds(grid, p)
+{
+    w := Len(grid[0]);
+    h := Len(grid);
+    ret (p.x >= 0) && (p.x < w) && (p.y >= 0) && (p.y < h);
+}
+
+Dive(grid, p, word, words)
+{
+    if(InBounds(grid, p))
+    {
+        if(grid[p.y][p.x] != BLOCK)
+        {
+            DFS(grid, p, word, words);
+        }
+    }
+}
+
+DFS(grid, p, word, words)
+{
+    temp := grid[p.y][p.x];
+    grid[p.y][p.x] = BLOCK;
+    Dive(grid, Add(p, Pt( 1,  0)), word + temp, words); 
+    Dive(grid, Add(p, Pt(-1,  0)), word + temp, words); 
+    Dive(grid, Add(p, Pt( 0,  1)), word + temp, words); 
+    Dive(grid, Add(p, Pt( 0, -1)), word + temp, words); 
+    grid[p.y][p.x] = temp;
+    words[word] := true;
+}
+
+Get(grid)
+{
+    w := Len(grid[0]);
+    h := Len(grid);
+    words := {};
+    for(x := 0; x < w; x += 1) {
+    for(y := 0; y < h; y += 1) {
+        DFS(grid, Pt(x, y), "", words);
+    }}
+    ret words;
+}
+
+Main()
+{
+    words := Get([
+        ["o", "a", "a", "n"],
+        ["e", "t", "a", "e"],
+        ["i", "h", "k", "r"],
+        ["i", "f", "l", "v"],
+    ]);
+    Assert(words["eat"]);
+    Assert(words["oath"]);
+    ret 0;
+}

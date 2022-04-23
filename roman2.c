@@ -2984,17 +2984,9 @@ CC_ConsumeExpression(CC* self)
 static void
 CC_Assign(CC* self)
 {
-    if(CC_Next(self) == '$')
-    {
-        CC_Match(self, "$=");
-        CC_Expression(self);
-    }
-    else
-    {
-        CC_Match(self, ":=");
-        CC_Expression(self);
-        CC_AssemB(self, String_Init("\tCop"));
-    }
+    CC_Match(self, ":=");
+    CC_Expression(self);
+    CC_AssemB(self, String_Init("\tCop"));
 }
 
 static void
@@ -3850,8 +3842,7 @@ CC_Block(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
                 CC_AssignLocal(self, String_Copy(next), true);
             }
             else
-            if(CC_Next(self) == ':'
-            || CC_Next(self) == '$')
+            if(CC_Next(self) == ':')
             {
                 Queue_PshB(scope, String_Copy(ident));
                 CC_AssignLocal(self, String_Copy(ident), false);

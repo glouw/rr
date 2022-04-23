@@ -1,0 +1,60 @@
+# LONGEST CONSECUTIVE SEQUENCE
+# 
+# Given an unsorted array of integers nums,
+# return the length of the longest consecutive
+# elements sequence.
+# 
+# You must write an algorithm that runs in O(n) time.
+
+inc lib.PQ;
+
+Compare(x, y)
+{
+    ret *x < *y;
+}
+
+Longest(nums)
+{
+    if(Len(nums) == 1)
+    {
+        ret 1;
+    }
+    else
+    {
+        pq := PQ(Compare);
+        foreach(x : nums)
+        {
+            PQ_Push(pq, x);
+        }
+        last := null;
+        max := 0;
+        count := 0;
+        while(!PQ_Empty(pq))
+        {
+            front := PQ_Pop(pq);
+            if(last != null)
+            {
+                diff := front - last;
+                if(diff > 1)
+                {
+                    if(count > max)
+                    {
+                        max = count;
+                    }
+                    count = 0;
+                }
+            }
+            last = front;
+            count += 1;
+        }
+        ret max;
+    }
+}
+
+Main()
+{
+    Assert(Longest([100, 4, 1, 2, 3, 900, 901, 902]) == 4);
+    Assert(Longest([]) == 0);
+    Assert(Longest([100]) == 1);
+    ret 0;
+}

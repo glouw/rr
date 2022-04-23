@@ -79,21 +79,6 @@ Main()
 }
 ```
 
-Reference assignment is done with the `$=` operator. References
-cannot be reassigned; modifying a reference modifies the referencing
-value.
-
-```
-Main()
-{
-    a := 1;
-    b $= a;
-    b = 2;
-    Assert(a == 2);
-    ret 0;
-}
-```
-
 Operators compatible with numbers include:
 
 ```
@@ -609,8 +594,8 @@ Compare(a, b)
 
 Main()
 {
-    a := [ 0, 5, 3, 2 ];
-    b := [ "b", "c", "a", "f", "z"];
+    a := [0, 5, 3, 2];
+    b := ["b", "c", "a", "f", "z"];
     Qsort(a, Compare);
     Qsort(b, Compare);
     ret 0;
@@ -625,14 +610,17 @@ Files can be opened, read, and written to, with built in calls `Open`, `Read`, a
 Main()
 {
     file := Open("file.txt", "w");
-    Write(file, "testing!");
-    string := Read(file, 8);
-    Assert(string == "testing!");
+    in := "testing!"
+    Write(file, in);
+    out := Read(file, Len(in));
+    Assert(out == in);
+    Assert(Len(file) == in);
     ret 0;
 }
 ```
 
-A file is automatically closed once it's reference count reaches 0.
+A file is automatically closed once it's reference count reaches 0. The length of
+the file returned by `Len` is the number of bytes in the file.
 
 ### Value Length
 
@@ -663,7 +651,7 @@ Diff(a, b) { ret a - b; }
 
 Main()
 {
-    a := [ "b", "c", "a", "f", "z"];
+    a := ["b", "c", "a", "f", "z"];
     Qsort(a, Compare);
     found := Bsearch(a, "b", Diff);
     if(found != null)
@@ -850,19 +838,17 @@ The garbage collector checks `alloc_cap` with every new local variable assignati
 ## Constant Values
 
 Objects marked with the `const` keyword escape garbage collection (eg. cyclical reference checks).
-`const` objects may not hold pointers. Functions returning large
-objects are best assigned as `const` references (`$=`) to both escape
-future garbage collection as well as the extra copy normally
-associated with the assignment `:=` operator:
+`const` objects may not hold pointers.
 
 
 ```
 Main()
 {
     path := "path/to/a/very/large/file.json"; # This is a 300MB JSON.
-    const json $= Value(Read(path, Len(path)));
+    file := Read(path, "r");
+    const json := Value(Read(file, Len(file)));
     ret 0;
 }
 ```
 
-Nevertheless, an ideal program will have all values initialized as `const` references.
+An ideal program will have all values initialized as `const` to escape the garbage collector.

@@ -1,10 +1,129 @@
-inc lib.PQU;
+# FIND MEDIAN FROM DATA STREAM
+# 
+# The median is the middle value in an ordered
+# integer list. If the size of the list is even,
+# there is no middle value and the median is the mean
+# of the two middle values.
+
+inc lib.PQ;
+
+Less(a, b)
+{
+    ret *a < *b;
+}
+
+Great(a, b)
+{
+    ret *a > *b;
+}
+
+Balancer()
+{
+    ret {
+        .rite : PQ(Less),
+        .left : PQ(Great),
+    };
+}
+
+Rebalance(bal)
+{
+    a := PQ_Len(bal.rite);
+    b := PQ_Len(bal.left);
+    if(Abs(a - b) > 1)
+    {
+        if(a > b)
+        {
+            PQ_Push(bal.left, *PQ_Front(bal.rite));
+            PQ_Pop(bal.rite);
+        }
+        else
+        {
+            PQ_Push(bal.rite, *PQ_Front(bal.left));
+            PQ_Pop(bal.left);
+        }
+    }
+}
+
+Push(bal, value)
+{
+    if(PQ_Empty(bal.rite))
+    {
+        PQ_Push(bal.rite, value);
+    }
+    else
+    {
+        if(value < *PQ_Front(bal.rite))
+        {
+            PQ_Push(bal.left, value);
+        }
+        else
+        {
+            PQ_Push(bal.rite, value);
+        }
+        Rebalance(bal);
+    }
+}
+
+Median(bal)
+{
+    a := PQ_Len(bal.left);
+    b := PQ_Len(bal.rite);
+    if(a == b)
+    { 
+        ret (*PQ_Front(bal.left) + *PQ_Front(bal.rite)) / 2;
+    }
+    else
+    {
+        if(a < b)
+        {
+            ret *PQ_Front(bal.rite);
+        }
+        else
+        {
+            ret *PQ_Front(bal.left);
+        }
+    }
+}
+
+Comp(x, y)
+{
+    ret x < y;
+}
+
+Even(value)
+{
+    ret value %% 2 == 0;
+}
+
+MedianQueue(queue)
+{
+    copy := queue;
+    Qsort(copy, Comp);
+    len := Len(copy);
+    mid := len // 2;
+    if(Even(len))
+    {
+        ret (copy[mid] + copy[mid + 1]) / 2;
+    }
+    else
+    {
+        ret copy[mid];
+    }
+}
+
+Populate(bal, values)
+{
+    foreach(x : values)
+    {
+        Push(bal, x);
+    }
+}
 
 Main()
 {
-    string := "asdf";
-    temp := [0, 1];
-    STD_Swap(&temp[0], &temp[1]);
-    Print(temp);
+    bal := Balancer();
+    values := [ 9, 1, 0, -1, 11, 22, 8, 3, 1 ];
+    Populate(bal, values);
+    Assert(Median(bal) == MedianQueue(values));
     ret 0;
 }
