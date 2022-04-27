@@ -64,7 +64,7 @@ Aside from numbers which are of double precision, Roman II supports maps,
 queues, files, strings, booleans, nulls, and pointers, the latter which may
 point to functions or variables.
 
-### Numbers
+## Numbers
 
 Variable assignment with Roman II is done with the `:=` operator.
 Variables are mutable and can be reassigned:
@@ -107,7 +107,7 @@ Each operator supports its relational variant: `+=`, `-=`, `/=`, `*=`, `%=`, `**
 
 Operators and relational variants have optional support for `queue`, `map`, and `string` types.
 
-### Queues
+## Queues
 
 Queues (also known as lists with O(1) front and back operations), can store value types:
 
@@ -211,7 +211,7 @@ Main()
 
 Any value type may be inserted into a queue.
 
-### Strings
+## Strings
 
 Strings contain an array of characters and can be indexed and modified like a queue:
 
@@ -268,7 +268,7 @@ Main()
 }
 ```
 
-### Maps
+## Maps
 
 Maps strictly associate strings with a value type:
 
@@ -511,7 +511,7 @@ Main()
 }
 ```
 
-### Pointers
+## Pointers
 
 Variables and functions can be pointed to with pointer syntaxing.
 A variable pointer requires use of the address-of `&` operator, followed by
