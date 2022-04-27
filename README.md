@@ -45,7 +45,7 @@ Flags passed to `roman2`:
 -d: Output bytecode and .data segment then terminate. Do not run the program.
 ```
 
-### Program Entry
+## Program Entry
 
 Roman II enters and starts execution from function `Main`. The `Main` function
 must return a number.
@@ -58,13 +58,13 @@ Main()
 }
 ```
 
-### Value Types
+## Value Types
 
 Aside from numbers which are of double precision, Roman II supports maps,
 queues, files, strings, booleans, nulls, and pointers, the latter which may
 point to functions or variables.
 
-#### Numbers
+### Numbers
 
 Variable assignment with Roman II is done with the `:=` operator.
 Variables are mutable and can be reassigned:
@@ -107,7 +107,7 @@ Each operator supports its relational variant: `+=`, `-=`, `/=`, `*=`, `%=`, `**
 
 Operators and relational variants have optional support for `queue`, `map`, and `string` types.
 
-#### Queues
+### Queues
 
 Queues (also known as lists with O(1) front and back operations), can store value types:
 
@@ -211,7 +211,7 @@ Main()
 
 Any value type may be inserted into a queue.
 
-#### Strings
+### Strings
 
 Strings contain an array of characters and can be indexed and modified like a queue:
 
@@ -268,7 +268,7 @@ Main()
 }
 ```
 
-#### Maps
+### Maps
 
 Maps strictly associate strings with a value type:
 
@@ -410,7 +410,7 @@ Main()
 }
 ```
 
-### Boolean Expressions
+## Boolean Expressions
 
 Boolean expression are pascal-like requiring enclosed parenthesis
 per boolean expression. Operators `&&` and `||` evaluate expressions to
@@ -424,7 +424,7 @@ Main()
 }
 ```
 
-### Loops and Control Flow
+## Loops and Control Flow
 
 Standard `for` and `while` loops can loop expression blocks.
 Continuing within a `for` loop will run it's advancement expression.
@@ -455,7 +455,7 @@ Main()
 }
 ```
 
-### Functions
+## Functions
 
 Functions pass values by reference. Functions return `null` if
 no specific return value is specified.
@@ -511,7 +511,7 @@ Main()
 }
 ```
 
-#### Pointers
+### Pointers
 
 Variables and functions can be pointed to with pointer syntaxing.
 A variable pointer requires use of the address-of `&` operator, followed by
@@ -581,7 +581,7 @@ Main()
 }
 ```
 
-### Sorting
+## Sorting
 
 Function pointers (in this case, a comparison function pointer)
 are often used while quick sorting:
@@ -602,7 +602,7 @@ Main()
 }
 ```
 
-### File Input and Output
+## File Input and Output
 
 Files can be opened, read, and written to, with built in calls `Open`, `Read`, and `Write`.
 
@@ -622,7 +622,7 @@ Main()
 A file is automatically closed once it's reference count reaches 0. The length of
 the file returned by `Len` is the number of bytes in the file.
 
-### Value Length
+## Value Length
 
 Strings, numbers, and booleans can be compared with all boolean operators.
 Other value types, such as queues, maps, files, use their length (size) for comparison.
@@ -639,7 +639,7 @@ Main()
     ret 0;
 }
 ```
-### Binary Searching
+## Binary Searching
 
 As with sorting, a queue of values can be binary searched
 for a key if the queue is already sorted. Bsearch requires
@@ -690,7 +690,7 @@ Main()
 In the above example, string subtraction within `Diff` is analogous to C's `strcmp`,
 returning 0 with a string match.
 
-### Modules
+## Modules
 
 Modules can be packaged and imported. Modules do not namespace and are recommended
 to include a suffix denoting the module name:
@@ -723,7 +723,7 @@ prefixing a module reference modules one up from the current directory:
 inc ..Lib.Basic.Math; # "../../Lib/Basic/Math.rr"
 ```
 
-### Shared Object Libraries
+## Shared Object Libraries
 
 Roman II can call functions from native C shared objects libraries. Value types
 supported are `number`, `string`, and `bool`, mapping to types `double*`,
@@ -755,7 +755,7 @@ Main()
 }
 ```
 
-### Built-In Keywords
+## Built-In Keywords
 
 Built in keywords are exposed by the compiler to present an include-free standard library.
 These keywords cannot be pointed to with pointer syntaxing:
