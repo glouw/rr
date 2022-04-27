@@ -1,8 +1,0 @@
-SET := { "a", "b", "c" };
-
-Main()
-{
-    Assert(SET["a"] != null);
-    Assert(SET["d"] == null);
-    ret 0;
-}

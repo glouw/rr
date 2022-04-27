@@ -1,8 +1,0 @@
-Main()
-{
-    a := {};
-    b := 0;
-    a["dict"] := b;
-    Assert(a["dict"] == b);
-    ret 0;
-}

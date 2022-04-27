@@ -1,9 +1,0 @@
-Main()
-{
-    a := 1;
-    b := Copy(a);
-    c := a;
-    Assert(!(a ? b));
-    Assert(!(a ? c));
-    ret 0;
-}

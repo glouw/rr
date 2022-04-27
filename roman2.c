@@ -2,6 +2,13 @@
 // 
 // COPYRIGHT (C) 2021-2022 GUSTAV LOUW. ALL RIGHTS RESERVED.
 // THIS WORK IS LICENSED UNDER THE TERMS OF THE MIT LICENSE.  
+// THIS WORK IS A MATTER OF FICTION - WRITING A PROGRAMMING
+// LANGUAGE INTENDED TO SOLVE LEETCODE MIGHT NOT YIELD NEW
+// JOB PROSPECTS.
+
+// Reader, hello! A high level overview of a program's structs
+// is often enough to learn the heart of the machine so the code
+// itself will be sparsely documented.
 
 #include <dlfcn.h>
 #include <string.h>
@@ -16,11 +23,55 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+// Roman II (here in simply known as RR) uses the notion of a `value`
+// for all of it's numerical computations, logic, and data storage.
+typedef struct Value Value;
+
+// Values are bound by type, ranging from in-memory
+// characters, floats, and containers like maps and queues,
+// to pointers thereof (including that of function pointers)
+// and persistent-memory file storage.
+typedef enum
+{
+    // Queues are growable arrays with O(1) front and back access.
+    TYPE_QUEUE,
+    // Maps associate a string values type to values.
+    // Char types reference strings.
+    TYPE_STRING,
+    TYPE_CHAR,
+    TYPE_MAP,
+    // Numbers are of standard double precision.
+    TYPE_NUMBER,
+    // Pointers may point to any value type, including function types.
+    TYPE_POINTER,
+    // Function types ensure other values cannot be executed.
+    TYPE_FUNCTION,
+    // File types grant read and write access to persistent storage.
+    TYPE_FILE,
+    // Booleans control control flow and logic bound operations -
+    // expressions do not short circuit.
+    TYPE_BOOL,
+    // Null types are useful when all other types fail.
+    TYPE_NULL,
+}
+Type;
+
+// Queues are growable arrows, with O(1) front and back access
+// emulating the functionality of C++'s std::deque.
+typedef struct
+{
 #define QUEUE_BLOCK_SIZE (16)
-#define STRING_CAP_SIZE (24)
-#define MODULE_BUFFER_SIZE (8192)
-#define SWEEP_BUFFER_SIZE (4096)
-#define LEN(a) (sizeof(a) / sizeof(*a))
+    void* value[QUEUE_BLOCK_SIZE];
+    int64_t a;
+    int64_t b;
+}
+Block;
+
+typedef enum
+{
+    FRONT, BACK
+}
+End;
 
 typedef int64_t
 (*Diff)(void*, void*);
@@ -34,23 +85,20 @@ typedef void
 typedef void*
 (*Copy)(void*);
 
-typedef struct Value Value;
-
-typedef enum
+typedef struct
 {
-    TYPE_FILE,
-    TYPE_FUNCTION,
-    TYPE_QUEUE,
-    TYPE_CHAR,
-    TYPE_MAP,
-    TYPE_STRING,
-    TYPE_NUMBER,
-    TYPE_BOOL,
-    TYPE_POINTER,
-    TYPE_NULL,
+    Block** block;
+    // Data structures with `kill` and `copy` pointers define per element
+    // free and copy semantics.
+    Kill kill;
+    Copy copy;
+    int64_t size;
+    int64_t blocks;
 }
-Type;
+Queue;
 
+// Strings are growable character arrays. `cap` accounts for the
+// null byte terminator; `size` does not.
 typedef struct
 {
     char* value;
@@ -59,6 +107,8 @@ typedef struct
 }
 String;
 
+// Character types reference a parent string. The livelihood of the
+// parent string is guaranteed by the existence of the character.
 typedef struct
 {
     Value* string;
@@ -66,32 +116,8 @@ typedef struct
 }
 Char;
 
-typedef struct
-{
-    String* name;
-    int64_t size;
-    int64_t address;
-}
-Function;
-
-typedef struct
-{
-    void* value[QUEUE_BLOCK_SIZE];
-    int64_t a;
-    int64_t b;
-}
-Block;
-
-typedef struct
-{
-    Block** block;
-    Kill kill;
-    Copy copy;
-    int64_t size;
-    int64_t blocks;
-}
-Queue;
-
+// Maps associate strings with value types. Maps are hash tables and
+// link by node keys with the same hash. Nodes store the key.
 typedef struct Node
 {
     struct Node* next;
@@ -102,29 +128,56 @@ Node;
 
 typedef struct
 {
+    Node** bucket;
+    Kill kill;
+    Copy copy;
+    int64_t size;
+    // The prime index indexes `Map_Primes`.
+    // Defaulting to -1, it grows by one with each rehash.
+    int64_t prime_index;
+    // Rehashes occur when the load factor is exceeded.
+    float load_factor;
+}
+Map;
+
+static const int64_t
+Map_Primes[] = {
+    2, 5, 11, 23, 47, 97, 199, 409, 823, 1741, 3739, 7517, 15173, 30727,
+    62233, 126271, 256279, 520241, 1056323, 2144977, 4355707, 8844859,
+    17961079, 36473443, 74066549, 150406843, 305431229, 620239453,
+    1259520799, 2557710269, 4294967291,
+};
+
+// Soft types include Function types, File types, and Pointer types.
+//
+// Function types store the assembly `address` of the function's
+// instruction as well as the number of arguments (`size`) expected.
+typedef struct
+{
+    String* name;
+    int64_t size;
+    int64_t address;
+}
+Function;
+
+// Files maintain their `path` and `mode` (eg. "rw") for debugging purposes.
+typedef struct
+{
     String* path;
     String* mode;
     FILE* file;
 }
 File;
 
-typedef struct
-{
-    Node** bucket;
-    Kill kill;
-    Copy copy;
-    int64_t size;
-    int64_t prime_index;
-    float load_factor;
-}
-Map;
-
+// Pointer types may hold any value type.
 typedef struct
 {
     Value* value;
 }
 Pointer;
 
+// Like the description in the `Type` enum, a value is one of a kind,
+// realized by a union of all types.
 typedef union
 {
     File* file;
@@ -141,117 +194,104 @@ Of;
 
 struct Value
 {
+    // The union can be identified with a `type` enum.
     Type type;
     Of of;
+    // RR is garbage collected, freeing allocations initially with
+    // reference counting `refs` and then with a naive mark-and-sweep
+    // run to free circular references.
     int64_t refs;
+    // A value deemed `constant` can be skipped by the garbage collecter.
     bool constant;
 };
 
 typedef enum
 {
-    FRONT, BACK
-}
-End;
-
-typedef struct
-{
-    char* entry;
-    bool dump;
-    bool help;
-}
-Args;
-
-typedef enum
-{
-    CLASS_VARIABLE_GLOBAL,
-    CLASS_VARIABLE_LOCAL,
+    // Values are either globally accessible or accessible from the stack.
+    // A global value is loaded with different offsets than a stack value.
+    CLASS_VALUE_GLOBAL,
+    CLASS_VALUE_LOCAL,
+    // Functions are defined as either functions, function prototypes, or
+    // native function prototypes. Function prototypes serve to aid circular
+    // function references.
     CLASS_FUNCTION,
     CLASS_FUNCTION_PROTOTYPE,
+    // Native function prototypes define the name and number of arguments
+    // for functions residing in shared object libraries
+    // (barring name mangling ala C++).
     CLASS_FUNCTION_PROTOTYPE_NATIVE,
 }
 Class;
 
-#define OPCODES \
-    X(Abs) X(Aco) X(Add) X(All) X(And) X(Any) X(Asi) X(Asr) X(Ata) X(Brf) X(Bsr) \
-    X(Cal) X(Cel) X(Con) X(Cop) X(Cos) X(Del) X(Div) X(Dll) X(Drf) X(End) X(Eql) \
-    X(Exi) X(Ext) X(Flr) X(Fls) X(Gar) X(Get) X(Glb) X(God) X(Grt) X(Gte) X(Idv) \
-    X(Imd) X(Ins) X(Jmp) X(Key) X(Len) X(Loc) X(Lod) X(Log) X(Lor) X(Lst) X(Lte) \
-    X(Max) X(Mem) X(Min) X(Mod) X(Mov) X(Mul) X(Neq) X(Not) X(Opn) X(Pop) X(Pow) \
-    X(Prt) X(Psb) X(Psf) X(Psh) X(Ptr) X(Qso) X(Ran) X(Red) X(Ref) X(Ret) X(Sav) \
-    X(Sin) X(Slc) X(Spd) X(Sqr) X(Srd) X(Sub) X(Tan) X(Tim) X(Trv) X(Typ) X(Val) \
-    X(Vrt) X(Wrt)
-
-typedef enum
-{
-#define X(name) OPCODE_##name,
-OPCODES
-#undef X
-}
-Opcode;
-
+// Meta information related to values of class - herein refered to as
+// identifiers or `idents` - store global, local, or function location,
+// class type, and the module file of origin.
 typedef struct
 {
-    Queue* modules;
-    Queue* assembly;
-    Queue* data;
-    Queue* debug;
-    Map* identifiers;
-    Map* files;
-    Map* included;
-    String* prime;
-    int64_t globals;
-    int64_t locals;
-    int64_t labels;
+    String* path;
+    Class class;
+    // The `stack` value is simply a stack index.
+    int64_t stack;
 }
-CC;
+Meta;
 
+// RR files are compiled to assembly on a per-module basis.
+// A sector of characters are streamed from persistent storage
+// and stored within an internal buffer.
 typedef struct
 {
+    // The name, compilation line, and file, are kept for debugging purposes.
     FILE* file;
     String* name;
+    int64_t line;
+    // The current index of the buffer, and size (should the sector read be
+    // less than the module buffer size), is tracked. Should a new module be
+    // included compilation is halted with the current module.
     int64_t index;
     int64_t size;
-    int64_t line;
+#define MODULE_BUFFER_SIZE (512)
     unsigned char buffer[MODULE_BUFFER_SIZE];
 }
 Module;
 
 typedef struct
 {
-    String* path;
-    Class class;
-    int64_t stack;
-}
-Meta;
-
-typedef struct
-{
-    Queue* data;
-    Queue* stack;
-    Queue* frame;
-    Queue* debug; // NOTE: OWNED BY CC.
-    Queue* addresses;
-    Map* data_dups;
-    Map* track;
-    Value* ret;
-    uint64_t* instructions;
-    int64_t size;
-    int64_t pc;
-    int64_t spds;
-    int64_t alloc_cap;
-    int64_t retno;
-    bool done;
-}
-VM;
-
-typedef struct
-{
-    String* string;
-    VM* vm;
-    int64_t index;
+    char* file;
     int64_t line;
 }
-Stream;
+Debug;
+
+typedef struct
+{
+    // Should a new module be encountered at compile time the current
+    // compilation module is pushed to the back of the `modules` queue  
+    Queue* modules;
+    // CC tracks global and local `identifiers` with a single map for
+    // all `modules` to prevent use before definition. The `included`
+    // map ensures no module is included twice.
+    Map* identifiers;
+    Map* included;
+    // Within `assembly` where each opcode is three characters long.
+    Queue* assembly;
+    // Each line of assembly maps to an RR file line number and
+    // file name such that, during runtime, the virtual machine can print
+    // usable debug messages.
+    Queue* debug;
+    // File names are stored in the `files` map, and referenced by `debug`.
+    // This is done to reduce string allocations. The debug information is
+    // passed to the virtual machine at VM runtime.
+    Map* files;
+    // RR is written with a recursive descent compiler - read ahead tokens
+    // that unbalance the parser are stored back in the `unget` buffer and
+    // later reemployed.
+    String* unget;
+    // CC tracks the number of globals, locals, and labels for loads,
+    // stores, and jumps. Labels are rolling incremented and therefor unique.
+    int64_t globals;
+    int64_t locals;
+    int64_t labels;
+}
+CC;
 
 typedef struct
 {
@@ -266,14 +306,190 @@ typedef struct
     String* label;
     int64_t address;
 }
-Stack;
+Address;
 
+// The virtual machine converts the assembly provided by CC into a stream
+// of bytecode 64 bit unsigned `instructions` and a list (queue) of `data`
+// values . The lower byte of an instruction is reserved for the opcode
+// command. The remaining 7 bytes manifest to be either an index for a value
+// in `data`, an index to a value on the `stack`, or an index to value in
+// `instructions`.
 typedef struct
 {
-    char* file;
+    uint64_t* instructions;
+    Queue* data;
+    Queue* stack;
+    // Prior to constructing the `data` stack, data values are initially
+    // stored in a map where their values are stored in key forms to
+    // prevent duplication.
+    Map* data_dups;
+    // Function calls store the previous function's frame information
+    // in a `frame` queue. Returning from a function returns to a
+    // previous function's frame.
+    Queue* frame;
+    // A function's return value is stored in a special `ret`
+    // return register.
+    Value* ret;
+    // Debug information previously built by CC is passed to the virtual
+    // machine. Should the VM execute an illegal operation, execution will
+    // halt, the virtual machine torn down, and the line and file number
+    // printed to stderr alongside any additional relevant crash
+    // information. The `addresses` list provides quick stack undwinding
+    // with a binary search that maps the function address with function name.
+    Queue* debug;
+    Queue* addresses;
+    // The number of `instructions` is marked by `size`.
+    int64_t size;
+    // The current executing instruction is marked by the program counter `pc`.
+    int64_t pc;
+    // `sp_decs` is number of stack pointer decrements required to prepare the
+    // stack for the next function call. This occurs after the next
+    // function stack has been prepared.
+    int64_t sp_decs;
+    // `alloc_cap` marks the maximum number of value allocations allowed until
+    // a garbage collection mark-and-sweep run must be performed.
+    int64_t alloc_cap;
+    // `retno` is the return integer of the `Main` function that is returned
+    // to the operating system once the `done` flag is set.
+    int retno;
+    bool done;
+}
+VM;
+
+// Garbage collection mark-and-sweep is performed with red-black (RB) trees.
+typedef struct Link
+{
+    struct Link* l; // Left.
+    struct Link* r; // Right.
+    struct Link* p; // Parent.
+    Value* value;
+    // 0: Red
+    // 1: Black
+    int64_t color;
+}
+Link;
+
+// RB Trees are specifically named `Cache` as they serve to cache
+// value allocations.
+typedef struct Cache
+{
+    Link* root;
+    int64_t size;
+}
+Cache;
+
+// A single global `GC_Alloc` captures all currently allocated values.
+// At the time of mark-and-sweep, a new red-black tree is constructed
+// holding all reachable parent values and their children originating
+// from the vM's global and local stack. The difference between `GC_Alloc`
+// and that which is reachable is considered garbage and must be collected.
+static Cache* GC_Alloc;
+
+// Streams mock a mix-in VM runtime compiler for converting string value
+// types to values. Maps, queues, numbers, booleans, strings, and
+// nulls are supported,
+typedef struct
+{
+    String* string;
+    // The virtual machine is a dependency, yielding debug messages
+    // if an error is encountered during string to value conversion.
+    VM* vm;
+    int64_t index;
     int64_t line;
 }
-Debug;
+Stream;
+
+// The X-Macro expands into an `Opcode` enum, prefixing each opcode with
+// the OPCODE_ prefix. This opcode also expands into a `Gen` (Generator) array
+// which ensures each new added opcode has a matching executable function.
+#define OPCODES /* X-MACRO */                                                 \
+    X(Abs) /* Floating point absolute.                                     */ \
+    X(Aco) /* Arccos - Inverse Cos trig function                           */ \
+    X(Add) /* Numeric addition. Concatenates queues, strings. Merges dicts */ \
+    X(All) /* Returns true if all values in queue are boolean true.        */ \
+    X(And) /* Logical and - returns true if two expressions are true.      */ \
+    X(Any) /* Returns true if any value in a queue is boolean true.        */ \
+    X(Asi) /* Arcsin - Inverse Sin trig function.                          */ \
+    X(Asr) /* Assert - Aborts VM execution if boolean expression is false. */ \
+    X(Ata) /* Atan - Inverse Tan trig function.                            */ \
+    X(Brf) /* Branch if false - Branches to PC if expression is false.     */ \
+    X(Bsr) /* Binary searches a queue and returns a pointer to an element. */ \
+    X(Cal) /* Calls a function and pushes the return value to the stack.   */ \
+    X(Cel) /* Numeric ceil.                                                */ \
+    X(Con) /* Makes a value and all its children constant.                 */ \
+    X(Cop) /* Copies a value and all of its children.                      */ \
+    X(Cos) /* Cos trig function.                                           */ \
+    X(Del) /* Deletes a queue or string element by, or a map value by key. */ \
+    X(Div) /* Numeric division.                                            */ \
+    X(Dll) /* Calls a function within a shared object library.             */ \
+    X(Drf) /* Dereferences a pointer.                                      */ \
+    X(End) /* Ends a program. Reserved for use as the last calling opcode. */ \
+    X(Eql) /* Returns true if two expressions are true.                    */ \
+    X(Exi) /* Returns true if a key exists within a map.                   */ \
+    X(Ext) /* Exits a program with an exit code.                           */ \
+    X(Flr) /* Numeric floor.                                               */ \
+    X(Fls) /* Pops all stack values in the current fuction stack frame.    */ \
+    X(Gar) /* Runs the garbage collector if alloc_cap is exceeded.         */ \
+    X(Get) /* Returns a queue value by index or map value by key.          */ \
+    X(Glb) /* Pushes global value to stack. Increments reference count.    */ \
+    X(God) /* Returns true if a file successfully opened.                  */ \
+    X(Grt) /* Returns true if A is greater than B.                         */ \
+    X(Gte) /* Returns true if A is greater than or Equal to B.             */ \
+    X(Idv) /* Integer numeric division.                                    */ \
+    X(Imd) /* Integer numeric modulus.                                     */ \
+    X(Ins) /* Inserts a value into a map.                                  */ \
+    X(Jmp) /* Jumps to program address.                                    */ \
+    X(Key) /* Returns the keys of a map.                                   */ \
+    X(Len) /* Returns the length of a queue.                               */ \
+    X(Loc) /* Pushes local value to stack. Increments reference count.     */ \
+    X(Lod) /* Pushes return register to stack.                             */ \
+    X(Log) /* Numerical Log.                                               */ \
+    X(Lor) /* Logical or. Returns true if one of two expressions are true. */ \
+    X(Lst) /* Returns true if A is less than B.                            */ \
+    X(Lte) /* Returns true if A is less than or equal to B.                */ \
+    X(Max) /* Returns A if A is greater than B, else B.                    */ \
+    X(Mem) /* Returns true if value A and B are the same value in memory.  */ \
+    X(Min) /* Returns A if A is less than B, else B.                       */ \
+    X(Mod) /* Numerical modulus.                                           */ \
+    X(Mov) /* Moves value A into value B.                                  */ \
+    X(Mul) /* Multiplies two numeric values.                               */ \
+    X(Neq) /* Returns true if A is not equal to B.                         */ \
+    X(Not) /* Returns true if B is false, else true.                       */ \
+    X(Opn) /* Opens a file. Returns a file type.                           */ \
+    X(Pop) /* Removes a stack value.                                       */ \
+    X(Pow) /* Numerical power-of.                                          */ \
+    X(Prt) /* Prints a value.                                              */ \
+    X(Psb) /* Appends a value to a queue.                                  */ \
+    X(Psf) /* Prepends a value to a queue.                                 */ \
+    X(Psh) /* Pushes a value to the stack.                                 */ \
+    X(Ptr) /* Pushes a pointer of a value to the stack.                    */ \
+    X(Qso) /* Quick sorts a queue using a comparison function.             */ \
+    X(Ran) /* Returns a random number.                                     */ \
+    X(Red) /* Reads a file. Returns a string.                              */ \
+    X(Ref) /* Returns a values reference count.                            */ \
+    X(Ret) /* Returns from a function.                                     */ \
+    X(Sav) /* Saves a value in the return register.                        */ \
+    X(Sin) /* Sin trig function.                                           */ \
+    X(Slc) /* Returns a slice of array. The slice is a copy.               */ \
+    X(Spd) /* Stack pointer decrement.                                     */ \
+    X(Sqr) /* Numerical square root.                                       */ \
+    X(Srd) /* Seed the random number generator.                            */ \
+    X(Sub) /* Numerical subtraction. Queue push front. String strcmp.      */ \
+    X(Tan) /* Tan trig function.                                           */ \
+    X(Tim) /* Microsecond uptime.                                          */ \
+    X(Trv) /* Return from virtual call.                                    */ \
+    X(Typ) /* Returns value type.                                          */ \
+    X(Val) /* Converts a string to a value.                                */ \
+    X(Vrt) /* Virtual call a function pointer.                             */ \
+    X(Wrt) /* Writes a string to file.                                     */
+
+typedef enum
+{
+#define X(name) OPCODE_##name,
+OPCODES
+#undef X
+}
+Opcode;
 
 typedef struct
 {
@@ -283,6 +499,18 @@ typedef struct
 }
 Gen;
 
+#define X(name) static void VM_##name(VM*, int64_t);
+OPCODES
+#undef X
+
+static const Gen Gens[] = {
+#define X(name) { #name, OPCODE_##name, VM_##name },
+OPCODES
+#undef X
+};
+
+// The compiler exposes the following keywords. An RR program may call
+// `name` as if it were a function to directly call a supported opcode.
 typedef struct
 {
     char* name;
@@ -291,23 +519,58 @@ typedef struct
 }
 Keyword;
 
-typedef struct Link
-{
-    struct Link* l;
-    struct Link* r;
-    struct Link* p;
-    Value* value;
-    int64_t color;
-}
-Link;
+static const Keyword Keywords[] = {
+    { "Abs",     "Abs", 1 }, // Must be sorted by `name`.
+    { "Acos",    "Aco", 1 },
+    { "All",     "All", 1 },
+    { "Any",     "Any", 1 },
+    { "Asin",    "Asi", 1 },
+    { "Assert",  "Asr", 1 },
+    { "Atan",    "Ata", 1 },
+    { "Bsearch", "Bsr", 3 },
+    { "Ceil",    "Cel", 1 },
+    { "Cos",     "Cos", 1 },
+    { "Del",     "Del", 2 },
+    { "Exists",  "Exi", 2 },
+    { "Exit",    "Ext", 1 },
+    { "Floor",   "Flr", 1 },
+    { "Good",    "God", 1 },
+    { "Keys",    "Key", 1 },
+    { "Len",     "Len", 1 },
+    { "Log",     "Log", 1 },
+    { "Max",     "Max", 2 },
+    { "Min",     "Min", 2 },
+    { "Open",    "Opn", 2 },
+    { "Pow",     "Pow", 1 },
+    { "Print",   "Prt", 1 },
+    { "Qsort",   "Qso", 2 },
+    { "Rand",    "Ran", 0 },
+    { "Read",    "Red", 2 },
+    { "Refs",    "Ref", 1 },
+    { "Sin",     "Sin", 1 },
+    { "Sqrt",    "Sqr", 1 },
+    { "Srand",   "Srd", 1 },
+    { "Tan",     "Tan", 1 },
+    { "Time",    "Tim", 0 },
+    { "Type",    "Typ", 1 },
+    { "Value",   "Val", 1 },
+    { "Write",   "Wrt", 2 },
+};
 
-typedef struct Cache
+// Lastly, command line arguments allow NIX like systems to pass
+// arguments to RR.
+typedef struct
 {
-    Link* root;
-    int64_t size;
+    char* entry;
+    // -d: Dumps program assembly. Does not run the program.
+    bool dump;
+    // -h: Displays the help screen.
+    bool help;
 }
-Cache;
+Args;
 
+// Wrappers for `malloc`, `realloc`, `free`, and `calloc` all
+// specific platforms to implement their own allocators.
 static void*
 Malloc(int64_t size)
 {
@@ -332,13 +595,8 @@ Calloc(int64_t nmemb, int64_t size)
     return calloc(nmemb, size);
 }
 
-static void
-Delete(Kill kill, void* value)
-{
-    if(kill)
-        kill(value);
-}
-
+// Explanations on RB Tree implementations can be found on Wiki:
+// https://en.wikipedia.org/wiki/Red-black_tree
 static Link*
 Link_Min(Link* self)
 {
@@ -756,12 +1014,9 @@ Cache_Kill(Cache* self)
     Free(self);
 }
 
+// Quality of life macro. Allows for quick map iterations.
 #define CACHE_FOREACH(self, link) \
     for(Link* link = Link_Min(self->root); link; link = Link_Next(link))
-
-static Cache* GC_Alloc;
-
-static bool ASM_Assembled;
 
 static bool
 Equals(char* a, char* b)
@@ -859,9 +1114,17 @@ String_Init(char* string)
     String* self = Malloc(sizeof(*self));
     self->value = NULL;
     self->size = strlen(string);
+#define STRING_CAP_SIZE (24)
     String_Alloc(self, self->size < STRING_CAP_SIZE ? STRING_CAP_SIZE : self->size);
     strcpy(self->value, string);
     return self;
+}
+
+static void
+Delete(Kill kill, void* value)
+{
+    if(kill)
+        kill(value);
 }
 
 static void
@@ -1619,14 +1882,6 @@ Node_Copy(Node* self, Copy copy)
     return Node_Init(String_Copy(self->key), copy ? copy(self->value) : self->value);
 }
 
-static const int64_t
-Map_Primes[] = {
-    2, 5, 11, 23, 47, 97, 199, 409, 823, 1741, 3739, 7517, 15173, 30727,
-    62233, 126271, 256279, 520241, 1056323, 2144977, 4355707, 8844859,
-    17961079, 36473443, 74066549, 150406843, 305431229, 620239453,
-    1259520799, 2557710269, 4294967291,
-};
-
 static int64_t
 Map_Buckets(Map* self)
 {
@@ -1634,6 +1889,8 @@ Map_Buckets(Map* self)
         return 0; 
     return Map_Primes[self->prime_index];
 }
+
+#define LEN(a) (sizeof(a) / sizeof(*a))
 
 static bool
 Map_Resizable(Map* self)
@@ -2075,6 +2332,8 @@ Value_Len(Value* self)
     return 0;
 }
 
+static bool ASM_Assembled;
+
 static void
 Value_Untrack(Value* self)
 {
@@ -2400,9 +2659,9 @@ Class_ToString(Class self)
 {
     switch(self)
     {
-    case CLASS_VARIABLE_GLOBAL:
+    case CLASS_VALUE_GLOBAL:
         return "global";
-    case CLASS_VARIABLE_LOCAL:
+    case CLASS_VALUE_LOCAL:
         return "local";
     case CLASS_FUNCTION:
         return "function";
@@ -2691,7 +2950,6 @@ CC_Init(void)
     CC* self = Malloc(sizeof(*self));
     self->modules = Queue_Init((Kill) Module_Kill, (Copy) NULL);
     self->assembly = Queue_Init((Kill) String_Kill, (Copy) NULL);
-    self->data = Queue_Init((Kill) String_Kill, (Copy) NULL);
     self->debug = Queue_Init((Kill) Debug_Kill, (Copy) NULL);
     self->files = Map_Init((Kill) NULL, (Copy) NULL);
     self->included = Map_Init((Kill) NULL, (Copy) NULL);
@@ -2699,7 +2957,7 @@ CC_Init(void)
     self->globals = 0;
     self->locals = 0;
     self->labels = 0;
-    self->prime = NULL;
+    self->unget = NULL;
     return self;
 }
 
@@ -2708,7 +2966,6 @@ CC_Kill(CC* self)
 {
     Queue_Kill(self->modules);
     Queue_Kill(self->assembly);
-    Queue_Kill(self->data);
     Queue_Kill(self->debug);
     Map_Kill(self->included);
     Map_Kill(self->files);
@@ -2795,57 +3052,12 @@ Module_Name(CC* self, char* postfix)
     return name;
 }
 
-static Keyword Keywords[] = {
-    { "Abs",     "Abs", 1 },
-    { "Acos",    "Aco", 1 },
-    { "All",     "All", 1 },
-    { "Any",     "Any", 1 },
-    { "Asin",    "Asi", 1 },
-    { "Assert",  "Asr", 1 },
-    { "Atan",    "Ata", 1 },
-    { "Bsearch", "Bsr", 3 },
-    { "Ceil",    "Cel", 1 },
-    { "Copy",    "Cop", 1 },
-    { "Cos",     "Cos", 1 },
-    { "Del",     "Del", 2 },
-    { "Exists",  "Exi", 2 },
-    { "Exit",    "Ext", 1 },
-    { "Floor",   "Flr", 1 },
-    { "Good",    "God", 1 },
-    { "Keys",    "Key", 1 },
-    { "Len",     "Len", 1 },
-    { "Log",     "Log", 1 },
-    { "Max",     "Max", 2 },
-    { "Min",     "Min", 2 },
-    { "Open",    "Opn", 2 },
-    { "Pow",     "Pow", 1 },
-    { "Print",   "Prt", 1 },
-    { "Qsort",   "Qso", 2 },
-    { "Rand",    "Ran", 0 },
-    { "Read",    "Red", 2 },
-    { "Refs",    "Ref", 1 },
-    { "Sin",     "Sin", 1 },
-    { "Sqrt",    "Sqr", 1 },
-    { "Srand",   "Srd", 1 },
-    { "Tan",     "Tan", 1 },
-    { "Time",    "Tim", 0 },
-    { "Type",    "Typ", 1 },
-    { "Value",   "Val", 1 },
-    { "Write",   "Wrt", 2 },
-};
-
 static int
 Keyword_Comp(const void* a, const void* b)
 {
     const Keyword* aa = a;
     const Keyword* bb = b;
     return strcmp(aa->name, bb->name);
-}
-
-static void
-Keyword_Sort(void)
-{
-    qsort(Keywords, LEN(Keywords), sizeof(Keyword), Keyword_Comp);
 }
 
 static Keyword*
@@ -2867,17 +3079,17 @@ CC_Include(CC* self)
 static bool
 CC_IsGlobal(Class class)
 {
-    return class == CLASS_VARIABLE_GLOBAL;
+    return class == CLASS_VALUE_GLOBAL;
 }
 
 static bool
 CC_IsLocal(Class class)
 {
-    return class == CLASS_VARIABLE_LOCAL;
+    return class == CLASS_VALUE_LOCAL;
 }
 
 static bool
-CC_IsVariable(Class class)
+CC_IsValue(Class class)
 {
     return CC_IsGlobal(class) || CC_IsLocal(class);
 }
@@ -2992,7 +3204,7 @@ CC_Assign(CC* self)
 static void
 CC_Local(CC* self, String* ident)
 {
-    CC_Define(self, CLASS_VARIABLE_LOCAL, self->locals, ident, String_Copy(CC_CurrentFile(self)));
+    CC_Define(self, CLASS_VALUE_LOCAL, self->locals, ident, String_Copy(CC_CurrentFile(self)));
     self->locals += 1;
 }
 
@@ -3014,7 +3226,7 @@ CC_Global(CC* self, String* ident, bool constant)
     CC_AssemB(self, String_Format("%s:", label->value));
     CC_Assign(self);
     CC_Match(self, ";");
-    CC_Define(self, CLASS_VARIABLE_GLOBAL, self->globals, ident, String_Copy(CC_CurrentFile(self)));
+    CC_Define(self, CLASS_VALUE_GLOBAL, self->globals, ident, String_Copy(CC_CurrentFile(self)));
     if(constant)
         CC_AssemB(self, String_Init("\tCon"));
     CC_AssemB(self, String_Init("\tRet"));
@@ -3121,11 +3333,11 @@ CC_Expect(CC* self, String* ident, bool clause(Class))
 static void
 CC_Ref(CC* self, String* ident)
 {
-    Meta* meta = CC_Expect(self, ident, CC_IsVariable);
-    if(meta->class == CLASS_VARIABLE_GLOBAL)
+    Meta* meta = CC_Expect(self, ident, CC_IsValue);
+    if(meta->class == CLASS_VALUE_GLOBAL)
         CC_AssemB(self, String_Format("\tGlb %ld", meta->stack));
     else
-    if(meta->class == CLASS_VARIABLE_LOCAL)
+    if(meta->class == CLASS_VALUE_LOCAL)
         CC_AssemB(self, String_Format("\tLoc %ld", meta->stack));
 }
 
@@ -3249,8 +3461,7 @@ CC_Resolve(CC* self)
 static void
 CC_Call(CC* self, String* ident, int64_t args)
 {
-    for(int64_t i = 0; i < args; i++)
-        CC_AssemB(self, String_Init("\tSpd"));
+    CC_AssemB(self, String_Format("\tSpd %ld", args));
     CC_AssemB(self, String_Format("\tCal %s", ident->value));
     CC_AssemB(self, String_Init("\tLod"));
 }
@@ -3350,7 +3561,7 @@ CC_Calling(CC* self, String* ident)
     if(CC_IsFunction(meta->class))
         CC_DirectCalling(self, ident, meta);
     else
-    if(CC_IsVariable(meta->class))
+    if(CC_IsValue(meta->class))
         CC_Ref(self, ident); // LEAVE A REFERENCE VALUE ON THE STACK FOR CC_RESOLVE TO HANDLE.
     else
         CC_QUIT(self, "identifier %s is not callable", ident->value);
@@ -3370,8 +3581,8 @@ static void
 CC_Identifier(CC* self)
 {
     String* ident = NULL;
-    if(self->prime)
-        String_Swap(&self->prime, &ident);
+    if(self->unget)
+        String_Swap(&self->unget, &ident);
     else
         ident = CC_Ident(self);
     if(String_IsBoolean(ident))
@@ -3420,7 +3631,7 @@ CC_Factor(CC* self)
     if(IsDigit(next))
         CC_Direct(self, false);
     else
-    if(IsIdent(next) || self->prime)
+    if(IsIdent(next) || self->unget)
         CC_Identifier(self);
     else switch(next)
     {
@@ -3849,7 +4060,7 @@ CC_Block(CC* self, int64_t head, int64_t tail, int64_t scoping, bool loop)
             }
             else
             {
-                self->prime = String_Copy(ident);
+                self->unget = String_Copy(ident);
                 CC_ConsumeExpression(self);
                 CC_Match(self, ";");
             }
@@ -3952,31 +4163,31 @@ CC_Parse(CC* self)
             Queue_PshB(start, label);
         }
         else
-            CC_QUIT(self, "%s must either be a function or function prototype, a global variable, or an include statement", ident->value);
+            CC_QUIT(self, "%s must either be a function or function prototype, a global value, or an include statement", ident->value);
         CC_Spin(self);
     }
     CC_Spool(self, start);
     Queue_Kill(start);
 }
 
-static Stack*
-Stack_Init(String* label, int64_t address)
+static Address*
+Address_Init(String* label, int64_t address)
 {
-    Stack* self = Malloc(sizeof(*self));
+    Address* self = Malloc(sizeof(*self));
     self->label = label;
     self->address = address;
     return self;
 }
 
 static void
-Stack_Kill(Stack* self)
+Address_Kill(Address* self)
 {
     String_Kill(self->label);
     Free(self);
 }
 
 static bool
-Stack_Comp(Stack* a, Stack* b)
+Address_Comp(Address* a, Address* b)
 {
     return a->address < b->address;
 }
@@ -3984,14 +4195,14 @@ Stack_Comp(Stack* a, Stack* b)
 static Queue*
 ASM_Flatten(Map* labels)
 {
-    Queue* addresses = Queue_Init((Kill) Stack_Kill, (Copy) NULL);
+    Queue* addresses = Queue_Init((Kill) Address_Kill, (Copy) NULL);
     MAP_FOREACH(labels, chain)
     {
         int64_t* address = Map_Get(labels, chain->key->value);
-        Stack* stack = Stack_Init(String_Init(chain->key->value), *address);
-        Queue_PshB(addresses, stack);
+        Address* found = Address_Init(String_Init(chain->key->value), *address);
+        Queue_PshB(addresses, found);
     }
-    Queue_Sort(addresses, (Comp) Stack_Comp);
+    Queue_Sort(addresses, (Comp) Address_Comp);
     return addresses;
 }
 
@@ -4035,10 +4246,10 @@ ASM_Dump(Queue* assembly)
 }
 
 static int64_t
-Stack_Diff(void* a, void* b)
+Address_Diff(void* a, void* b)
 {
-    Stack* aa = a;
-    Stack* bb = b;
+    Address* aa = a;
+    Address* bb = b;
     return aa->address - bb->address;
 }
 
@@ -4051,8 +4262,8 @@ VM_PrintTrace(VM* self)
         {
             Frame* a = Queue_Get(self->frame, i + 0);
             Frame* b = Queue_Get(self->frame, i + 1);
-            Stack key = { NULL, a->address };
-            Stack* found = Queue_BSearch(self->addresses, &key, Stack_Diff);
+            Address key = { NULL, a->address };
+            Address* found = Queue_BSearch(self->addresses, &key, Address_Diff);
             fprintf(stderr, "%s(...): ", found->label->value);
             Debug* sub = Queue_Get(self->debug, b->pc);
             fprintf(stderr, "%s: line %ld\n", sub->file, sub->line);
@@ -4075,6 +4286,7 @@ while(0)
 static void
 VM_CapAllocs(VM* self)
 {
+#define SWEEP_BUFFER_SIZE (4096)
     self->alloc_cap = GC_Alloc->size + SWEEP_BUFFER_SIZE;
 }
 
@@ -4086,14 +4298,13 @@ VM_Init(int64_t size, Queue* debug, Queue* addresses)
     self->data_dups = Map_Init((Kill) Int_Kill, (Copy) NULL);
     self->stack = Queue_Init((Kill) Value_Kill, (Copy) NULL);
     self->frame = Queue_Init((Kill) Frame_Free, (Copy) NULL);
-    self->track = Map_Init((Kill) Int_Kill, (Copy) NULL);
     self->addresses = addresses;
     self->debug = debug;
     self->ret = NULL;
     self->size = size;
     self->instructions = Malloc(size * sizeof(*self->instructions));
     self->pc = 0;
-    self->spds = 0;
+    self->sp_decs = 0;
     self->retno = 0;
     self->done = false;
     VM_CapAllocs(self);
@@ -4107,7 +4318,6 @@ VM_Kill(VM* self)
     Queue_Kill(self->stack);
     Queue_Kill(self->frame);
     Queue_Kill(self->addresses);
-    Map_Kill(self->track);
     Map_Kill(self->data_dups);
     Free(self->instructions);
     Free(self);
@@ -4253,6 +4463,7 @@ VM_Redirect(VM* self, Map* labels, Opcode opcode)
     case OPCODE_Glb:
     case OPCODE_Loc:
     case OPCODE_Pop:
+    case OPCODE_Spd:
         return VM_Direct(opcode, strtok(NULL, "\n"));
     default:
         break;
@@ -4263,11 +4474,11 @@ VM_Redirect(VM* self, Map* labels, Opcode opcode)
 static void
 VM_Cal(VM* self, int64_t address)
 {
-    int64_t sp = self->stack->size - self->spds;
+    int64_t sp = self->stack->size - self->sp_decs;
     Frame* frame = Frame_Init(self->pc, sp, address);
     Queue_PshB(self->frame, frame);
     self->pc = address;
-    self->spds = 0;
+    self->sp_decs = 0;
 }
 
 static void
@@ -4997,10 +5208,9 @@ VM_Min(VM* self, int64_t unused)
 }
 
 static void
-VM_Spd(VM* self, int64_t unused)
+VM_Spd(VM* self, int64_t count)
 {
-    (void) unused;
-    self->spds += 1;
+    self->sp_decs += count;
 }
 
 static void
@@ -5555,9 +5765,7 @@ VM_Exi(VM* self, int64_t unused)
     {
         bool exists = false;
         if(b->type == TYPE_STRING)
-        {
             exists = Map_Exists(a->of.map, b->of.string->value);
-        }
         else
         {
             char temp[2] = {'\0'};
@@ -5832,12 +6040,6 @@ VM_Asr(VM* self, int64_t unused)
     Queue_PshB(self->stack, Value_Null());
 }
 
-static const Gen Gens[] = {
-#define X(name) { #name, OPCODE_##name, VM_##name },
-OPCODES
-#undef X
-};
-
 static int
 Gen_Comp(const void* a, const void* b)
 {
@@ -5937,7 +6139,6 @@ Args_Help(void)
 int
 main(int argc, char* argv[])
 {
-    Keyword_Sort();
     Args args = Args_Parse(argc, argv);
     if(args.entry)
     {

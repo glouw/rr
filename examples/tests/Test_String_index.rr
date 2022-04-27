@@ -1,6 +1,0 @@
-Main()
-{
-    str := "roman";
-    Assert(str[2] == "m");
-    ret 0;
-}

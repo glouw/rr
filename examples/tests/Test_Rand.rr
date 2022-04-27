@@ -1,9 +1,0 @@
-Main()
-{
-    Srand(1);
-    a := Rand();
-    Srand(2);
-    b := Rand();
-    Assert(a != b);
-    ret 0;
-}

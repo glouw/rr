@@ -1,9 +1,0 @@
-Main()
-{
-    a := Open("./Test_File.rr", "r");
-    b := Open("./Test_File.rr", "r");
-    Print(a);
-    Print(b);
-    Assert(a == b);
-    ret 0;
-}

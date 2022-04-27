@@ -1,6 +1,0 @@
-Main()
-{
-    dotted := { .key : 1 };
-    Assert(dotted.key == 1);
-    ret 0;
-}

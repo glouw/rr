@@ -1,8 +1,0 @@
-Main()
-{
-    Assert({} == {});
-    Assert({} != {.key : 1});
-    Assert({.key : 1} != {});
-    Assert({.key : 1} == {.key : 1});
-    ret 0;
-}

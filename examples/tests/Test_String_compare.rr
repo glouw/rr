@@ -1,8 +1,0 @@
-Main()
-{
-    Assert("a" < "b");
-    Assert("b" > "a");
-    Assert("a" >= "a");
-    Assert("a" <= "a");
-    ret 0;
-}

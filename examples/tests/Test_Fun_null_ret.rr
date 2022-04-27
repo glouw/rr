@@ -1,9 +1,0 @@
-NullRet()
-{
-}
-
-Main()
-{
-    Assert(NullRet() == null);
-    ret 0;
-}

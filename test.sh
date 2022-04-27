@@ -1,5 +1,5 @@
 make install
-for dir in examples/tests examples/leetcode; do
+for dir in leetcode; do
     cd $dir
     for test in *.rr; do
         roman2 $test 1> /dev/null

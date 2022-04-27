@@ -1,8 +1,0 @@
-Main()
-{
-    Assert(false == Value("{}" % ["false"]));
-    Assert(true == Value("{}" % ["true"]));
-    Assert(false == Value("false"));
-    Assert(true == Value("true"));
-    ret 0;
-}

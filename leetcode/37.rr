@@ -31,7 +31,7 @@ Longest(nums)
         count := 0;
         while(!PQ_Empty(pq))
         {
-            front := PQ_Pop(pq);
+            front := *PQ_Pop(pq);
             if(last != null)
             {
                 diff := front - last;

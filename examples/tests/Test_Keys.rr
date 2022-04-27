@@ -1,7 +1,0 @@
-Main()
-{
-    dict := { "B", "A", "C", "E", "D" };
-    want := [ "A", "B", "C", "D", "E" ];
-    Assert(want == Keys(dict));
-    ret 0;
-}

@@ -1,9 +1,0 @@
-Main()
-{
-    Assert(null == null);
-    Assert("st" != null);
-    Assert(1 != null);
-    Assert(null != "st");
-    Assert(null != 1);
-    ret 0;
-}
