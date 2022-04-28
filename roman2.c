@@ -245,8 +245,7 @@ typedef struct
     String* name;
     int64_t line;
     // The current index of the buffer, and size (should the sector read be
-    // less than the module buffer size), is tracked. Should a new module be
-    // included compilation is halted with the current module.
+    // less than the module buffer size), is tracked.
     int64_t index;
     int64_t size;
 #define MODULE_BUFFER_SIZE (512)
@@ -271,7 +270,7 @@ typedef struct
     // map ensures no module is included twice.
     Map* identifiers;
     Map* included;
-    // Within `assembly` where each opcode is three characters long.
+    // Within `assembly` each opcode is three characters long.
     Queue* assembly;
     // Each line of assembly maps to an RR file line number and
     // file name such that, during runtime, the virtual machine can print
@@ -310,8 +309,8 @@ Address;
 
 // The virtual machine converts the assembly provided by CC into a stream
 // of bytecode 64 bit unsigned `instructions` and a list (queue) of `data`
-// values . The lower byte of an instruction is reserved for the opcode
-// command. The remaining 7 bytes manifest to be either an index for a value
+// values. The lower byte of an instruction is reserved for the opcode
+// command; the remaining 7 bytes manifest to be either an index for a value
 // in `data`, an index to a value on the `stack`, or an index to value in
 // `instructions`.
 typedef struct
@@ -334,7 +333,7 @@ typedef struct
     // machine. Should the VM execute an illegal operation, execution will
     // halt, the virtual machine torn down, and the line and file number
     // printed to stderr alongside any additional relevant crash
-    // information. The `addresses` list provides quick stack undwinding
+    // information. The `addresses` list provides quick stack undwinding info
     // with a binary search that maps the function address with function name.
     Queue* debug;
     Queue* addresses;
@@ -369,7 +368,7 @@ typedef struct Link
 }
 Link;
 
-// RB Trees are specifically named `Cache` as they serve to cache
+// RB Trees are specifically named `Cache` as they serve only to cache
 // value allocations.
 typedef struct Cache
 {
@@ -399,7 +398,7 @@ typedef struct
 }
 Stream;
 
-// The X-Macro expands into an `Opcode` enum, prefixing each opcode with
+// The OPCODES X-Macro expands into an `Opcode` enum, prefixing each opcode with
 // the OPCODE_ prefix. This opcode also expands into a `Gen` (Generator) array
 // which ensures each new added opcode has a matching executable function.
 #define OPCODES /* X-MACRO */                                                 \
@@ -557,7 +556,7 @@ static const Keyword Keywords[] = {
     { "Write",   "Wrt", 2 },
 };
 
-// Lastly, command line arguments allow NIX like systems to pass
+// Lastly, command line arguments allow *NIX-like systems to pass
 // arguments to RR.
 typedef struct
 {
