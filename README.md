@@ -130,7 +130,7 @@ Main()
     queue += 4;
     queue -= -2;
     queue -= -1;
-    Assert(queue == [-2, -1, 0, 1, 2, 3, 4]);
+    Assert(queue == [-1, -2, 0, 1, 2, 3, 4]);
     ret 0;
 }
 ```
@@ -151,8 +151,8 @@ Queues can be sliced:
 ```
 Main()
 {
-    queue := [0, 1, 2, 3]
-    slice := Assert(queue[1:3] == [1, 2]);
+    queue := [0, 1, 2, 3];
+    Assert(queue[1:3] == [1, 2]);
     ret 0;
 }
 ```
@@ -174,7 +174,7 @@ The back of the queue can be accessed with the [-1] operator:
 ```
 Main()
 {
-    queue := [0, 1, 2, 3]
+    queue := [0, 1, 2, 3];
     Assert(queue[-1] == 3);
     ret 0;
 }
@@ -262,7 +262,7 @@ Strings can be formatted with the `%` operator:
 ```
 Main()
 {
-    formatted := "number : {5.2}, string : {}" % [1, "Roman II"];
+    formatted := "number : {.2}, string : {}" % [1, "Roman II"];
     Assert(formatted == "number : 1.00, string : Roman II");
     ret 0;
 }
@@ -321,7 +321,7 @@ not exist, the `=` operator is a no-op.
 ```
 Main()
 {
-    map := {}
+    map := {};
     map["key"] := 1;
     map["key"] = 2;
     map.door := 3;
@@ -463,7 +463,7 @@ no specific return value is specified.
 ```
 Increment(number)
 {
-    number := 1;
+    number += 1;
 }
 
 Add(a, b)
@@ -474,12 +474,12 @@ Add(a, b)
 Main()
 {
     a := Add(1, 3);
-    b := Add({ .x = 1 }, { .y = 2 })
+    b := Add({ .x : 1 }, { .y : 2 });
     c := Add([0, 1, 2, 3], [4, 5, 6, 7]);
     d := 1;
     Increment(d);
     Assert(a == 4);
-    Assert(b == { .x = 1, .y = 2 });
+    Assert(b == { .x : 1, .y : 2 });
     Assert(c == [0, 1, 2, 3, 4, 5, 6, 7]);
     Assert(d == 2);
     ret 0;
@@ -535,7 +535,7 @@ Main()
 {
     map := { .key : 1 };
     pointer := &map;
-    Assert(map.key == 1)
+    Assert(map.key == 1);
     Assert((*pointer).key == 1);
     Assert(pointer@key == 1); # Same as above but a little easier on the programmer.
     ret 0;
@@ -609,12 +609,15 @@ Files can be opened, read, and written to, with built in calls `Open`, `Read`, a
 ```
 Main()
 {
-    file := Open("file.txt", "w");
-    in := "testing!"
+    path := "file.txt";
+    file := Open(path, "w");
+    in := "testing!";
     Write(file, in);
-    out := Read(file, Len(in));
+    file = Open(path, "r");
+    out := Read(file, Len(file));
     Assert(out == in);
-    Assert(Len(file) == in);
+    Assert(Len(file) == Len(in));
+    Assert(Len(file) == Len(out));
     ret 0;
 }
 ```
@@ -652,7 +655,7 @@ Diff(a, b) { ret a - b; }
 Main()
 {
     a := ["b", "c", "a", "f", "z"];
-    Qsort(a, Compare);
+    Qsort(a, Comp);
     found := Bsearch(a, "b", Diff);
     if(found != null)
     {
@@ -680,7 +683,7 @@ Main()
         { .key : "z", .value :  5 },
         { .key : "f", .value :  6 },
     ];  
-    Qsort(a, Compare);
+    Qsort(a, Comp);
     b := Bsearch(a, { .key : "b" }, Diff);
     Assert(b@value == 99);
     ret 0;
@@ -845,7 +848,7 @@ Objects marked with the `const` keyword escape garbage collection (eg. cyclical 
 Main()
 {
     path := "path/to/a/very/large/file.json"; # This is a 300MB JSON.
-    file := Read(path, "r");
+    file := Open(path, "r");
     const json := Value(Read(file, Len(file)));
     ret 0;
 }
